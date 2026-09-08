@@ -1,7 +1,7 @@
 """Actual compiled UI, source edits, hot reload, sandbox checks and native debugger pauses."""
 from pathlib import Path
 import functools, http.server, json, os, threading, unittest, base64
-from playwright.sync_api import sync_playwright, expect
+from playwright.sync_api import sync_playwright, expect, Error as PlaywrightError
 ROOT=Path(__file__).resolve().parents[2]
 class DevelopmentTests(unittest.TestCase):
     @classmethod
@@ -91,7 +91,17 @@ class DevelopmentTests(unittest.TestCase):
     def test_native_debugger_pauses_and_steps_compiled_csharp_with_source_map(self):
         text=self.source('MainView.axaml.cs');line=text[:text.index('CounterLabel.Text')].count('\n')+1
         self.page.fill('#dev-breakpoint-line',str(line));self.page.click('#dev-add-breakpoint')
-        session=self.page.context.new_cdp_session(self.page.frames[-1]);scripts=[];pauses=[]
+        frame=self.page.frames[-1]
+        # Sandboxed srcdoc frames may share the parent target or have an OOPIF
+        # target depending on Chromium's process assignment. Test real pauses
+        # in either layout; unrelated transport failures must still fail.
+        try:
+            session=self.page.context.new_cdp_session(frame)
+        except PlaywrightError as error:
+            if "does not have a separate CDP session" not in str(error):
+                raise
+            session=self.page.context.new_cdp_session(self.page)
+        scripts=[];pauses=[]
         session.on('Debugger.scriptParsed',lambda p:scripts.append(p))
         session.on('Debugger.paused',lambda event:pauses.append(event));session.send('Debugger.enable')
         session.send('Debugger.setSkipAllPauses',{'skip':False})

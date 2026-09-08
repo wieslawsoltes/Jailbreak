@@ -4,6 +4,15 @@ const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 export { liveProperties } from './live-properties.js';
 import { liveProperties } from './live-properties.js';
 const literal=v=>v===null||['string','number','boolean'].includes(typeof v);
+/** Hooks in constructors/accessors are not replaced by a method-body update.
+ * Refuse patches that would relabel those still-live hooks as another site.
+ * Generated line coordinates can change independently and are not identities.
+ */
+function retainedSites(debug){
+  const replaced=new Set((debug.methods??[]).map(m=>m.type+'.'+m.name.replace(/\$\d+$/,'')));
+  return (debug.sites??[]).filter(p=>!replaced.has(p.method)).map(({generatedLine,...p})=>p);
+}
+
 export function planReload(previous,next){
   const reasons=[],patches=[],locations=[];
   if(!previous?.success||!next?.success)return {compatible:false,reasons:['Both builds must succeed'],patches:[]};
@@ -11,6 +20,7 @@ export function planReload(previous,next){
   if(!same(previous.manifest,next.manifest))reasons.push('Entry, assets, project profile or binary manifest changed');
   if(!same(previous.buildProfiles,next.buildProfiles))reasons.push('Project evaluation changed');
   if(!same(previous.debug.typeShapes,next.debug.typeShapes))reasons.push('C# type shape, constructor, initializer or property changed');
+  if(!same(retainedSites(previous.debug),retainedSites(next.debug)))reasons.push('Source locations in retained constructors or accessors changed');
   if(!same(previous.binaries,next.binaries)||!same(previous.packages,next.packages))reasons.push('Binary library/package change requires restart');
   const oldDocs=new Map(previous.xaml.map(d=>[d.path,d]));
   if(previous.xaml.length!==next.xaml.length)reasons.push('XAML document set changed');
