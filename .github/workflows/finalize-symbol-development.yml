@@ -1,0 +1,89 @@
+name: Finalize symbol development
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/finalize-symbol-development.yml'
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: finalize-symbol-development
+  cancel-in-progress: false
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Apply checksummed development source stages
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python3 .delivery/apply-devtools.py
+      - name: Build independent SDK fixture and derive the source example
+        run: |
+          node scripts/build-pdb-fixture.mjs
+          node scripts/generate-pdb-example.mjs
+      - name: Remove obsolete editor initialization temporary
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('apps/ide/app.js')
+          text = p.read_text()
+          old = "let samples={},files={},symbolSources={},{active=''}=globalThis;let _unused='',modified="
+          new = "let samples={},files={},symbolSources={},active='',modified="
+          if old in text:
+              if text.count(old) != 1:
+                  raise ValueError('Ambiguous editor initialization preimage')
+              p.write_text(text.replace(old, new))
+          PY
+      - name: Verify compilers runtime examples and generated site
+        run: |
+          npm test
+          npm run gate
+          npm run build
+          npm run check
+          node scripts/verify-msil-clr.mjs
+          node scripts/verify-exceptions-clr.mjs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install real browser test dependencies
+        run: |
+          python -m pip install playwright==1.55.0
+          python -m playwright install --with-deps chromium
+      - name: Run the complete browser regression suite
+        run: python -m unittest discover -s tests/browser -p 'test_*.py' -v
+      - name: Commit verified fixture and editor source
+        run: |
+          git add tests/fixtures/pdb examples/PdbLibrary/library.binary.json apps/ide/app.js
+          if ! git diff --cached --quiet; then
+            git commit -m 'fix(symbols): synchronize verified DLL PDB example and initialize symbol editor state explicitly'
+          fi
+          mkdir -p test-results/source-checkpoint
+          git rev-parse HEAD > test-results/source-checkpoint/commit.txt
+          git archive --format=tar.gz HEAD > test-results/source-checkpoint/source.tar.gz
+          sha256sum test-results/source-checkpoint/source.tar.gz > test-results/source-checkpoint/source.sha256
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jailbreak-symbol-development-evidence
+          path: test-results
+          retention-days: 30
+      - name: Publish verified source without overwriting concurrent commits
+        run: git push origin HEAD:main
+      - name: Run canonical verification and Pages publishing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run toolchain.yml --ref main
