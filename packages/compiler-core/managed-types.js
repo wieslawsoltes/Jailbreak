@@ -1,0 +1,3 @@
+/** Shared managed type spelling and evaluation-stack categories. No binary decoding. */
+export function typeName(t){if(typeof t==='string')return t;if(t.kind==='array')return typeName(t.element)+'[]';if(t.kind==='generic')return typeName(t.base)+'<'+t.args.map(typeName).join(',')+'>';return t.name??t.kind;}
+export function stackType(t){if(typeof t==='object')return ['class','array'].includes(t.kind)?'ref':t.kind;return ['bool','char','int8','uint8','int16','uint16','int32','uint32'].includes(t)?'i4':['float32','float64'].includes(t)?'f':['int64','uint64'].includes(t)?'i8':t==='void'?'void':['string','object'].includes(t)?'ref':'native';}
