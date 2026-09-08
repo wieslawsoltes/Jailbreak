@@ -7,6 +7,7 @@ public static class Recovery
     private static int trace;
     private static Exception original;
     public static int Trace() => trace;
+    public static void Reset() { trace = 0; }
     public static int SafeDivide(int value, int divisor)
     {
         try { return value / divisor; }
@@ -54,7 +55,7 @@ public static class Recovery
     public static bool RethrowIdentity()
     {
         original = new InvalidOperationException("identity");
-        try { ThrowOriginal(); }
+        try { ThrowOriginal(); return false; }
         catch (Exception error) { return error == original; }
     }
     public static int FinallyWins()
