@@ -1,0 +1,10 @@
+export const runtimeModulePaths=['dotnet/index.js','renderer/index.js','runtime/theme.js','runtime/bindings.js','runtime/properties.js','runtime/controls.js','runtime/index.js'];
+
+/** Bundle trusted runtime module source text into an offline, opaque-origin preview document. */
+export function createApplicationHtml(compilation,runtimeSources,{title='Jailbreak application',channel='jailbreak-preview',preferGPU=true}={}){
+  if(!compilation.ok)throw new Error('Cannot run a compilation containing errors');
+  const runtime=runtimeSources.map(s=>s.replace(/^import .*;\n/gm,'').replace(/^export\s+/gm,'')).join('\n');
+  const js=`${runtime}\nconst send=(kind,value)=>parent.postMessage({channel:${JSON.stringify(channel)},kind,value},'*');\nconst R=createRuntime({dotnet:createDotNet({log:(...a)=>send('log',a.map(String).join(' '))}),drawingBackend:(c,o)=>createDrawingSurface(c,{...o,preferGPU:${!!preferGPU}}),onDiagnostic:d=>send('diagnostic',d)});\nwindow.addEventListener('error',e=>send('error',e.message));window.addEventListener('unhandledrejection',e=>send('error',String(e.reason)));\ntry{${compilation.code}\nconst root=new R.types[${JSON.stringify(compilation.entry)}]();R.mount(root);window.jailbreak={runtime:R,root};send('ready',{entry:${JSON.stringify(compilation.entry)},...R.stats()});}catch(e){send('error',e.stack||String(e));document.body.textContent='Application error: '+e.message;}`;
+  const escape=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob: https:; connect-src 'none'; font-src 'none'; base-uri 'none'; form-action 'none'"><title>${escape(title)}</title><style>html,body{margin:0;min-height:100%;}body{font-family:system-ui}</style></head><body><script>${js.replace(/<\/script/gi,'<\\/script')}<\/script></body></html>`;
+}
