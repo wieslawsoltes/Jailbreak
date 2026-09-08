@@ -1,64 +1,81 @@
 # Jailbreak
 
-Browser-native **C# and Avalonia-style XAML → JavaScript** compilers, reusable UI/runtime libraries, and a web workbench. Applications in the supported profile run as HTML/CSS/SVG with an optional WebGPU primitive surface, without a .NET or WebAssembly runtime.
+Browser-native **C# and Avalonia-style XAML → JavaScript** compilers, reusable UI/runtime libraries, and a web workbench. Applications in the supported subset run with HTML and optional WebGPU primitive surfaces, without a .NET runtime.
 
-**Initial compatibility release, not full Avalonia compatibility.** The supported-profile catalog and an unchanged upstream CheckBoxPage run in the browser. The entire upstream ControlCatalog is not yet supported. The exact requested `wieslawsoltes/Avalonialibrary` repository returned HTTP 404 and remains a blocked external gate.
+**[Open the deployed workbench](https://wieslawsoltes.github.io/Jailbreak/)** · [Secondary workbench](https://wieslawsoltes.github.io/Jailbreak/browser/ide/) · [CI and deployment](https://github.com/wieslawsoltes/Jailbreak/actions/workflows/toolchain.yml)
 
-[Getting started](docs/getting-started.md) · [Architecture](docs/architecture.md) · [Compatibility](docs/compatibility.md) · [Quality gates](docs/quality-gates.md) · [Security](docs/security.md) · [CI and deployment](https://github.com/wieslawsoltes/Jailbreak/actions/workflows/toolchain.yml)
+**Subset compatibility, not a complete Avalonia port.** Full unmodified ControlCatalog remains the target. The requested `wieslawsoltes/Avalonia` repository is accessible and pinned in `browser/fixtures/control-catalog/manifest.json`; earlier documentation referring to `Avalonialibrary` named the wrong repository.
 
-## Build and try
+[Getting started](docs/getting-started.md) · [Architecture](docs/architecture.md) · [Build profiles milestone](docs/milestone-build-profiles.md) · [Compatibility](docs/compatibility.md) · [Quality gates](docs/quality-gates.md) · [Security](docs/security.md)
 
-Node.js 22 or newer; no npm dependencies are needed for the toolchain.
+## New: project-aware build profiles
+
+Both compiler pipelines now share `packages/build-profile`:
+
+- Source-preserving C# conditional compilation: `#if`, `#elif`, `#else`, `#endif`, file-local `#define`/`#undef`, active errors/warnings and Boolean expressions.
+- A bounded MSBuild source-selection evaluator: properties, conditions, imported `.props`/`.targets` files, `Directory.Build.*`, `Choose`, conditional items and project references.
+- Per-project framework/conditional symbols, explicit multi-target selection, linked-source conflict diagnostics, and dependency isolation.
+- A reusable IDE profile editor and evaluated-build inspector, with JSON/local-storage persistence.
+
+Select **Build Profiles**, open **Build profile**, switch Debug to Release, and choose **Apply & build**. The compiled click handler changes from adding one to adding ten. The referenced `netstandard2.0` library retains its own symbols while the app targets `net8.0`.
+
+No SDK process, MSBuild task, property function, NuGet package restore or source generator is executed. See the [exact supported profile and limitations](docs/milestone-build-profiles.md).
+
+## Build and run
+
+Node.js 22 or newer. The compiler libraries have no npm dependencies.
 
 ```sh
 npm test
 npm run gate
 npm run build
 npm run check
-npm run serve
+python3 -m http.server --directory site 8080
 ```
 
-Open the development server on port 4173. The build also produces **`site/index.html`, a self-contained offline-capable IDE**, and `site/index.module.html`, its modular HTTP-served counterpart. The workbench has six editable source workspaces: ControlCatalog, Counter, DataBinding, Collections, WebGPU and UpstreamCheckBox.
+Open `http://localhost:8080/`. `site/index.html` is also a self-contained offline-capable primary IDE; `site/index.module.html` is its modular HTTP-served counterpart. The secondary workbench is at `browser/ide/` within the built site and requires HTTP module loading.
 
-Open a containing folder to load solution/project files and their neighboring sources. Choose a startup project/root view, edit C# or XAML, and press Ctrl/Command+Enter. Inspect generated JavaScript and source-located diagnostics, run the isolated preview, save the workspace as JSON, or export a standalone HTML application. Compiler errors prevent execution. Sources are processed locally by the browser IDE.
-
-The Pages workflow builds and tests the static site before attempting deployment. Pages must be enabled for GitHub Actions; automatic enablement can be denied by repository permissions. Check the deployment job rather than treating a successful build as proof that the live endpoint is available.
+The primary workbench includes seven editable source workspaces: ControlCatalog, Counter, DataBinding, Collections, WebGPU, UpstreamCheckBox and BuildProfiles. Open a containing folder to preserve neighboring solution/project/import paths. Choose a startup project and view, edit C# or XAML, build in a worker, inspect generated JavaScript, and run the isolated preview. Export source workspaces as JSON or applications as standalone HTML.
 
 ## Reusable libraries
 
 | Package | Responsibility |
 |---|---|
-| `packages/compiler-core` | Source spans, diagnostics, structural XML and safe serialization |
+| `packages/compiler-core` | Source spans, diagnostics, structural XML and serialization |
+| `packages/build-profile` | Project evaluation, conditional compilation, dependency profiles and inspector UI |
 | `packages/xaml-compiler` | Namespace/type/property validation, markup extensions, XAML IR and JS emission |
-| `packages/csharp-compiler` | Separate lexer/parser, partial-type merging, symbol resolution and JS emission |
-| `packages/dotnet-runtime` | Events, observable collections, commands, tasks, LINQ and numeric/string adapters |
-| `packages/avalonia-runtime` | Styled properties, bindings, resources, templates, controls and HTML/CSS/SVG rendering |
-| `packages/renderer` | Instanced WebGPU rectangles/ellipses, buffer reuse and real Canvas2D fallback |
-| `packages/project-system` | Virtual workspace, solution/project references, compilation and preview export |
+| `packages/csharp-compiler` | Lexer/parser, partial-type merging, symbol resolution and JS emission |
+| `packages/dotnet-runtime` | Events, collections, commands, tasks and selected library adapters |
+| `packages/avalonia-runtime` | Properties, bindings, resources, selected templates and native controls |
+| `packages/renderer` | WebGPU primitive rendering and explicit Canvas2D fallback |
+| `packages/project-system` | Workspace, project graph, compilation and preview export |
 
-All are native ES modules. The IDE uses these libraries rather than a separate demo-only compilation path. The C# compiler parses syntax trees; it is not a sequence of regex source replacements.
+The existing secondary modules under `browser/packages` are preserved. Both project/C# frontends use the same build-profile package rather than duplicating evaluation logic. Runtime/compiler state is not shared between application instances.
 
 ```js
 import { compileProject } from './packages/project-system/index.js';
 
-const result = compileProject({
-  'Demo.csproj': '<Project/>',
-  'Main.axaml': '<Window><TextBlock Text="Compiled XAML"/></Window>'
+const files = {
+  'Demo.csproj': '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>',
+  'Main.axaml': '<Window xmlns="https://github.com/avaloniaui"><TextBlock Text="Compiled XAML"/></Window>'
+};
+const result = compileProject(files, {
+  projectPath: 'Demo.csproj',
+  configuration: 'Release',
+  symbols: ['BROWSER']
 });
 if (!result.success) console.error(result.diagnostics);
-else console.log(result.code, result.manifest);
+else console.log(result.code, result.buildProfiles, result.sourceSymbols);
 ```
 
 ## Evidence and boundaries
 
-The initial local checkpoint passed **42 Node tests**, **six example compile/hydrate gates**, **three upstream source/license hash checks**, and **15 browser checks**. Browser checks exercise real C# event handlers, edits changing behavior, bindings, collection templates, checkbox states, tabs, source import, standalone export and preview-origin isolation. Reproduce them with the commands in [quality-gates.md](docs/quality-gates.md); current CI results are authoritative for subsequent changes.
+The build-profile checkpoint at `29e721b5aca1f402d3bc1dde6a12c18749acf32b` passed repository verification and deployed through [Actions run 34232824105](https://github.com/wieslawsoltes/Jailbreak/actions/runs/34232824105). The workflow runs the Node suite, example compile/hydrate gate, static build, syntax checks, and actual Chromium tests before deploying. Its artifacts include browser screenshots and the gate report. Current workflow results are authoritative for later commits.
 
-The upstream fixture is pinned to `AvaloniaUI/Avalonia` commit `27c1ece36cbe17de3b8f95ae88223ba68702ae47` and retains its license and exact source bytes. It uses an explicit Jailbreak ContentPage/ScrollPage host adapter. The optional upstream inventory reports parsing and isolated XAML validation separately; it does not represent a linked or executed full catalog.
+The requested fork's unchanged CheckBoxPage and RadioButtonPage XAML/code-behind are hash-checked and compiled through both pipelines. Secondary browser gates exercise checkbox states, the three-state cycle, disabled input and radio-group behavior. The separate official `AvaloniaUI/Avalonia` baseline is retained. Both use explicit ContentPage/ScrollPage host adapters; neither proves full theme/rendering parity.
 
-Local rendering tests exercised Canvas2D because the environment had no WebGPU adapter. WebGPU implementation is present, but local GPU execution/performance is not claimed. Most UI rendering is HTML/CSS/SVG, not a complete GPU compositor.
-
-Important gaps include general control/theme templates, advanced binding and styling, full C# semantic/value-type/numeric behavior, complete .NET APIs, NuGet/source generators/MSBuild evaluation, platform services and full rendering fidelity. Generic syntax is erased, and notifying auto-properties are a documented convenience extension. Schema presence is not a behavioral compatibility guarantee. `npm run gate -- --require-full` fails until the full target is met.
+Remaining gaps include complete C# semantics and .NET APIs, general Avalonia templates/layout/styling, full SDK/MSBuild/NuGet/source-generator behavior, native platform services and full ControlCatalog execution. Most UI rendering remains HTML, not a complete WebGPU compositor. `npm run gate -- --require-full` intentionally fails while full compatibility is unimplemented.
 
 ## License
 
-MIT; see [LICENSE](LICENSE). The unchanged Avalonia reference fixture retains its separate MIT copyright and license in [examples/UpstreamCheckBox](examples/UpstreamCheckBox/). This is an independent project, not an official Avalonia distribution.
+Independent compatibility implementation. Upstream Avalonia fixtures retain their MIT copyright/license notices. See the fixture manifests for exact provenance; this is not an official Avalonia distribution.
