@@ -58,13 +58,13 @@ export function compileProject(input,options={}) {
   if(selected.size>2000)bag.add('JB4011','Workspace exceeds 2,000 source files for interactive compilation',new SourceFile(projectPath??'workspace',''));
   const sourceFiles=[...selected].sort(),csFiles=sourceFiles.filter(p=>p.endsWith('.cs')).map(path=>({path,text:workspace.get(path)}));
   const declarations=csFiles.flatMap(f=>parseCSharp(f.text,f.path).ast?.declarations??[]);
-  const typeNames=declarations.map(d=>d.fullName),xaml=[],xamlNames={};
+  const typeNames=[...declarations.map(d=>d.fullName),...(options.externalTypes??[])],xaml=[],xamlNames={};
   for(const path of sourceFiles.filter(p=>/\.a?xaml$/i.test(p))){const result=compileXaml(workspace.get(path),{path,customTypes:typeNames});xaml.push(result);bag.merge(result.diagnostics);if(result.ir.className){xamlNames[result.ir.className]=result.ir.names;if(!typeNames.includes(result.ir.className)){
     const pieces=result.ir.className.split('.'),name=pieces.pop(),ns=pieces.join('.');
     csFiles.push({path:path+'.g.cs',text:(ns?'namespace '+ns+'; ':'')+`public partial class ${name} : ${result.ir.root.type} { }`});
   }}}
   const linked=linkXamlIncludes(xaml.map(x=>({...x.ir,sourceText:workspace.get(x.ir.path)})),{assemblies:options.xamlAssemblies??{}});bag.merge(linked.diagnostics);
-  const cs=compileCSharp(csFiles,{xamlNames});bag.merge(cs.diagnostics);
+  const cs=compileCSharp(csFiles,{xamlNames,externalTypes:options.externalTypes});bag.merge(cs.diagnostics);
   let entry=options.entryXaml?xaml.find(x=>x.ir.path===options.entryXaml||x.ir.className===options.entryXaml):null;
   if(!entry&&options.entryType)entry=xaml.find(x=>x.ir.className===options.entryType);
   if(!entry&&!options.entryXaml&&!options.entryType)entry=xaml.find(x=>x.ir.root?.type==='Window')??xaml.find(x=>x.ir.root?.type!=='Application'&&x.ir.root?.kind==='control');

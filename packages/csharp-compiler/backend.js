@@ -24,14 +24,18 @@ export function compileCSharp(input, options={}) {
       else {old.members.push(...decl.members);if(!old.bases.length)old.bases=decl.bases;}
     }else declarations.set(decl.fullName,decl);
   }}
+  const externalTypes=new Set(options.externalTypes??[]);
+  for(const name of externalTypes)if(declarations.has(name))bag.add('JB2250',`Source type conflicts with binary type ${name}`);
+  const availableTypes=new Set([...declarations.keys(),...externalTypes]);
   const jsNames=new Map([...declarations].map(([name])=>[name,identifier(name)]));
+  for(const name of externalTypes)if(!jsNames.has(name))jsNames.set(name,`(JB.types.get(${escapeJs(name)}))`);
   const warnings=new Set();let current=null,currentSource=null;
   const report=(code,message,node,severity='error')=>bag.add(code,message,currentSource??current?.source,node?.start??0,severity);
   function resolve(name,decl=current){
-    if(declarations.has(name))return name;
-    if(decl&&declarations.has(decl.namespace+'.'+name))return decl.namespace+'.'+name;
-    for(const u of allUsings){if(u.alias===name){const aliased=resolve(u.name,null);if(aliased)return aliased;}if(declarations.has(u.name+'.'+name))return u.name+'.'+name;}
-    const matches=[...declarations.keys()].filter(n=>n.split('.').at(-1)===name);
+    if(availableTypes.has(name))return name;
+    if(decl&&availableTypes.has(decl.namespace+'.'+name))return decl.namespace+'.'+name;
+    for(const u of allUsings){if(u.alias===name){const aliased=resolve(u.name,null);if(aliased)return aliased;}if(availableTypes.has(u.name+'.'+name))return u.name+'.'+name;}
+    const matches=[...availableTypes].filter(n=>n.split('.').at(-1)===name);
     return matches.length===1?matches[0]:null;
   }
   function typeRef(t,node=t){

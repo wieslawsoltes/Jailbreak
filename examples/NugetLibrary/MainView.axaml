@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="BinaryDemo.MainView">
+  <StackPanel Margin="28" Spacing="16">
+    <TextBlock Text="C# source + a real managed library" FontSize="27" FontWeight="Bold" TextWrapping="Wrap" />
+    <TextBlock Name="Greeting" TextWrapping="Wrap" />
+    <TextBlock Text="This view is compiled from XAML/C#. Calculator and Counter are compiled from DLL bytes, not substituted source." TextWrapping="Wrap" />
+    <TextBox Name="NameInput" Text="browser" />
+    <Button Content="Call converted DLL" Click="RunLibrary" />
+    <TextBlock Name="Result" Text="Ready" FontSize="20" />
+    <TextBlock Text="Open library.binary.json to inspect the imported binary workspace record. The exported HTML contains emitted JavaScript, not a .NET runtime." TextWrapping="Wrap" />
+  </StackPanel>
+</UserControl>

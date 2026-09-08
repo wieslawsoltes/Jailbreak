@@ -1,3 +1,4 @@
+import { createBinaryRuntime } from '../msil-runtime/index.js';
 import { TemplateAppliedEventArgs } from './templates.js';
 export { TemplateAppliedEventArgs } from './templates.js';
 import * as DN from '../dotnet-runtime/index.js';
@@ -34,6 +35,7 @@ export function createRuntime() {
     DelegateCommand:DN.RelayCommand,AvaloniaObject:StyledObject,StyledElement:StyledObject,AvaloniaProperty,StyledProperty:AvaloniaProperty,
     ResourceDictionary,TemplateAppliedEventArgs,Thickness,CornerRadius,Point,Vector:Point,Size,Rect,Color,SolidColorBrush,Uri,Colors,Brushes,Dispatcher,BindingMode,Binding,
     runtimeCss,flushLayout,types,documents};
+  api.binary=createBinaryRuntime({log:(...args)=>api.Console?.WriteLine?.(...args)});
   api.defineType=(name,type)=>{if(types.has(name))throw new Error(`Duplicate runtime type '${name}'`);types.set(name,type);if(typeof type==='function')Object.defineProperty(type,'$fullName',{value:name,configurable:true});return type;};
   for(const [name,type]of Object.entries(controls))types.set(name,type);
   api.registerXaml=(id,ir)=>{if(ir.version!==1)throw new Error('Unsupported XAML IR version');documents.set(id,ir);};
