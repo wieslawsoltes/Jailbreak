@@ -1,4 +1,4 @@
-import { reconcilePanel } from './structure.js';
+import { reconcilePanel, structureContext } from './structure.js';
 import { eventNames, controlDefinitions } from '../avalonia-runtime/schema.js';
 import { identifier, escapeJs } from '../compiler-core/index.js';
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
@@ -25,6 +25,7 @@ export function planReload(previous,next){
   if(!same(previous.binaries,next.binaries)||!same(previous.packages,next.packages))reasons.push('Binary library/package change requires restart');
   const oldDocs=new Map(previous.xaml.map(d=>[d.path,d]));
   if(previous.xaml.length!==next.xaml.length)reasons.push('XAML document set changed');
+  let context;
   function walk(a,b,file){
     if(!a||!b||a.kind!==b.kind||a.type!==b.type||a.property!==b.property||!same(a.key,b.key)){reasons.push('XAML structure changed in '+file);return;}
     if(a.kind==='text'&&a.text!==b.text)reasons.push('Text-node change requires restart; use a Text/Content attribute for live edits');
@@ -34,12 +35,12 @@ export function planReload(previous,next){
       if(a.kind!=='control'||!Object.hasOwn(controlDefinitions,a.type)||!liveProperties.has(key)||eventNames.includes(key)||before!==undefined&&!literal(before)||after!==undefined&&!literal(after))reasons.push('Non-live property '+file+':'+a.type+'.'+key);
       else patches.push({file,offset:a.span.start,property:key,value:after,remove:after===undefined});
     }
-    try { if(a.kind==='control'&&reconcilePanel(a,b,file,walk,structures))return; }
+    try { if(a.kind==='control'&&reconcilePanel(a,b,file,walk,structures,context))return; }
     catch(error){reasons.push(error.message+' in '+file);return;}
     if(a.children?.length!==b.children?.length){reasons.push('Non-panel XAML structure changed in '+file);return;}
     for(let i=0;i<(a.children?.length??0);i++)walk(a.children[i],b.children[i],file);
   }
-  for(const doc of next.xaml){const old=oldDocs.get(doc.path);if(!old||old.className!==doc.className)reasons.push('XAML identity changed');else walk(old.root,doc.root,doc.path);}
+  for(const doc of next.xaml){const old=oldDocs.get(doc.path);if(!old||old.className!==doc.className)reasons.push('XAML identity changed');else {try{context=structureContext(old.root,doc.root);walk(old.root,doc.root,doc.path);}catch(error){reasons.push(error.message+' in '+doc.path);}}}
   // References to deleted names may otherwise retain a disposed target.
   const removed=new Set(structures.flatMap(s=>s.removedNames));
   const inspect=value=>{if(!value||typeof value!=='object')return;if(removed.has(value.ElementName)||value.kind==='reference'&&removed.has(value.name))reasons.push('A surviving reference targets a removed name');for(const v of Object.values(value))if(v&&typeof v==='object')inspect(v);};

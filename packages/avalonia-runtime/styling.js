@@ -25,8 +25,9 @@ export function applyCommon(control){
   style.justifySelf=align[control.HorizontalAlignment]??'';
   style.alignSelf=align[control.parent?.Orientation==='Horizontal'?control.VerticalAlignment:control.HorizontalAlignment]??'';
   if(control.parent?.type==='Grid')style.alignSelf=align[control.VerticalAlignment]??'';
-  if(control.GetValue('Grid.Row')!=null)style.gridRow=`${Number(control.GetValue('Grid.Row'))+1} / span ${Number(control.GetValue('Grid.RowSpan'))||1}`;
-  if(control.GetValue('Grid.Column')!=null)style.gridColumn=`${Number(control.GetValue('Grid.Column'))+1} / span ${Number(control.GetValue('Grid.ColumnSpan'))||1}`;
+  style.gridRow=control.GetValue('Grid.Row')!=null?`${Number(control.GetValue('Grid.Row'))+1} / span ${Number(control.GetValue('Grid.RowSpan'))||1}`:'';
+  style.gridColumn=control.GetValue('Grid.Column')!=null?`${Number(control.GetValue('Grid.Column'))+1} / span ${Number(control.GetValue('Grid.ColumnSpan'))||1}`:'';
+  style.position='';for(const key of ['left','top','right','bottom'])style[key]='';
   if(control.parent?.type==='Canvas'){style.position='absolute';for(const key of ['Left','Top','Right','Bottom'])style[key.toLowerCase()]=dimension(control.GetValue('Canvas.'+key));}
   element.setAttribute('aria-disabled',String(!control.effectiveEnabled));if(control.GetValue('ToolTip.Tip')!=null)element.title=String(control.GetValue('ToolTip.Tip'));
   if(control.Focusable===true&&element.tabIndex<0)element.tabIndex=0;

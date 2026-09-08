@@ -1,3 +1,4 @@
+import { childSlot, logicalIndex } from './tree-slots.js';
 /** Conservative source-tree reconciliation. Named siblings are keys, never array indices. */
 import { controlDefinitions, eventNames } from '../avalonia-runtime/schema.js';
 export const reloadPanels = new Set(['Panel', 'StackPanel', 'WrapPanel', 'Grid', 'Canvas', 'DockPanel']);
@@ -50,17 +51,43 @@ export function namedNodes(node, result = new Set()) {
   for (const child of node.children ?? []) namedNodes(child, result);
   return result;
 }
-/** Build panel edits alongside property patches using the caller's recursive visitor. */
-export function reconcilePanel(a, b, file, visit, structures) {
-  if (!reloadPanels.has(a.type) || a.children.some(n => n.kind !== 'control') || b.children.some(n => n.kind !== 'control')) return false;
-  const {pairs, removed} = matchChildren(a.children, b.children);
-  const changed = a.children.length !== b.children.length || b.children.some((n, i) => pairs.get(n) !== a.children[i]);
-  for (const n of b.children) {
-    const old = pairs.get(n);
-    if (old) visit(old, n, file); else validateNewSubtree(n);
+/** Document-wide names permit moves only between existing hosts in one namescope. */
+export function structureContext(before, after) {
+  return {before:logicalIndex(before), after:logicalIndex(after), visited:new Set()};
+}
+export function reconcilePanel(a, b, file, visit, structures, context) {
+  const oldSlot=childSlot(a), newSlot=childSlot(b);
+  if (!oldSlot || !newSlot || oldSlot.kind!==newSlot.kind) return false;
+  const before=oldSlot.children, after=newSlot.children;
+  const {pairs}=matchChildren(before, after);
+  for (const next of after) {
+    const key=name(next), old=key && context?.before.names.get(key);
+    if (!pairs.has(next) && old) {
+      if (old.type!==next.type) throw new Error('Named control type changed: '+key);
+      pairs.set(next,old);
+    }
   }
-  if (changed) structures.push({file, offset: a.span.start, before: a.children.map(n => n.span.start),
-    children: b.children.map(n => pairs.has(n) ? {offset: pairs.get(n).span.start} : {node: n}),
-    removedNames: [...new Set(removed.flatMap(n => [...namedNodes(n)]))]});
+  const removed=before.filter(n=>![...pairs.values()].includes(n));
+  const changed=before.length!==after.length || after.some((n,i)=>pairs.get(n)!==before[i]);
+  for (const next of after) {
+    const old=pairs.get(next);
+    if (old) {
+      if (context?.visited.has(old)) throw new Error('A retained control has multiple new owners');
+      context?.visited.add(old); visit(old,next,file);
+    } else {
+      validateNewSubtree(next);
+      for (const key of namedNodes(next)) if(context?.before.names.has(key))
+        throw new Error('Moving a retained control into a newly constructed host requires restart');
+    }
+  }
+  // A removed host must not own a descendant that a separate edit tries to retain.
+  for(const node of removed) if(!context?.after.names.has(name(node)))
+    for(const key of namedNodes(node)) if(context?.after.names.has(key))
+      throw new Error('Extracting a descendant from a removed host requires restart');
+  if(changed) structures.push({file,offset:a.span.start,kind:oldSlot.kind,before:before.map(n=>n.span.start),
+    children:after.map(n=>pairs.has(n)?{offset:pairs.get(n).span.start}:{node:n}),
+    removedNames:[...new Set(removed.flatMap(n=>context?.after.names.has(name(n))?[]:[...namedNodes(n)]))]});
+  if(oldSlot.rest.length!==newSlot.rest.length) throw new Error('Nonvisual property structure changed');
+  for(let i=0;i<oldSlot.rest.length;i++) visit(oldSlot.rest[i],newSlot.rest[i],file);
   return true;
 }
