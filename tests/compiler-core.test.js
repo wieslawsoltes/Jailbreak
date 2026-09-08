@@ -10,6 +10,15 @@ test('XML reports exact source file and location',()=>{const r=parseXml('<Root>\
 test('markup supports nested resources in bindings',()=>{const b=parseMarkup("{Binding Name, Mode=TwoWay, Converter={StaticResource Converter}, StringFormat='Hello, {0}'}");assert.equal(b.path,'Name');assert.equal(b.Converter.key,'Converter');assert.equal(b.StringFormat,'Hello, {0}');assert.equal(parseMarkup('{x:Null}'),null);assert.equal(parseMarkup('{}{literal}'),'{literal}');});
 test('XAML compiles named controls, attached properties and events',()=>{const r=compileXaml('<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Demo.Window"><Grid ColumnDefinitions="*,Auto"><Button x:Name="go" Grid.Column="1" Click="OnClick">Go</Button></Grid></Window>');assert.equal(r.success,true,JSON.stringify(r.diagnostics));assert.deepEqual(r.ir.names,['go']);assert.match(r.code,/JB.registerXaml/);});
 test('unknown controls and properties fail compilation rather than disappear',()=>{assert.equal(compileXaml('<HolographicBox/>').success,false);const r=compileXaml('<Button Imaginary="1"/>');assert.equal(r.diagnostics[0].code,'JB1106');assert.equal(r.code,'');});
-test('unsupported binding and template syntax is explicit',()=>{assert.equal(compileXaml('<TextBlock Text="{Binding Name, RelativeSource={RelativeSource Self}}"/>').success,false);assert.equal(compileXaml('<ControlTemplate><Button/></ControlTemplate>').success,false);});
+test('RelativeSource Self and valid deferred ControlTemplate now compile',()=>{
+  for(const source of ['<TextBlock Text="{Binding Name, RelativeSource={RelativeSource Self}}"/>','<ControlTemplate><Button/></ControlTemplate>']) {
+    const result=compileXaml(source);assert.equal(result.success,true,JSON.stringify(result.diagnostics));
+  }
+});
+test('unsupported relative sources and invalid template bodies remain errors',()=>{
+  for(const source of ['<TextBlock Text="{Binding Name, RelativeSource={RelativeSource FindAncestor}}"/>','<ControlTemplate><Button/><Button/></ControlTemplate>','<TextBlock Text="{TemplateBinding Content}"/>','<TreeDataTemplate><TextBlock/></TreeDataTemplate>']) {
+    const result=compileXaml(source);assert.equal(result.success,false,source);assert.equal(result.code,'');
+  }
+});
 test('duplicate names fail and property elements are preserved',()=>{assert.equal(compileXaml('<StackPanel><Button Name="a"/><Button Name="a"/></StackPanel>').success,false);const r=compileXaml('<Border><Border.Background><SolidColorBrush Color="Red"/></Border.Background></Border>');assert.equal(r.ir.root.children[0].property,'Background');});
 test('JavaScript serialization cannot inject a closing script tag',()=>assert.equal(escapeJs('</script>'), '"\\u003c/script>"'));
