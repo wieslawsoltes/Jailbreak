@@ -1,3 +1,4 @@
+import {createCooperativeDebugger} from './cooperative-debugger.js';
 import {beginTemplateTransaction} from '../avalonia-runtime/template-transaction.js';
 import {eventNames} from '../avalonia-runtime/schema.js';
 import { prepareStructure } from './structure-runtime.js';
@@ -6,9 +7,21 @@ import { liveProperties } from './live-properties.js';
 /** Per-application developer session. Nothing here is enabled for release execution. */
 export function createDevelopmentSession(JB,{debug={},report=()=>{},nativeBreaks=true,breakpoints=[],watches=[],breakOnThrow=false}={}){
   const origins=new WeakMap(),bindings=new WeakMap(),boundMethods=new WeakMap();let points=new Map(),counts=new Map(),lastLocals=null,selected=null,picking=false,breakNext=false,disposed=false,revision=0,reloading=false;
-  const originalMethod=JB.method;
-  JB.method=(object,name)=>{let cache=boundMethods.get(object);if(!cache){cache=new Map();boundMethods.set(object,cache);}if(!cache.has(name))cache.set(name,(...args)=>object[name](...args));return cache.get(name);};
+  const originalMethod=JB.method,originalAdd=JB.eventAdd,originalRemove=JB.eventRemove;
+  JB.method=(object,name)=>{let cache=boundMethods.get(object);if(!cache){cache=new Map();boundMethods.set(object,cache);}if(!cache.has(name))cache.set(name,co.rememberBound((...args)=>object[name](...args),object,name));return cache.get(name);};
   const emit=(kind,payload)=>{if(!disposed){try{report(kind,payload);}catch{/* Tool clients must not change application execution. */}}};
+  let inputRoot=null,inputInert=false;
+  function cooperativeReport(kind,payload){
+    if(['debug-paused','debug-resumed','debug-completed'].includes(kind)){
+      const paused=co.state().some(t=>t.status==='paused'),element=JB.root?.element;
+      if(paused&&element&&!inputRoot){inputRoot=element;inputInert=element.inert;element.inert=true;}
+      if(!paused&&inputRoot){inputRoot.inert=inputInert;inputRoot=null;}
+    }
+    emit(kind,payload);
+  }
+  const co=createCooperativeDebugger({point:id=>points.get(id),breakpoint:(p,locals)=>hitPoint(p,locals,false),breakOnThrow:()=>breakOnThrow,report:cooperativeReport});
+  JB.eventAdd=(object,name,handler)=>originalAdd(object,name,co.eventFunction(handler));
+  JB.eventRemove=(object,name,handler)=>originalRemove(object,name,co.eventFunction(handler));
   function configure(settings={}){if(settings.debug){debug=settings.debug;points=new Map((debug.sites??[]).map(p=>[p.id,p]));}if(settings.breakpoints)breakpoints=settings.breakpoints.slice(0,1000);if(settings.watches)watches=settings.watches.slice(0,50);if('nativeBreaks'in settings)nativeBreaks=!!settings.nativeBreaks;if('breakOnThrow'in settings)breakOnThrow=!!settings.breakOnThrow;counts.clear();}
   configure({debug});
   const registry=()=>{const result=[],seen=new Set();function visit(c,parent=null){if(!c||c._disposed||seen.has(c)||result.length>=5000)return;seen.add(c);result.push({c,parent});for(const child of c.visualChildren??[])visit(child,c.uid);}visit(JB.root);return result;};
@@ -23,9 +36,9 @@ export function createDevelopmentSession(JB,{debug={},report=()=>{},nativeBreaks
     return m[2]==='>'?l>r:m[2]==='<'?l<r:m[2]==='>='?l>=r:l<=r;
   }
   function hit(id,getLocals){
-    return hitPoint(points.get(id),getLocals);
+    return co.active?false:hitPoint(points.get(id),getLocals);
   }
-  function hitPoint(point,getLocals){
+  function hitPoint(point,getLocals,native=true){
     if(disposed||reloading||!point)return false;
     const matching=breakpoints.filter(b=>b.enabled!==false&&(b.language==='javascript'?b.line===point.generatedLine:b.file===point.file&&Number(b.line)===point.line));
     if(!breakNext&&!matching.length)return false;
@@ -34,8 +47,8 @@ export function createDevelopmentSession(JB,{debug={},report=()=>{},nativeBreaks
       try{if(!condition(b.condition,locals))continue;if(b.log){emit('debug-log',{point,hitCount:count,locals:snapshot(locals)});continue;}stop=true;}
       catch(error){emit('debug-condition-error',{point,message:error.message});}
     }
-    if(stop){lastLocals=locals;emit('debug-hit',{point,locals:snapshot(locals),watches:watchResults(),stack:new Error().stack,nativePause:nativeBreaks});}
-    return stop&&nativeBreaks;
+    if(stop){lastLocals=locals;emit('debug-hit',{point,locals:snapshot(locals),watches:watchResults(),stack:new Error().stack,nativePause:native&&nativeBreaks});}
+    return native?stop&&nativeBreaks:stop;
   }
   function watchResults(){return watches.map(path=>{try{return {path,value:snapshot(readWatch(lastLocals??{this:JB.root},path))};}catch(error){return {path,error:error.message};}});}
   function tree(){return registry().map(({c,parent})=>({id:c.uid,parent,type:c.constructor.$fullName??c.type,name:c.Name??'',source:origins.get(c)??null,template:!!c.TemplatedParent,selected:c===selected}));}
@@ -64,6 +77,7 @@ export function createDevelopmentSession(JB,{debug={},report=()=>{},nativeBreaks
   function pointer(event){if(!picking)return;const path=event.composedPath?.()??[];const item=registry().filter(({c})=>path.includes(c.element)).sort((a,b)=>path.indexOf(a.c.element)-path.indexOf(b.c.element))[0];if(item){event.preventDefault();event.stopImmediatePropagation();if(event.type==='click')select(item.c.uid);}}
   globalThis.document?.addEventListener('pointerdown',pointer,true);globalThis.document?.addEventListener('click',pointer,true);globalThis.addEventListener?.('scroll',highlight,true);
   function applyReload(plan,methods){
+    if(co.busy)throw new Error('Finish or cancel active debug invocations before hot reload');
     if(!plan.compatible||plan.revision!==revision+1)throw new Error('Stale or incompatible hot reload');
     const all=registry().map(e=>e.c),changes=[],descriptors=[],environmentChanges=[];
     const targets=p=>{
@@ -101,6 +115,7 @@ export function createDevelopmentSession(JB,{debug={},report=()=>{},nativeBreaks
       templates?.rollback();for(const t of environments)attempt(()=>t.finalize());
       attempt(()=>JB.flushLayout());structure?.settle();reloading=false;emit('reload-error',{message:error.message,revision});throw error;
     }
+    for(const m of methods)if(m.generator)co.register(JB.types.get(m.type),[{...m,fn:m.generator}]);
     for(const doc of plan.documents)JB.documents.set(doc.className??doc.path,doc);
     for(const c of all){const origin=origins.get(c),location=plan.locations?.find(l=>l.file===origin?.file&&l.offset===origin.offset);if(location)origins.set(c,location.next);}
     for(const c of all)if(c._xamlLoaded){const updated=plan.documents.find(d=>d.path===c._xamlLoaded.path);if(updated)c._xamlLoaded=updated;}
@@ -110,17 +125,17 @@ export function createDevelopmentSession(JB,{debug={},report=()=>{},nativeBreaks
     if(selected?._disposed){selected=null;overlay?.remove();overlay=null;resizeObserver?.disconnect();}
     emit('reloaded',{revision,properties:changes.length,methods:methods.length,environments:environmentChanges.length,added:structure.added,removed:structure.removed,panels:structure.groups});emit('tree',tree());highlight();return {revision};
   }
-  const api={configure,hit,inspect,tree,select,applyReload,watchResults,
+  const api={co,handler:(object,name)=>co.eventFunction(JB.method(object,name)),configure,hit,inspect,tree,select,applyReload,watchResults,
     read(fn){try{return fn();}catch{return '[unavailable]';}},
-    throwing(error,point){emit('debug-exception',{point,error:snapshot(error),message:error?.message??String(error),stack:error?.stack});if(breakOnThrow&&nativeBreaks){debugger;}return error;},
+    throwing(error,point){emit('debug-exception',{point,error:snapshot(error),message:error?.message??String(error),stack:error?.stack});if(!co.active&&breakOnThrow&&nativeBreaks){debugger;}return error;},
     get revision(){return revision;},
-    register(control,source){if(control?.uid){origins.set(control,{...source});if(source.language==='xaml'&&hitPoint(source,()=>({this:control}))) {debugger;}}return control;},
+    register(control,source){if(control?.uid){origins.set(control,{...source});if(!co.active&&source.language==='xaml'&&hitPoint(source,()=>({this:control}))) {debugger;}}return control;},
     created(value,source){if(value?.uid){origins.set(value,{...source});emit('constructed',{id:value.uid,source});}return value;},
     binding(control,name,spec){let map=bindings.get(control);if(!map){map={};bindings.set(control,map);}map[name]=snapshot(spec);},
     breakNext(){breakNext=true;},
     pick(value){picking=!!value;if(!picking){overlay?.remove();overlay=null;}return picking;},
     refresh(){emit('tree',tree());if(selected&&!selected._disposed)emit('selected',inspect(selected.uid));},
-    dispose(){disposed=true;lastLocals=null;selected=null;breakpoints=[];watches=[];points.clear();overlay?.remove();resizeObserver?.disconnect();globalThis.document?.removeEventListener('pointerdown',pointer,true);globalThis.document?.removeEventListener('click',pointer,true);globalThis.removeEventListener?.('scroll',highlight,true);if(JB.dev===api){JB.method=originalMethod;delete JB.dev;}}
+    dispose(){co.dispose();if(inputRoot){inputRoot.inert=inputInert;inputRoot=null;}disposed=true;lastLocals=null;selected=null;breakpoints=[];watches=[];points.clear();overlay?.remove();resizeObserver?.disconnect();globalThis.document?.removeEventListener('pointerdown',pointer,true);globalThis.document?.removeEventListener('click',pointer,true);globalThis.removeEventListener?.('scroll',highlight,true);if(JB.dev===api){JB.method=originalMethod;JB.eventAdd=originalAdd;JB.eventRemove=originalRemove;delete JB.dev;}}
   };
   return api;
 }

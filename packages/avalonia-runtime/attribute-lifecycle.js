@@ -18,7 +18,7 @@ export function createAttributeRuntime(api,{resolve,findResource,keyOf,set}) {
           api.dev?.binding(target,name,value?.kind?value:null);
           if(eventNames.includes(name)){
             const fn=scope.owner[value];if(typeof fn!=='function')throw new Error('JB3004: Event handler '+value+' was not found');
-            off=target[name].add(api.dev?api.method(scope.owner,value):fn.bind(scope.owner));return;
+            off=target[name].add(api.dev?api.dev.handler(scope.owner,value):fn.bind(scope.owner));return;
           }
           let spec=value;
           if(spec?.kind==='templateBinding'){

@@ -13,6 +13,9 @@ addEventListener('message',event=>{
     else if(message.action==='configure')development.configure(message.settings??{});
     else if(message.action==='break-next')development.breakNext();
     else if(message.action==='watch')report('development',{event:'watches',payload:development.watchResults()});
+    else if(message.action==='debug-control')development.co.command(message.taskId,message.command);
+    else if(message.action==='debug-frame')report('development',{event:'debug-frame',payload:development.co.inspectFrame(message.taskId,message.frameId,message.paths??[])});
+    else if(message.action==='debug-local')development.co.setLocal(message.taskId,message.frameId,message.name,message.value);
     else if(message.action==='reload'){
       if(typeof message.script!=='string'||message.script.length>8000000)throw new Error('Reload script exceeds the session limit');
       const failed=error=>report('development',{event:'tool-error',payload:{message:error.message}});addEventListener('error',failed);

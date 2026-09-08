@@ -64,7 +64,7 @@ export function compileProject(input,options={}) {
     csFiles.push({path:path+'.g.cs',text:(ns?'namespace '+ns+'; ':'')+`public partial class ${name} : ${result.ir.root.type} { }`});
   }}}
   const linked=linkXamlIncludes(xaml.map(x=>({...x.ir,sourceText:workspace.get(x.ir.path)})),{assemblies:options.xamlAssemblies??{}});bag.merge(linked.diagnostics);
-  const cs=compileCSharp(csFiles,{xamlNames,externalTypes:options.externalTypes,debug:options.debug});bag.merge(cs.diagnostics);
+  const cs=compileCSharp(csFiles,{xamlNames,externalTypes:options.externalTypes,debug:options.debug,cooperativeDebug:options.cooperativeDebug});bag.merge(cs.diagnostics);
   let entry=options.entryXaml?xaml.find(x=>x.ir.path===options.entryXaml||x.ir.className===options.entryXaml):null;
   if(!entry&&options.entryType)entry=xaml.find(x=>x.ir.className===options.entryType);
   if(!entry&&!options.entryXaml&&!options.entryType)entry=xaml.find(x=>x.ir.root?.type==='Window')??xaml.find(x=>x.ir.root?.type!=='Application'&&x.ir.root?.kind==='control');

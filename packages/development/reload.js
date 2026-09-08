@@ -20,6 +20,7 @@ export function planReload(previous,next){
   const reasons=[],patches=[],locations=[],structures=[],environments=[];
   if(!previous?.success||!next?.success)return {compatible:false,reasons:['Both builds must succeed'],patches:[]};
   if(!previous.debug||!next.debug)return {compatible:false,reasons:['Enable development tools before starting the preview'],patches:[]};
+  if(!!previous.debug.cooperative!==!!next.debug.cooperative)reasons.push('Debugger execution mode changed');
   if(!same(previous.manifest,next.manifest))reasons.push('Entry, assets, project profile or binary manifest changed');
   if(!same(previous.buildProfiles,next.buildProfiles))reasons.push('Project evaluation changed');
   if(!same(previous.debug.typeShapes,next.debug.typeShapes))reasons.push('C# type shape, constructor, initializer or property changed');
@@ -63,6 +64,6 @@ export function planReload(previous,next){
 export function reloadScript(plan,previous,next,revision){
   if(!plan.compatible)throw new Error('Cannot emit incompatible reload');
   const aliases=next.types.filter(t=>t.kind!=='interface').map(t=>`const ${identifier(t.name)}=JB.types.get(${escapeJs(t.name)});`).join('\n');
-  const methods=(next.debug.methods??[]).map(m=>`{type:${escapeJs(m.type)},name:${escapeJs(m.name)},static:${m.static},fn:({${m.code}})[${escapeJs(m.name)}]}`).join(',\n');
+  const methods=(next.debug.methods??[]).map(m=>`{type:${escapeJs(m.type)},name:${escapeJs(m.name)},static:${m.static},fn:({${m.code}})[${escapeJs(m.name)}]${m.generator?',generator:({'+m.generator+'})['+escapeJs(m.name)+'],async:'+!!m.async:''}}`).join(',\n');
   return `(function(JB){\n${aliases}\nJB.dev.applyReload(${escapeJs({...plan,debug:{sites:plan.debug.sites},revision})},[${methods}]);\n})(globalThis.Jailbreak);`;
 }

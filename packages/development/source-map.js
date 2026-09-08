@@ -15,7 +15,7 @@ export function createSourceMap(code,sites,files,{file='jailbreak-app.js'}={}){
     if(point){
       const mapping={generatedLine:line,generatedColumn:column,source:sources.indexOf(point.file),line:point.line-1,column:point.column-1,id:point.id};points.push(mapping);
       const tail=code.indexOf('\n',offset);
-      if(code.slice(offset).startsWith('if(JB.dev?.hit(')&&tail>=0)points.push({...mapping,generatedLine:line+1,generatedColumn:0});
+      if((code.slice(offset).startsWith('if(JB.dev?.hit(')||code.slice(offset).startsWith('yield $co.checkpoint('))&&tail>=0)points.push({...mapping,generatedLine:line+1,generatedColumn:0});
     }
   }
   let source=0,originalLine=0,originalColumn=0,lastLine=0,lastColumn=0,mappings='',first=true;

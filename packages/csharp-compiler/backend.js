@@ -106,6 +106,10 @@ export function compileCSharp(input, options={}) {
           if(stringMethods.has(name))return `JB.invoke(${obj},${escapeJs(name)},[${args.join(',')}],${!!m.optional})`;
           if(linqMethods.has(name)&&flatName(m.object)!=='Enumerable')return `JB.Enumerable.${name}(${obj}${args.length?','+args.join(','):''})`;
         }
+        if(ctx.cooperative){
+          if(e.callee.kind==='member')return `(yield* $co.applyReference($co.reference(${expr(e.callee.object,ctx)},${escapeJs(e.callee.name)},${!!e.callee.optional}),(function*(){return [${args.join(',')}];}).call(this)))`;
+          return `(yield* $co.call(${expr(e.callee,ctx)},[${args.join(',')}]))`;
+        }
         return `${expr(e.callee,ctx)}(${args.join(',')})`;
       }
       case 'index':return `JB.getIndex(${expr(e.object,ctx)},${expr(e.index,ctx)},${!!e.optional})`;
@@ -126,9 +130,9 @@ export function compileCSharp(input, options={}) {
         return `(${expr(e.left,ctx)} ${e.op} ${expr(e.right,ctx)})`;
       }
       case 'postfix':return e.argument.kind==='index'?`JB.incrementIndex(${expr(e.argument.object,ctx)},${expr(e.argument.index,ctx)},${e.op==='++'?1:-1},true)`:`(${expr(e.argument,ctx)}${e.op})`;
-      case 'unary':if(e.op==='await'&&!ctx.async)report('JB2204','await requires an async method/lambda',e);return `(${e.op}${e.op==='await'?' ':''}${expr(e.argument,ctx)})`;
+      case 'unary':if(ctx.cooperative&&e.op==='await')return `(yield $co.awaitValue(${expr(e.argument,ctx)}))`;if(e.op==='await'&&!ctx.async)report('JB2204','await requires an async method/lambda',e);return `(${e.op}${e.op==='await'?' ':''}${expr(e.argument,ctx)})`;
       case 'conditional':return `(${expr(e.test,ctx)} ? ${expr(e.consequent,ctx)} : ${expr(e.alternate,ctx)})`;
-      case 'lambda':{const inner=clone(ctx);for(const p of e.parameters)inner.locals.set(p.name,p.type??{name:'object'});return `(${e.parameters.map(p=>p.name).join(',')}) => ${e.body.kind==='block'?stmt(e.body,inner):expr(e.body,inner)}`;}
+      case 'lambda':{const inner={...clone(ctx),cooperative:false};for(const p of e.parameters)inner.locals.set(p.name,p.type??{name:'object'});return `(${e.parameters.map(p=>p.name).join(',')}) => ${e.body.kind==='block'?stmt(e.body,inner):expr(e.body,inner)}`;}
       case 'new':{
         const t=e.type??expected;
         if(!t&&!e.members?.length){report('JB2206','Target-typed new requires a declared target type',e);return 'null';}
@@ -164,14 +168,19 @@ export function compileCSharp(input, options={}) {
   function sequence(s,ctx){
     if(!options.debug||!s)return '';
     const location=(currentSource??current.source).location(s.start),id=debugSites.length;
-    debugSites.push({id,...location,language:'csharp',method:current.fullName+'.'+debugMethod});
+    debugSites.push({id,...location,language:'csharp',method:current.fullName+'.'+debugMethod,...(ctx.cooperative?{cooperative:true}:{})});
     const locals=[...ctx.locals.keys()].filter(n=>/^[A-Za-z_$][\w$]*$/.test(n));
+    if(ctx.cooperative){
+      const writable=locals.filter(n=>!ctx.locals.get(n)?.debugReadonly);
+      return `\n/*@jb:${id}*/yield $co.checkpoint(${id},()=>({this:${ctx.static?'null':'this'}${locals.map(n=>','+n+':$co.read(()=>'+n+')').join('')}}),{${writable.map(n=>n+':v=>'+n+'=v').join(',')}},${escapeJs(Object.fromEntries(writable.map(n=>[n,ctx.locals.get(n)?.name])))});\n`;
+    }
     return `\n/*@jb:${id}*/if(JB.dev?.hit(${id},()=>({this:${ctx.static?'null':'this'}${locals.map(n=>','+n+':JB.dev.read(()=>'+n+')').join('')}}))){debugger;}\n`;
   }
   function statementBody(s,ctx){
     if(s?.kind==='block')return stmt(s,ctx);
     return '{'+sequence(s,ctx)+stmt(s,ctx)+'}';
   }
+  function loopBody(node,ctx){return ctx.cooperative?'{'+sequence(node,ctx)+statementBody(node.body,clone(ctx))+'}':statementBody(node.body,clone(ctx));}
   function stmt(s,ctx){
     if(!s)return '{}';
     switch(s.kind){
@@ -184,15 +193,15 @@ export function compileCSharp(input, options={}) {
       }
       case 'if':return `if (${expr(s.test,ctx)}) ${statementBody(s.consequent,clone(ctx))}${s.alternate?' else '+statementBody(s.alternate,clone(ctx)):''}`;
       case 'return':return 'return'+(s.expression?' '+expr(s.expression,ctx):'')+';';
-      case 'throw':{const value=s.expression?'('+expr(s.expression,ctx)+' ?? new JB.NullReferenceException())':ctx.catchName??'__error';return 'throw '+(options.debug?`(JB.dev?JB.dev.throwing(${value},${escapeJs({...currentSource.location(s.start),language:'csharp'})}):${value})`:value)+';';}
+      case 'throw':{const value=s.expression?'('+expr(s.expression,ctx)+' ?? new JB.NullReferenceException())':ctx.catchName??'__error';if(ctx.cooperative)return `throw (yield* $co.throwing(${value},${escapeJs({...currentSource.location(s.start),language:'csharp'})}));`;return 'throw '+(options.debug?`(JB.dev?JB.dev.throwing(${value},${escapeJs({...currentSource.location(s.start),language:'csharp'})}):${value})`:value)+';';}
       case 'break':case 'continue':return s.kind+';';
-      case 'while':return `while (${expr(s.test,ctx)}) ${statementBody(s.body,clone(ctx))}`;
-      case 'do':return `do ${statementBody(s.body,clone(ctx))} while (${expr(s.test,ctx)});`;
-      case 'for':{const inner=clone(ctx),init=s.init?(s.init.kind==='local'?stmt(s.init,inner).replace(/;$/,''):expr(s.init,inner)):'';return `for (${init}; ${s.test?expr(s.test,inner):''}; ${s.update?expr(s.update,inner):''}) ${statementBody(s.body,inner)}`;}
-      case 'foreach':{const inner=clone(ctx);inner.locals.set(s.name,s.type);return `for (const ${s.name} of JB.iterate(${expr(s.iterable,ctx)})) ${statementBody(s.body,inner)}`;}
+      case 'while':return `while (${expr(s.test,ctx)}) ${loopBody(s,ctx)}`;
+      case 'do':return `do ${loopBody(s,ctx)} while (${expr(s.test,ctx)});`;
+      case 'for':{const inner=clone(ctx),init=s.init?(s.init.kind==='local'?stmt(s.init,inner).replace(/;$/,''):expr(s.init,inner)):'';return `for (${init}; ${s.test?expr(s.test,inner):''}; ${s.update?expr(s.update,inner):''}) ${loopBody(s,inner)}`;}
+      case 'foreach':{const inner=clone(ctx);inner.locals.set(s.name,{...s.type,debugReadonly:true});return `for (const ${s.name} of JB.iterate(${expr(s.iterable,ctx)})) ${loopBody(s,inner)}`;}
       case 'switch':return `switch (${expr(s.expression,ctx)}) {\n${s.cases.map(c=>(c.value?'case '+expr(c.value,ctx):'default')+':\n'+c.statements.map(x=>sequence(x,ctx)+stmt(x,ctx)).join('\n')).join('\n')}\n}`;
       case 'try':{
-        let code='try '+statementBody(s.body,clone(ctx));if(s.catches.length){code+=' catch (__caught) {\n';for(let i=0;i<s.catches.length;i++){const c=s.catches[i],inner=clone(ctx);inner.locals.set(c.name,{name:c.type?.name??'Exception'});inner.catchName=c.name;code+=(i?'else ':'')+'if ('+(c.type?`JB.is(__caught,${typeRef(c.type)})`:'true')+') { const '+c.name+' = __caught; '+stmt(c.body,inner)+' }\n';}code+='else { throw __caught; }\n}';}if(s.finalizer)code+=' finally '+stmt(s.finalizer,clone(ctx));return code;
+        let code='try '+statementBody(s.body,clone(ctx));if(s.catches.length){code+=' catch (__caught) {\n';for(let i=0;i<s.catches.length;i++){const c=s.catches[i],inner=clone(ctx);inner.locals.set(c.name,{name:c.type?.name??'Exception',debugReadonly:true});inner.catchName=c.name;code+=(i?'else ':'')+'if ('+(c.type?`JB.is(__caught,${typeRef(c.type)})`:'true')+') { const '+c.name+' = __caught; '+stmt(c.body,inner)+' }\n';}code+='else { throw __caught; }\n}';}if(s.finalizer)code+=' finally '+stmt(s.finalizer,clone(ctx));return code;
       }
       default:report('JB2298',`Emitter missing statement '${s.kind}'`,s);return ';';
     }
@@ -211,7 +220,7 @@ export function compileCSharp(input, options={}) {
     if(decl.kind==='enum'){let next=0;const ctx=context();const fields=decl.members.map(m=>{const value=m.value?expr(m.value,ctx):String(next);next=m.value?.kind==='literal'?Number(m.value.value)+1:next+1;return `${escapeJs(m.name)}:${value}`;});chunks.push(`const ${js}=Object.freeze({${fields.join(',')}}); JB.defineType(${escapeJs(decl.fullName)},${js});`);continue;}
     for(const m of decl.members)if(m.type&&['long','ulong','decimal','dynamic'].includes(m.type.name))report('JB2212',`Type '${m.type.name}' requires an extended numeric/dynamic backend`,m);
     const classBases=decl.bases.filter(b=>!interfaces.has(b.name.split('.').at(-1))&&declarations.get(resolve(b.name))?.kind!=='interface');
-    const base=classBases.length?typeRef(classBases[0]):'JB.Object';const body=[];
+    const base=classBases.length?typeRef(classBases[0]):'JB.Object';const body=[],continuations=[];
     for(const m of decl.members){currentSource=m.source??decl.source;debugMethod=m.name;const stat=m.mods.includes('static')||m.mods.includes('const'),ctx=context({static:stat});
       if(m.kind==='field')body.push(`${stat?'static ':''}${m.name} = ${m.init?expr(m.init,ctx,m.type):defaultValue(m.type)};`);
       if(m.kind==='event')body.push(`${stat?'static ':''}${m.name} = new JB.Event();`);
@@ -236,11 +245,21 @@ export function compileCSharp(input, options={}) {
         const name=m.name+(group.length>1?'$'+m.parameters.length:'');const params=m.parameters.map(p=>(p.rest?'...':'')+p.name+(p.value?' = '+expr(p.value,ctx):'')).join(',');
         const methodCode=`${ctx.async?'async ':''}${name}(${params}) ${m.body?stmt(m.body,ctx):`{ throw new JB.NotSupportedException('Abstract method ${m.name}'); }`}`;
         body.push(`// ${currentSource.path}:${currentSource.location(m.start).line}\n${ctx.static?'static ':''}${methodCode}`);
-        if(options.debug)debugMethods.push({type:decl.fullName,name,static:ctx.static,code:methodCode});
+        let generator;
+        if(options.debug&&options.cooperativeDebug&&m.body){
+          const hasBase=node=>node&&typeof node==='object'&&(node.kind==='identifier'&&node.name==='base'||Object.values(node).some(v=>Array.isArray(v)?v.some(hasBase):hasBase(v)));
+          if(hasBase(m.body))report('JB2260','Base-dispatch method remains a native step-over region in cooperative debugging',m,'warning');
+          else {
+            const inner={...clone(ctx),cooperative:true};
+            generator=`*${name}($co${params?','+params:''}) {const $frame=$co.enter(${escapeJs(decl.fullName+'.'+m.name)});try ${stmt(m.body,inner)} finally {$co.leave($frame);}}`;
+            continuations.push(`{name:${escapeJs(name)},static:${ctx.static},async:${ctx.async},fn:({${generator}})[${escapeJs(name)}]}`);
+          }
+        }
+        if(options.debug)debugMethods.push({type:decl.fullName,name,static:ctx.static,code:methodCode,...(generator?{generator,async:ctx.async}:{})});
       }
       if(group.length>1){const m=group[0],stat=m.mods.includes('static');body.push(`${stat?'static ':''}${m.name}(...args) { switch(args.length) { ${group.map(x=>`case ${x.parameters.length}: return this.${x.name}$${x.parameters.length}(...args);`).join(' ')} default: throw new JB.ArgumentException('No overload matches argument count'); } }`);}
     }
-    chunks.push(`class ${js} extends ${base} {\n${body.join('\n')}\n}\nJB.defineType(${escapeJs(decl.fullName)}, ${js});`);
+    chunks.push(`class ${js} extends ${base} {\n${body.join('\n')}\n}\nJB.defineType(${escapeJs(decl.fullName)}, ${js});${continuations.length?'\nJB.dev?.co.register('+js+',['+continuations.join(',')+']);':''}`);
   }
   const cleanShape=(node,key='')=>{
     if(Array.isArray(node))return node.map(x=>cleanShape(x));
@@ -249,5 +268,5 @@ export function compileCSharp(input, options={}) {
   };
   const typeShapes=options.debug?[...declarations.values()].map(d=>cleanShape(d)):undefined;
   const code=bag.hasErrors?'':chunks.join('\n\n');
-  return {success:!bag.hasErrors,code,diagnostics:bag.items,debug:options.debug?{sites:debugSites,methods:debugMethods,typeShapes}:undefined,types:[...declarations.values()].map(d=>({name:d.fullName,kind:d.kind,members:d.members.map(m=>({name:m.name,kind:m.kind}))})),ast:options.includeAst?units.map(u=>u.ast):undefined};
+  return {success:!bag.hasErrors,code,diagnostics:bag.items,debug:options.debug?{sites:debugSites,methods:debugMethods,typeShapes,cooperative:!!options.cooperativeDebug}:undefined,types:[...declarations.values()].map(d=>({name:d.fullName,kind:d.kind,members:d.members.map(m=>({name:m.name,kind:m.kind}))})),ast:options.includeAst?units.map(u=>u.ast):undefined};
 }
