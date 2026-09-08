@@ -17,3 +17,9 @@ Full SDK/MSBuild task/property-function behavior, NuGet/source generators, assem
 WebGPU source exists for primitive drawing, with explicit Canvas2D fallback. A browser test using the fallback is not GPU performance or physical-device validation. Most controls are native HTML, not GPU-rendered Avalonia controls.
 
 `npm run gate -- --require-full` intentionally returns a failure while the full catalog target remains unmet. New gates must preserve this distinction rather than reinterpret selected pages as complete coverage.
+
+## MSIL / DLL / NuGet scope
+
+The primary route now converts a bounded ILAsm/CIL subset and genuine managed implementation DLLs, including ordinary calls, object state, properties, arrays and static initialization. Existing C#/XAML can explicitly link those libraries. Local NuGet conversion selects exact implementation asset groups and validates supplied dependencies; general restore, nearest-framework/version resolution and package signature verification remain incomplete.
+
+This does not imply arbitrary Avalonia framework DLL execution. Generic/exception-region/value-type/reflection/platform semantics and compiled-XAML/resource-loader integration remain major gaps. The verifier is not a CLR security verifier. Whole-assembly errors suppress output; ref-only/native images are not successful executable substitutes. The secondary toolchain is unchanged. Full details: [binary milestone](milestone-msil-nuget.md).

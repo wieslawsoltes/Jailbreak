@@ -19,3 +19,11 @@ To load an existing application, select the containing folder, including `.sln`/
 Use Ctrl/Command+Enter to build. Save a JSON workspace to preserve all text files and the build profile. Export app writes a standalone HTML application from the last successful, current build. Errors suppress executable output. Open the generated JavaScript or diagnostics to inspect unsupported constructs rather than assuming all .NET/Avalonia dependencies have been loaded.
 
 The two workbenches retain distinct frontend/runtime implementations; the build-profile layer is shared. The [milestone guide](milestone-build-profiles.md) describes their API/result differences.
+
+## Binary Studio and compiled libraries
+
+Open [Binary Studio](https://wieslawsoltes.github.io/Jailbreak/binary/) or the primary toolbar's **MSIL / DLL / NuGet** link. Use the IL/loop/DLL/NuGet examples or load local inputs, compile, select a public method and invoke with JSON arguments. Instance methods accept constructor arguments and retain the instance until rebuild. Export writes an offline method-runner HTML.
+
+In the main source IDE, select **Binary Library** or **Nuget Library**. The C# code-behind calls the real converted library. You may import a managed DLL/nupkg alongside supported source files; the workspace preserves binary bytes as `.binary.json` text records. Do not assume existing HintPath or PackageReference declarations restore/map automatically. See [binary examples and exact API scope](milestone-msil-nuget.md).
+
+For command-line conversion: `npm run compile:binary -- path/to/Library.dll --out test-results/library`. Add `--tfm net8.0` for a package with multiple implementation groups. The CLI emits diagnostics, JavaScript/runtime, and HTML without invoking user methods.

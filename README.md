@@ -1,10 +1,20 @@
 # Jailbreak
 
-Browser-native **C# and Avalonia-style XAML → JavaScript** compilers, reusable runtime libraries and a web IDE. Supported applications run with HTML and optional WebGPU surfaces, without a .NET runtime.
+Browser-native **C#, Avalonia-style XAML and MSIL → JavaScript** compilers, reusable runtime libraries and a web IDE. Supported applications run with HTML and optional WebGPU surfaces, without a .NET runtime.
 
-[Open the primary IDE](https://wieslawsoltes.github.io/Jailbreak/) · [Secondary IDE](https://wieslawsoltes.github.io/Jailbreak/browser/ide/) · [Toolchain CI](https://github.com/wieslawsoltes/Jailbreak/actions/workflows/toolchain.yml) · [Batched-source CI](https://github.com/wieslawsoltes/Jailbreak/actions/workflows/delivery.yml)
+[Open the primary IDE](https://wieslawsoltes.github.io/Jailbreak/) · [Binary Studio](https://wieslawsoltes.github.io/Jailbreak/binary/) · [Secondary IDE](https://wieslawsoltes.github.io/Jailbreak/browser/ide/) · [Toolchain CI](https://github.com/wieslawsoltes/Jailbreak/actions/workflows/toolchain.yml) · [Batched-source CI](https://github.com/wieslawsoltes/Jailbreak/actions/workflows/delivery.yml)
 
 **This is a compatibility subset, not a complete Avalonia port. Full unmodified ControlCatalog remains the target and its full gate remains failing.** The requested `wieslawsoltes/Avalonia` repository is accessible; fixtures are pinned with exact hashes and retained licenses.
+
+## New: MSIL, DLL and NuGet conversion
+
+The primary toolchain now compiles real managed DLLs and an ILAsm subset to native JavaScript basic-block functions. The binary frontend decodes PE/CLI metadata, verifies stack/control flow and links exact method references. It reuses the existing integer/string/array adapters and primary UI type registry, not an IL interpreter or a .NET download.
+
+Open **[Binary Studio](https://wieslawsoltes.github.io/Jailbreak/binary/)** for editable IL examples, real DLL/nupkg upload, method/disassembly inspection and offline runner export. In the primary source IDE, select **Binary Library** or **Nuget Library**: compiled C#/XAML handlers call the actual converted DLL, including stateful objects. DLL/package bytes round-trip in workspace JSON.
+
+NuGet conversion selects an exact `lib/<tfm>` group from supplied local packages; it is not automatic NuGet restore. Native/ref-only assets, unsupported IL/generics/exception regions, unknown executable dependencies and invalid binaries are diagnostics rather than empty stubs. Conversion supports a bounded managed subset, not arbitrary Avalonia DLLs.
+
+[Binary milestone, APIs and examples](docs/milestone-msil-nuget.md) · [Integrated roadmap](docs/roadmap.md) · [Architecture](docs/architecture.md)
 
 ## New: templates, shared XAML and another original catalog page
 
@@ -30,7 +40,7 @@ python3 -m http.server --directory site 8080
 
 Open `http://localhost:8080/`. `site/index.html` embeds its worker, runtime and source samples for offline use. `site/index.module.html` and the secondary `site/browser/ide/` use HTTP-served modules.
 
-The primary IDE contains nine editable workspaces: ControlCatalog, Counter, DataBinding, Collections, WebGPU, UpstreamCheckBox, BuildProfiles, Templates and UpstreamProgressBar. Open a containing folder to preserve solution/project/import/source paths. Build profiles configure Debug/Release, platform, target framework and symbols. Inspect generated JavaScript, diagnostics and evaluated project inputs; save workspaces as JSON or export standalone application HTML.
+The primary IDE contains eleven editable workspaces: ControlCatalog, Counter, DataBinding, Collections, WebGPU, UpstreamCheckBox, BuildProfiles, Templates, UpstreamProgressBar, BinaryLibrary and NugetLibrary. Open a containing folder to preserve solution/project/import/source paths. Build profiles configure Debug/Release, platform, target framework and symbols. Inspect generated JavaScript, diagnostics and evaluated project inputs; save workspaces as JSON or export standalone application HTML.
 
 ## Reusable modules
 
@@ -43,7 +53,14 @@ The primary IDE contains nine editable workspaces: ControlCatalog, Counter, Data
 | `packages/dotnet-runtime` | Selected managed-library adapters, events, commands, collections and tasks |
 | `packages/avalonia-runtime` | Properties, resources, bindings, templates and HTML controls |
 | `packages/renderer` | WebGPU primitives and explicit Canvas2D fallback |
+| `packages/managed-pe` | Bounded PE/CLI metadata, signatures and method-body reader |
+| `packages/msil-compiler` | IL text/bytecode parsing, verification and JS block emission |
+| `packages/msil-runtime` | Converted methods/objects, linking, selected external calls and budgets |
+| `packages/nuget` | Safe local ZIP/nuspec ingestion, exact asset selection and DLL conversion |
+| `packages/binary-project` | Existing C#/XAML source linked with explicitly supplied binary libraries |
 | `packages/project-system` | Workspace/dependency compilation and application export |
+
+The .NET 8 SDK is needed only for `npm run test:clr`, which checks freshly built owned DLL/nupkg output against an independent CLR oracle. The compiler/runtime/browser workbenches require no SDK.
 
 The pre-existing secondary modules remain under `browser/packages`. Both project/C# pipelines share the build-profile layer. This milestone extends the primary runtime instead of adding a third implementation.
 
