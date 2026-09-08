@@ -1,0 +1,15 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Counter.MainWindow" Title="Counter" Padding="32">
+  <StackPanel Spacing="16" MaxWidth="480" HorizontalAlignment="Center">
+    <TextBlock Text="A little C#. A real browser app." FontSize="28" FontWeight="Bold" TextWrapping="Wrap"/>
+    <TextBlock Text="This view is compiled from XAML. The buttons call compiled C# methods, not JavaScript demo handlers." TextWrapping="Wrap" Foreground="#64748b"/>
+    <Border Background="#f2f6fc" CornerRadius="12" Padding="24">
+      <TextBlock x:Name="CounterText" Text="{Binding Count}" FontSize="64" HorizontalAlignment="Center"/>
+    </Border>
+    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+      <Button x:Name="DecrementButton" Click="Decrement" Content="− Subtract"/>
+      <Button x:Name="IncrementButton" Click="Increment" Content="+ Add one"/>
+      <Button Click="Reset" Content="Reset"/>
+    </StackPanel>
+    <TextBlock Text="{Binding Message}" TextWrapping="Wrap" HorizontalAlignment="Center"/>
+  </StackPanel>
+</Window>

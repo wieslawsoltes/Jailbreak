@@ -1,0 +1,17 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="DataBinding.MainWindow" Padding="28" Title="Data binding">
+  <StackPanel Spacing="14" MaxWidth="620">
+    <TextBlock Text="Data binding, both ways" FontSize="28" FontWeight="Bold"/>
+    <TextBlock Text="Edit the name or move the slider. Bindings subscribe to the C# view model and update the other controls." TextWrapping="Wrap"/>
+    <TextBox x:Name="NameInput" Text="{Binding Name}" Watermark="Your name"/>
+    <TextBlock x:Name="NameOutput" Text="{Binding Name, StringFormat='{}{0} — live from the view model'}" FontSize="22"/>
+    <Slider x:Name="LevelSlider" Value="{Binding Level}" Minimum="0" Maximum="100" Orientation="Horizontal"/>
+    <ProgressBar Value="{Binding Level}" Height="8"/>
+    <TextBlock Text="{Binding Level, StringFormat='{}Level: {0:F0}%'}"/>
+    <CheckBox Content="Enable the form" IsChecked="{Binding Enabled}"/>
+    <TextBox Text="This control inherits its enabled state from the model" IsEnabled="{Binding Enabled}"/>
+    <TextBlock Text="ElementName binding" FontWeight="Bold"/>
+    <TextBox x:Name="SourceText" Text="Try typing here"/>
+    <TextBlock x:Name="ElementOutput" Text="{Binding Text, ElementName=SourceText}"/>
+    <Button Content="Replace values from C#" Click="ChangeValues"/>
+  </StackPanel>
+</Window>

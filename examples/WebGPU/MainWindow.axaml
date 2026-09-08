@@ -1,0 +1,14 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="GpuDemo.MainWindow" Padding="24" Title="WebGPU primitives">
+  <StackPanel Spacing="14">
+    <TextBlock Text="A real GPU rendering library" FontSize="28" FontWeight="Bold"/>
+    <TextBlock Text="Batched instanced rectangles and ellipses, rendered with WebGPU. This surface uses Canvas 2D only when a WebGPU adapter is unavailable. The surrounding controls remain HTML." TextWrapping="Wrap"/>
+    <StackPanel Orientation="Horizontal" Spacing="10">
+      <TextBlock Text="Primitive count" VerticalAlignment="Center"/>
+      <NumericUpDown x:Name="CountInput" Value="{Binding Count}" Minimum="100" Maximum="50000" Increment="1000" Width="150"/>
+      <Button Content="5,000" Click="Normal"/>
+      <Button Content="25,000" Click="Stress"/>
+    </StackPanel>
+    <GpuSurface x:Name="Surface" ItemCount="{Binding Count}" Width="720" Height="350"/>
+    <TextBlock Text="The rendering backend reports its actual adapter/fallback status in the browser diagnostics." Foreground="#64748b" TextWrapping="Wrap"/>
+  </StackPanel>
+</Window>

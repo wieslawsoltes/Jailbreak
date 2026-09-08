@@ -1,0 +1,22 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Collections.MainWindow" Title="Collections" Padding="28">
+  <StackPanel Spacing="12" MaxWidth="650">
+    <TextBlock Text="Observable collections &amp; templates" FontSize="26" FontWeight="Bold"/>
+    <TextBlock Text="Add and remove rows through compiled C#. Each row is constructed from a DataTemplate." TextWrapping="Wrap"/>
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <TextBox Text="{Binding NewName}" Width="260" Watermark="A new component"/>
+      <Button Content="Add item" Click="AddItem"/>
+      <Button Content="Remove selected" Click="RemoveItem"/>
+    </StackPanel>
+    <ListBox x:Name="Rows" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Height="240">
+      <ListBox.ItemTemplate>
+        <DataTemplate>
+          <StackPanel Orientation="Horizontal" Spacing="16">
+            <TextBlock Text="{Binding Name}" FontWeight="Bold" Width="180"/>
+            <TextBlock Text="{Binding Category}" Foreground="#64748b"/>
+          </StackPanel>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+    <TextBlock Text="{Binding Summary}"/>
+  </StackPanel>
+</Window>

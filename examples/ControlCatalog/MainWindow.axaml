@@ -1,0 +1,88 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Catalog.MainWindow" Title="Jailbreak Control Catalog" Padding="24">
+  <Window.Resources>
+    <SolidColorBrush x:Key="Accent" Color="#4268f4"/>
+  </Window.Resources>
+  <Window.Styles>
+    <Style Selector="TextBlock.section"><Setter Property="FontSize" Value="20"/><Setter Property="FontWeight" Value="Bold"/></Style>
+    <Style Selector="Button.accent"><Setter Property="Background" Value="{StaticResource Accent}"/><Setter Property="Foreground" Value="White"/></Style>
+  </Window.Styles>
+  <StackPanel Spacing="16">
+    <StackPanel Spacing="5">
+      <TextBlock Text="Control Catalog" FontSize="30" FontWeight="Bold"/>
+      <TextBlock Text="XAML + C# → JavaScript. Interactive controls, compiled in your browser." Foreground="#687487" TextWrapping="Wrap"/>
+    </StackPanel>
+    <TabControl x:Name="CatalogTabs" SelectedIndex="0">
+      <TabItem Header="Buttons">
+        <StackPanel Spacing="18" Margin="4,18">
+          <TextBlock Classes="section" Text="Buttons &amp; commands"/>
+          <TextBlock Text="Click a button to invoke a C# event handler. State flows back through the binding engine." TextWrapping="Wrap"/>
+          <WrapPanel Orientation="Horizontal">
+            <Button x:Name="PrimaryButton" Classes="accent" Content="Primary action" Click="Clicked"/>
+            <Button Content="Standard button" Click="Clicked"/>
+            <Button Content="Disabled" IsEnabled="False"/>
+            <ToggleButton Content="Toggle me"/>
+            <RepeatButton Content="Press and hold" Click="Clicked" Delay="300" Interval="100"/>
+          </WrapPanel>
+          <Border Background="#f3f6fb" CornerRadius="10" Padding="20">
+            <StackPanel Spacing="5">
+              <TextBlock x:Name="ActionCount" Text="{Binding Clicks, StringFormat='{}{0} actions handled by C#'}" FontSize="22"/>
+              <TextBlock Text="{Binding Status}" Foreground="#687487"/>
+            </StackPanel>
+          </Border>
+          <TextBlock Classes="section" Text="Check boxes &amp; radio buttons"/>
+          <WrapPanel Orientation="Horizontal">
+            <CheckBox Content="Unchecked"/>
+            <CheckBox Content="Checked" IsChecked="True"/>
+            <CheckBox x:Name="ThreeState" Content="Three-state" IsChecked="{x:Null}" IsThreeState="True"/>
+            <CheckBox Content="Disabled" IsEnabled="False" IsChecked="True"/>
+          </WrapPanel>
+          <StackPanel Orientation="Horizontal" Spacing="20">
+            <RadioButton Content="Option one" GroupName="Choice" IsChecked="True"/>
+            <RadioButton Content="Option two" GroupName="Choice"/>
+            <ToggleSwitch Content="A toggle switch" IsChecked="True"/>
+          </StackPanel>
+        </StackPanel>
+      </TabItem>
+      <TabItem Header="Input">
+        <StackPanel Spacing="15" Margin="4,18" MaxWidth="600">
+          <TextBlock Classes="section" Text="Text &amp; number input"/>
+          <TextBox x:Name="CatalogName" Text="{Binding Name}" Watermark="Enter a name"/>
+          <TextBlock x:Name="CatalogGreeting" Text="{Binding Name, StringFormat='{}Hello, {0}'}" FontSize="20"/>
+          <TextBox Text="A multiline TextBox.
+Native text selection, clipboard and IME." AcceptsReturn="True" Height="90"/>
+          <TextBox Text="password" PasswordChar="●"/>
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <NumericUpDown Value="{Binding Level}" Minimum="0" Maximum="100" Width="130"/>
+            <ComboBox SelectedIndex="0" Width="180"><ComboBoxItem Content="Light"/><ComboBoxItem Content="Dark"/><ComboBoxItem Content="System"/></ComboBox>
+            <DatePicker/>
+          </StackPanel>
+          <Slider x:Name="CatalogSlider" Value="{Binding Level}" Orientation="Horizontal" Minimum="0" Maximum="100"/>
+          <ProgressBar Value="{Binding Level}" Height="8"/>
+          <TextBlock Text="{Binding Level, StringFormat='{}Progress: {0:F0}%'}"/>
+        </StackPanel>
+      </TabItem>
+      <TabItem Header="Collections">
+        <StackPanel Spacing="14" Margin="4,18">
+          <TextBlock Classes="section" Text="Selection &amp; item templates"/>
+          <ListBox x:Name="CatalogList" ItemsSource="{Binding Libraries}" SelectedIndex="0" Height="220">
+            <ListBox.ItemTemplate><DataTemplate><StackPanel Orientation="Horizontal" Spacing="16"><TextBlock Text="{Binding}" FontWeight="Bold"/><TextBlock Text="Reusable ES module" Foreground="#687487"/></StackPanel></DataTemplate></ListBox.ItemTemplate>
+          </ListBox>
+          <Expander Header="Tree view" IsExpanded="True"><TreeView><TreeViewItem Header="Jailbreak" IsExpanded="True"><TreeViewItem Header="Compilers" IsExpanded="True"><TreeViewItem Header="XAML"/><TreeViewItem Header="C#"/></TreeViewItem><TreeViewItem Header="Runtime"/><TreeViewItem Header="Renderer"/></TreeViewItem></TreeView></Expander>
+        </StackPanel>
+      </TabItem>
+      <TabItem Header="Layout">
+        <StackPanel Spacing="16" Margin="4,18">
+          <TextBlock Classes="section" Text="Grid, panels &amp; borders"/>
+          <Grid ColumnDefinitions="*,2*" RowDefinitions="Auto,Auto" RowSpacing="12" ColumnSpacing="12">
+            <Border Background="#edf2ff" Padding="20" CornerRadius="10"><TextBlock Text="1* column"/></Border>
+            <Border Grid.Column="1" Background="#e6f7f1" Padding="20" CornerRadius="10"><TextBlock Text="2* column"/></Border>
+            <Border Grid.Row="1" Grid.ColumnSpan="2" Background="#fff2df" Padding="20" CornerRadius="10"><TextBlock Text="Spanning both columns"/></Border>
+          </Grid>
+          <GroupBox Header="Vector graphics"><StackPanel Orientation="Horizontal" Spacing="20" Margin="12"><Rectangle Width="100" Height="65" Fill="#4268f4" RadiusX="12"/><Ellipse Width="65" Height="65" Fill="#15a77b"/><Path Width="65" Height="65" Fill="#f6b94c" Data="M32 2 L62 60 L2 60 Z"/></StackPanel></GroupBox>
+          <TextBlock Text="Layout and controls use HTML/CSS and SVG. The dedicated GPU surface uses WebGPU." Foreground="#687487" TextWrapping="Wrap"/>
+        </StackPanel>
+      </TabItem>
+    </TabControl>
+    <TextBlock Text="Supported-profile catalog · Select an Upstream sample in the IDE for unchanged Avalonia source fixtures." FontSize="12" Foreground="#8590a1" TextWrapping="Wrap"/>
+  </StackPanel>
+</Window>
