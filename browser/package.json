@@ -1,0 +1,19 @@
+{
+  "name": "@jailbreak/browser-toolchain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Reusable C# and Avalonia XAML to JavaScript compiler workspace",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "build": "node scripts/build.mjs",
+    "serve": "node scripts/serve.mjs",
+    "gate": "node scripts/catalog-gate.mjs",
+    "test:browser": "node scripts/prepare-browser-tests.mjs && python3 tests/browser_test.py",
+    "audit": "node scripts/catalog-audit.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}
