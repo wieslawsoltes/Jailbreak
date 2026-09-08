@@ -38,7 +38,7 @@ export function observePath(source,path,callback){
     if(object?.PropertyChanged?.add){const observed=object,key=segments[i];subscriptions.push(observed.PropertyChanged.add((sender,e)=>{if(!e?.PropertyName||e.PropertyName===key)refresh();}));}
     if(i<segments.length)object=object==null?undefined:object[segments[i]];
   }callback(object);}
-  refresh();return dispose;
+  try{refresh();}catch(error){dispose();throw error;}return dispose;
 }
 export function pathSegments(path){if(!path||path==='.')return [];return String(path).replace(/\[['"]?([^\]'"\s]+)['"]?\]/g,'.$1').split('.').filter(Boolean);}
 export function writePath(source,path,value){const segments=pathSegments(path);if(!segments.length)return false;let object=source;for(const key of segments.slice(0,-1))object=object?.[key];if(object==null)return false;object[segments.at(-1)]=value;return true;}

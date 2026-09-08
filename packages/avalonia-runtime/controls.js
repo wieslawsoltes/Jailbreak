@@ -6,7 +6,7 @@ import { controlDefinitions,commonProperties,eventNames } from './schema.js';
 import { applyCommon,applyStyles,gridTracks,dimension,brush } from './styling.js';
 import { PrimitiveSurface,demoScene } from '../renderer/index.js';
 const queue=new Set();let scheduled=false,id=0;
-export function flushLayout(){scheduled=false;const controls=[...queue];queue.clear();for(const control of controls)if(!control._disposed&&control.element)control.render();}
+export function flushLayout(){scheduled=true;try{let passes=0;while(queue.size){if(++passes>100)throw new Error('Layout did not converge after 100 passes');const controls=[...queue];queue.clear();for(const control of controls)if(!control._disposed&&control.element)control.render();}}finally{scheduled=false;}}
 function schedule(control){queue.add(control);if(!scheduled){scheduled=true;queueMicrotask(flushLayout);}}
 const defaults={IsEnabled:true,IsVisible:true,Opacity:1,Minimum:0,Maximum:100,Value:0,IsChecked:false,IsThreeState:false,IsExpanded:false,SelectedIndex:-1,Text:'',Spacing:0,Orientation:'Vertical',IsPaneOpen:false,OpenPaneLength:200,LastChildFill:true,IsReadOnly:false,Focusable:false};
 const numericProperties=new Set('Width Height MinWidth MinHeight MaxWidth MaxHeight FontSize Opacity Spacing RowSpacing ColumnSpacing Minimum Maximum Value Increment TickFrequency SelectedIndex MaxLength Delay Interval OpenPaneLength CompactPaneLength ItemWidth ItemHeight ZIndex CaretIndex SelectionStart SelectionEnd ItemCount'.split(' '));
@@ -23,6 +23,7 @@ export class Control extends StyledObject {
     super();this.type=type;this.uid='jb-'+(++id);this.parent=null;this.element=null;this.container=null;this._children=new ChildCollection(this);this.Resources=new ResourceDictionary();this.Styles=[];this.pseudos=new Set();this._dirty=new Set(['*']);this._generated=[];this._itemCache=[];
     for(const [name,value]of Object.entries(defaults))this._metadata.set(name,new AvaloniaProperty(Control,name,name==='Orientation'&&['Slider','ScrollBar','ProgressBar'].includes(type)?'Horizontal':value,{inherits:name==='DataContext'}));
     for(const event of eventNames)this[event]=new Event();
+    this.track(this.Resources.subscribe(()=>{const invalidate=c=>{c.invalidate('resources');for(const child of c.visualChildren)invalidate(child);};invalidate(this);}));
   }
   get Children(){return this._children;}get Items(){return this._children;}
   get effectiveEnabled(){return this.IsEnabled!==false&&(!this.parent||this.parent.effectiveEnabled);}

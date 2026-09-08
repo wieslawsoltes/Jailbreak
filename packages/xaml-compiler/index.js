@@ -87,7 +87,6 @@ export function compileXaml(text, options = {}) {
     }
     if(type==='ControlTheme'&&!attributes.TargetType)report('JB1114','ControlTheme requires TargetType',node);
     if(type==='Setter'&&attributes.Value?.kind==='binding')report('JB1114','Bindings in style/theme setters are not implemented',node);
-    if(type==='Setter'&&attributes.Value?.kind==='resource'&&attributes.Value.dynamic)report('JB1114','DynamicResource in style/theme setters requires a style subscription pipeline',node);
     if(structural&&['ControlTemplate','ControlTheme','StyleInclude','ResourceInclude'].includes(type)){
       const allowed={ControlTemplate:['TargetType'],ControlTheme:['TargetType','BasedOn'],StyleInclude:['Source'],ResourceInclude:['Source']}[type];
       for(const attr of Object.keys(attributes))if(!allowed.includes(attr))report('JB1114',`Unsupported ${type} property ${attr}`,node);

@@ -1,3 +1,5 @@
+import {liveValue,environmentProperties,validateEnvironment} from './live-values.js';
+import {semanticNode} from './structure.js';
 import { reconcilePanel, structureContext } from './structure.js';
 import { eventNames, controlDefinitions } from '../avalonia-runtime/schema.js';
 import { identifier, escapeJs } from '../compiler-core/index.js';
@@ -15,7 +17,7 @@ function retainedSites(debug){
 }
 
 export function planReload(previous,next){
-  const reasons=[],patches=[],locations=[],structures=[];
+  const reasons=[],patches=[],locations=[],structures=[],environments=[];
   if(!previous?.success||!next?.success)return {compatible:false,reasons:['Both builds must succeed'],patches:[]};
   if(!previous.debug||!next.debug)return {compatible:false,reasons:['Enable development tools before starting the preview'],patches:[]};
   if(!same(previous.manifest,next.manifest))reasons.push('Entry, assets, project profile or binary manifest changed');
@@ -32,8 +34,18 @@ export function planReload(previous,next){
     if(a.source&&b.source)locations.push({file,offset:a.span.start,next:b.source});
     const keys=new Set([...Object.keys(a.attributes??{}),...Object.keys(b.attributes??{})]);
     for(const key of keys){const before=a.attributes?.[key],after=b.attributes?.[key];if(same(before,after))continue;
-      if(a.kind!=='control'||!Object.hasOwn(controlDefinitions,a.type)||!liveProperties.has(key)||eventNames.includes(key)||before!==undefined&&!literal(before)||after!==undefined&&!literal(after))reasons.push('Non-live property '+file+':'+a.type+'.'+key);
-      else patches.push({file,offset:a.span.start,property:key,value:after,remove:after===undefined});
+      if(a.kind!=='control'||!Object.hasOwn(controlDefinitions,a.type)||!liveProperties.has(key)&&!eventNames.includes(key)||before!==undefined&&!liveValue(before)||after!==undefined&&!liveValue(after))reasons.push('Non-live property '+file+':'+a.type+'.'+key);
+      else patches.push({file,offset:a.span.start,property:key,value:after,remove:after===undefined,attribute:true});
+    }
+    if(a.kind==='control'){
+      for(const property of environmentProperties){
+        const old=a.children.find(n=>n.kind==='property'&&n.property===property),value=b.children.find(n=>n.kind==='property'&&n.property===property);
+        if(!same(semanticNode(old),semanticNode(value))){
+          try{validateEnvironment(value);environments.push({file,offset:a.span.start,property,node:value??null});}catch(error){reasons.push(error.message);}
+        }
+      }
+      const filter=n=>!(n.kind==='property'&&environmentProperties.has(n.property));
+      a={...a,children:a.children.filter(filter)};b={...b,children:b.children.filter(filter)};
     }
     try { if(a.kind==='control'&&reconcilePanel(a,b,file,walk,structures,context))return; }
     catch(error){reasons.push(error.message+' in '+file);return;}
@@ -43,10 +55,10 @@ export function planReload(previous,next){
   for(const doc of next.xaml){const old=oldDocs.get(doc.path);if(!old||old.className!==doc.className)reasons.push('XAML identity changed');else {try{context=structureContext(old.root,doc.root);walk(old.root,doc.root,doc.path);}catch(error){reasons.push(error.message+' in '+doc.path);}}}
   // References to deleted names may otherwise retain a disposed target.
   const removed=new Set(structures.flatMap(s=>s.removedNames));
-  const inspect=value=>{if(!value||typeof value!=='object')return;if(removed.has(value.ElementName)||value.kind==='reference'&&removed.has(value.name))reasons.push('A surviving reference targets a removed name');for(const v of Object.values(value))if(v&&typeof v==='object')inspect(v);};
+  const inspect=value=>{if(!value||typeof value!=='object')return;if(removed.has(value.ElementName)||value.kind==='reference'&&removed.has(value.name)||value.kind==='binding'&&value.path?.startsWith('#')&&removed.has(value.path.slice(1).split('.')[0]))reasons.push('A surviving reference targets a removed name');for(const v of Object.values(value))if(v&&typeof v==='object')inspect(v);};
   for(const doc of next.xaml)inspect(doc.root);
   for(const method of next.debug.methods??[])if(method.code.includes('super.'))reasons.push('Base-dispatch method updates require restart');
-  return {compatible:!reasons.length,reasons:[...new Set(reasons)],patches,locations,structures,documents:next.xaml,debug:next.debug};
+  return {compatible:!reasons.length,reasons:[...new Set(reasons)],patches,locations,structures,environments,documents:next.xaml,debug:next.debug};
 }
 export function reloadScript(plan,previous,next,revision){
   if(!plan.compatible)throw new Error('Cannot emit incompatible reload');

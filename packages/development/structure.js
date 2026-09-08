@@ -1,3 +1,4 @@
+import { liveValue } from './live-values.js';
 import { childSlot, logicalIndex } from './tree-slots.js';
 /** Conservative source-tree reconciliation. Named siblings are keys, never array indices. */
 import { controlDefinitions, eventNames } from '../avalonia-runtime/schema.js';
@@ -40,7 +41,7 @@ export function validateNewSubtree(node, count = {value: 0}) {
   if (node.kind !== 'control' || !Object.hasOwn(controlDefinitions, node.type)) throw new Error('New subtrees require builtin controls');
   if (node.key != null) throw new Error('Resource instances require restart');
   for (const [key, value] of Object.entries(node.attributes ?? {})) {
-    if (!scalar(value) || ['Theme', 'Template', 'ContentTemplate', 'ItemTemplate', 'DataContext'].includes(key)) throw new Error('New subtree property requires restart: ' + key);
+    if (!liveValue(value) || ['Theme', 'Template', 'ContentTemplate', 'ItemTemplate', 'DataContext'].includes(key)) throw new Error('New subtree property requires restart: ' + key);
     if (eventNames.includes(key) && typeof value !== 'string') throw new Error('Event handler name must be a string');
     if (key === 'Name' && (!/^[A-Za-z_][\w]*$/.test(value) || ['constructor','prototype','__proto__'].includes(value))) throw new Error('Unsafe new XAML name');
   }

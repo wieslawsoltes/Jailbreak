@@ -2,7 +2,7 @@ import { observePath, writePath } from './properties.js';
 import { defaultTwoWay } from './schema.js';
 import { StringApi } from '../dotnet-runtime/index.js';
 /** A disposable path binding. Subscription graphs are rebuilt when intermediate objects change. */
-export function bind(target,property,spec,scope,resolveValue=x=>x){
+export function bind(target,property,spec,scope,resolveValue=x=>x,{track=true}={}){
   let busy=false,offPath=()=>{},source=null,disposed=false,hasValue=false;
   let path=spec.path??'',negate=false,elementName=spec.ElementName;
   if(path.startsWith('!')){negate=true;path=path.slice(1);}
@@ -14,10 +14,11 @@ export function bind(target,property,spec,scope,resolveValue=x=>x){
     busy=true;try{target.SetValue(property,value,spec.priority??1000);}finally{busy=false;}
   }
   function backward(){if(busy||disposed||source==null)return;let value=target.GetValue(property);if(negate)value=!value;if(converter){if(typeof converter.ConvertBack!=='function')throw new Error('TwoWay converter has no ConvertBack');value=converter.ConvertBack(value,null,spec.ConverterParameter,null);}busy=true;try{writePath(source,path,value);}finally{busy=false;}}
-  function refresh(){if(disposed||(mode==='OneTime'&&hasValue))return;offPath();source=spec.RelativeSource?.mode==='Self'?target:spec.RelativeSource?.mode==='TemplatedParent'?scope.templatedParent:Object.hasOwn(spec,'Source')?resolveValue(spec.Source,target):elementName?scope.names.get(elementName):target.DataContext;
+  function refresh(force=false){if(force)hasValue=false;if(disposed||(mode==='OneTime'&&hasValue))return;offPath();source=spec.RelativeSource?.mode==='Self'?target:spec.RelativeSource?.mode==='TemplatedParent'?scope.templatedParent:Object.hasOwn(spec,'Source')?resolveValue(spec.Source,target):elementName?scope.names.get(elementName):target.DataContext;
     if(mode==='OneWayToSource'){backward();return;}
     offPath=observePath(source,path,forward);if(mode==='OneTime'&&source!=null){hasValue=true;offPath();}
   }
-  const offTarget=target.PropertyChanged.add((sender,e)=>{if(e.PropertyName==='DataContext'&&!spec.RelativeSource&&!elementName&&!Object.hasOwn(spec,'Source'))refresh();if(e.PropertyName===property&&(mode==='TwoWay'||mode==='OneWayToSource'))backward();});
-  refresh();const dispose=()=>{disposed=true;offPath();offTarget();};target.track(dispose);return dispose;
+  const offTarget=target.PropertyChanged.add((sender,e)=>{if(e.PropertyName==='DataContext'&&!spec.RelativeSource&&!elementName&&!Object.hasOwn(spec,'Source'))refresh(true);if(e.PropertyName===property&&(mode==='TwoWay'||mode==='OneWayToSource'))backward();});
+  try{refresh();}catch(error){disposed=true;offPath();offTarget();throw error;}
+  const dispose=()=>{disposed=true;offPath();offTarget();};if(track)target.track(dispose);return dispose;
 }

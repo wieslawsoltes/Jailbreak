@@ -74,6 +74,7 @@ export function prepareStructure(JB, edits, controls, origin) {
       for(const [c,p]of finalParents){c.parent=p;c._resourceParent=p;}
       for(const g of groups)for(const key of g.edit.removedNames){g.scope.delete(key);delete g.owner[key];}
       for(const f of fragments)f.attach();
+      for(const f of fragments)f.activate();
       for(const [c,saved]of parents)if(c.parent!==saved.parent){c.inheritChanged('DataContext');c.inheritChanged('IsEnabled');JB.refreshXamlSubscriptions?.(c);}
     },
     rollback(){

@@ -1,3 +1,5 @@
+import {beginTemplateTransaction} from '../avalonia-runtime/template-transaction.js';
+import {eventNames} from '../avalonia-runtime/schema.js';
 import { prepareStructure } from './structure-runtime.js';
 import { readWatch, snapshot } from './watch.js';
 import { liveProperties } from './live-properties.js';
@@ -63,24 +65,50 @@ export function createDevelopmentSession(JB,{debug={},report=()=>{},nativeBreaks
   globalThis.document?.addEventListener('pointerdown',pointer,true);globalThis.document?.addEventListener('click',pointer,true);globalThis.addEventListener?.('scroll',highlight,true);
   function applyReload(plan,methods){
     if(!plan.compatible||plan.revision!==revision+1)throw new Error('Stale or incompatible hot reload');
-    const all=registry().map(e=>e.c),changes=[],descriptors=[];
-    for(const p of plan.patches){if(!liveProperties.has(p.property))throw new Error('Non-live property in reload');const matches=all.filter(c=>{const o=origins.get(c);return o?.file===p.file&&o.offset===p.offset;});if(!matches.length)throw new Error('Reload target is not live: '+p.file+':'+p.offset);for(const c of matches){const value=c.GetValue(p.property);if(value!==null&&typeof value==='object'||typeof value==='function')throw new Error('Restart required: live property owns a nonliteral object');changes.push({c,p});}}
+    const all=registry().map(e=>e.c),changes=[],descriptors=[],environmentChanges=[];
+    const targets=p=>{
+      const matches=all.filter(c=>{const o=origins.get(c);return o?.file===p.file&&o.offset===p.offset;});
+      if(!matches.length)throw new Error('Reload target is not live: '+p.file+':'+p.offset);return matches;
+    };
+    for(const p of plan.patches){
+      if(!liveProperties.has(p.property)&&!eventNames.includes(p.property))throw new Error('Non-live property in reload');
+      for(const c of targets(p)){
+        if(c.GetValue(p.property)?.uid)throw new Error('Restart required: property owns a live visual');
+        changes.push({c,p});
+      }
+    }
+    for(const p of plan.environments??[])for(const c of targets(p))environmentChanges.push({c,p});
+    environmentChanges.sort((a,b)=>(a.p.property==='Resources'?0:1)-(b.p.property==='Resources'?0:1));
     for(const m of methods){const Type=JB.types.get(m.type),target=m.static?Type:Type?.prototype,d=target&&Object.getOwnPropertyDescriptor(target,m.name);if(!d||!d.configurable||typeof d.value!=='function')throw new Error('Reload method shape no longer matches');descriptors.push({target,name:m.name,descriptor:d,fn:m.fn});}
-    reloading=true;let structure;
-    try {structure=prepareStructure(JB,plan.structures,all,c=>origins.get(c));}catch(error){reloading=false;throw error;}
     const values=new Map(all.map(c=>[c,new Map([...c._values].map(([k,v])=>[k,new Map(v)]))]));
+    reloading=true;let structure,templates;const attributes=[],environments=[];
     try{
+      templates=beginTemplateTransaction(all);
+      structure=prepareStructure(JB,plan.structures,all,c=>origins.get(c));
+      for(const {c,p}of environmentChanges){const t=JB.prepareXamlEnvironment(c,p.property,p.node);environments.push(t);t.apply();}
       structure.apply();
-      for(const {c,p}of changes){if(p.remove)c.ClearValue(p.property);else c.SetValue(p.property,p.value);}
+      for(const {c,p}of changes){const t=JB.prepareXamlAttribute(c,p.property,p.value,p.remove);attributes.push(t);t.apply();}
       for(const m of descriptors)Object.defineProperty(m.target,m.name,{...m.descriptor,value:m.fn});
-      JB.flushLayout();
-    }catch(error){structure.rollback();for(const [c,value]of values){c._values=value;c.invalidate('*');}for(const m of descriptors)Object.defineProperty(m.target,m.name,m.descriptor);try{JB.flushLayout();}catch{}structure.settle();reloading=false;emit('reload-error',{message:error.message,revision});throw error;}
+      for(const c of all)c.invalidate('*');JB.flushLayout();
+    }catch(error){
+      const attempt=fn=>{try{fn();}catch(e){emit('reload-warning',{message:'Rollback: '+e.message});}};
+      for(const t of attributes)attempt(()=>t.suspend());
+      for(const t of [...environments].reverse())attempt(()=>t.rollback());
+      if(structure)attempt(()=>structure.rollback());
+      for(const t of attributes)attempt(()=>t.rollback());
+      for(const [c,value]of values){c._values=value;c.invalidate('*');}
+      for(const m of descriptors)Object.defineProperty(m.target,m.name,m.descriptor);
+      templates?.rollback();for(const t of environments)attempt(()=>t.finalize());
+      attempt(()=>JB.flushLayout());structure?.settle();reloading=false;emit('reload-error',{message:error.message,revision});throw error;
+    }
     for(const doc of plan.documents)JB.documents.set(doc.className??doc.path,doc);
     for(const c of all){const origin=origins.get(c),location=plan.locations?.find(l=>l.file===origin?.file&&l.offset===origin.offset);if(location)origins.set(c,location.next);}
     for(const c of all)if(c._xamlLoaded){const updated=plan.documents.find(d=>d.path===c._xamlLoaded.path);if(updated)c._xamlLoaded=updated;}
-    configure({debug:plan.debug});revision=plan.revision;structure.finalize(message=>emit('reload-warning',{message,revision}));reloading=false;
+    configure({debug:plan.debug});revision=plan.revision;
+    const warn=message=>emit('reload-warning',{message,revision});
+    templates.finalize(warn);for(const t of environments)t.finalize();structure.finalize(warn);reloading=false;
     if(selected?._disposed){selected=null;overlay?.remove();overlay=null;resizeObserver?.disconnect();}
-    emit('reloaded',{revision,properties:changes.length,methods:methods.length,added:structure.added,removed:structure.removed,panels:structure.groups});emit('tree',tree());highlight();return {revision};
+    emit('reloaded',{revision,properties:changes.length,methods:methods.length,environments:environmentChanges.length,added:structure.added,removed:structure.removed,panels:structure.groups});emit('tree',tree());highlight();return {revision};
   }
   const api={configure,hit,inspect,tree,select,applyReload,watchResults,
     read(fn){try{return fn();}catch{return '[unavailable]';}},

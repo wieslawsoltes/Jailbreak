@@ -33,5 +33,14 @@ export class ResourceDictionary extends Map {
   *entries(){for(const key of this.keys())yield [key,this.get(key)];}
   [Symbol.iterator](){return this.entries();}get Count(){return [...this.keys()].length;}
   subscribe(callback){this.listeners.add(callback);return()=>this.listeners.delete(callback);}
+  snapshot(){return {entries:[...Map.prototype.entries.call(this)],merged:[...this.MergedDictionaries]};}
+  replaceContents(state){
+    const changed=new Set([...this.keys(),...state.entries.map(e=>e[0]),...state.merged.flatMap(d=>[...d.keys()])]);
+    for(const off of this.MergedDictionaries.disposers.values())off();
+    this.MergedDictionaries.items=[...state.merged];this.MergedDictionaries.disposers=new Map();
+    Map.prototype.clear.call(this);for(const [key,value]of state.entries)Map.prototype.set.call(this,key,value);
+    for(const d of state.merged)this.MergedDictionaries.disposers.set(d,d.subscribe(key=>{if(!Map.prototype.has.call(this,key))this.changed(key);}));
+    for(const key of changed)this.changed(key);
+  }
   Dispose(){this.MergedDictionaries.Clear();this.listeners.clear();super.clear();}
 }

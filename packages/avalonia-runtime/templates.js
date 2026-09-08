@@ -5,13 +5,13 @@ export function applyControlTheme(control){
   if(theme?.kind!=='controlTheme'){for(const key of control._themeKeys??[])control.ClearValue(key,90);control._themeKeys=[];return;}
   if(theme.targetType&&!(control instanceof theme.targetType))throw new Error('JB3012: ControlTheme TargetType mismatch');
   const values={},seen=new Set();
-  function collect(value){if(!value)return;if(value.kind!=='controlTheme'||seen.has(value))throw new Error('JB3012: Invalid or cyclic BasedOn theme');if(value.targetType&&!(control instanceof value.targetType))throw new Error('JB3012: BasedOn TargetType mismatch');seen.add(value);collect(value.basedOn);Object.assign(values,value.setters);}
+  function collect(value){if(!value)return;if(value.kind!=='controlTheme'||seen.has(value))throw new Error('JB3012: Invalid or cyclic BasedOn theme');if(value.targetType&&!(control instanceof value.targetType))throw new Error('JB3012: BasedOn TargetType mismatch');seen.add(value);collect(value.basedOn);Object.assign(values,value.resolveSetters?.(control)??value.setters);}
   collect(theme);for(const key of control._themeKeys??[])if(!Object.hasOwn(values,key))control.ClearValue(key,90);
   for(const [key,value]of Object.entries(values))control.SetValue(key,value,90);control._themeKeys=Object.keys(values);
 }
 export function releaseControlTemplate(control){
   const instance=control._templateInstance;control._templateInstance=null;control._appliedTemplate=null;
-  if(instance){instance.root.Dispose();instance.names.clear();}
+  if(instance){if(control._templateTransaction)control._templateTransaction.retire(instance);else{instance.root.Dispose();instance.names.clear();}}
 }
 export function applyControlTemplate(control){
   const template=control.Template;if(template===control._appliedTemplate&&control._templateInstance)return false;
@@ -37,9 +37,9 @@ export function renderControlTemplate(control){
 }
 export function renderDataContent(control){
   const template=control.ContentTemplate,content=control.Content;
-  if(!template?.build){if(control._contentTemplateRoot){control._contentTemplateRoot.Dispose();control._contentTemplateRoot=null;}return false;}
+  if(!template?.build){if(control._contentTemplateRoot){if(control._templateTransaction)control._templateTransaction.retire(control._contentTemplateRoot);else control._contentTemplateRoot.Dispose();control._contentTemplateRoot=null;}return false;}
   if(!control._contentTemplateRoot||control._contentTemplate!==template||!Object.is(control._contentData,content)){
-    const next=template.build(content,control);control._contentTemplateRoot?.Dispose();control._contentTemplateRoot=next;control._contentTemplate=template;control._contentData=content;
+    const next=template.build(content,control);if(control._templateTransaction)control._templateTransaction.retire(control._contentTemplateRoot);else control._contentTemplateRoot?.Dispose();control._contentTemplateRoot=next;control._contentTemplate=template;control._contentData=content;
   }
   const root=control._contentTemplateRoot;root.mount(control.container);
   for(const node of [...control.container.childNodes])if(node!==root.element)node.remove();return true;
