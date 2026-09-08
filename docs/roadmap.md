@@ -37,3 +37,7 @@ Full C#/XAML/generated-JavaScript debugging, a full visual designer for C#/XAML 
 | Full catalog | Catalog shell, remaining controls, themes/platform integration | Complete original app linked and exercised; retain `--require-full` failure until achieved |
 
 Do not raise compatibility percentages by suppressing unsupported instructions, skipping methods without reporting them, using ref-only assemblies as implementations, or replacing original catalog pages with similar-looking demos. Track integrity, compilation, construction, interaction and visual fidelity as different gates.
+
+## Boundary expansion checkpoint
+
+[Content/reparenting, binding/environment reload and source editing](boundary-expansion.md), plus [in-IDE stepping](cooperative-debugging.md), are delivered subsets with regression evidence. Continue with general C# round-tripping, native-callback/constructor/debugger integration, Portable PDB/binary stepping, cross-scope ownership, include-file environment updates and the full original ControlCatalog gate.

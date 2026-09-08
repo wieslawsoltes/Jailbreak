@@ -31,3 +31,7 @@ The progress document for each implementation round must distinguish delivered b
 - ECMA-426 source maps: https://tc39.es/ecma426/
 - Chrome original-source debugging: https://developer.chrome.com/docs/devtools/javascript/source-maps
 - Chrome debugger and stepping: https://developer.chrome.com/docs/devtools/javascript
+
+## Delivered cooperative transport
+
+[In-IDE stepping](cooperative-debugging.md) now supplies compiled-continuation suspension, frame locals and stepping for supported C# methods. Native callbacks and event propagation retain the documented scheduling boundaries; Portable PDB/MSIL and full-scope debugger gates remain open. [Boundary expansion](boundary-expansion.md) records the newer ownership, binding/environment and source-designer support.

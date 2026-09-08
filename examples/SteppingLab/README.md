@@ -1,0 +1,7 @@
+# In-IDE stepping laboratory
+
+Open **Develop**, enable **In-IDE stepping**, and open `MainView.axaml.cs`. Add a breakpoint on `int result = Double(3);`, then click **Run nested call**. The continuation suspends before the assignment; the IDE and its inspector remain responsive. **Step into** enters `Double`, **Step over** advances within the current frame, and **Step out** returns to the caller. Select a call frame to inspect its own locals or watches. **Set local** accepts a variable name and a JSON scalar of the same supported type; integer ranges are checked.
+
+Try changing `value` to `10` in `Double` and continue: the actual computation uses the new value. **Cancel invocation** unwinds generator `finally` blocks. **Run async call** exercises awaited method continuations. With **Break on C# throw**, **Catch an exception** suspends before the explicit throw, then resumes into the typed catch.
+
+This option emits additional JavaScript generator methods using the existing C# emitter. It does not reinterpret an AST or IL. Ordinary direct method calls retain their synchronous API. Source method groups attached to XAML or C# events enter the cooperative runner. Constructors, accessors, base-dispatch methods, native/runtime APIs and synchronous native callbacks are step-over regions; they are not a separately paused JavaScript engine. Browser DevTools remains the native debugger for those regions and arbitrary JavaScript. Disable development tools for release exports.

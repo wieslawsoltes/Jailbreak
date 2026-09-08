@@ -44,3 +44,9 @@ C# object initializer editing now adds and removes typed literal properties, cre
 The primary Develop panel exposes **Set binding/resource**, **Remove property**, and **Move into** a named host. Literal edits still protect bindings; the explicit expression action parses and validates supported markup. XAML moves preserve the existing element bytes, reject cycles, nonempty content slots, namespace-resolution changes and template-scope moves, and are one undoable transaction.
 
 Regression paths: `tests/designer-roundtrip.test.js` (12 cases) plus three browser gates. Local verification: 247 Node tests and 20 development-browser tests. General imperative C# UI reconstruction, custom typed expressions and arbitrary AST refactorings remain outside these operations.
+
+## Stage 4: independent in-IDE stepping
+
+The **In-IDE stepping** option now executes compiler-emitted C# continuations with real suspended frames, resume/step into/over/out, conditional/log breakpoints, selected-frame watches, validated scalar local edits, explicit exception breaks, async task stepping and cancellation/finally cleanup. A new **Stepping Lab** source example exercises these controls. This path does not require browser DevTools or CDP, and hot reload refuses active frames rather than migrating them unsafely.
+
+See [cooperative debugger architecture and exact boundaries](cooperative-debugging.md). Native APIs, constructors/accessors, base dispatch and synchronous callbacks are step-over regions. Event-level cooperative scheduling is not VM-wide pause and does not freeze native routed-event propagation. MSIL/PDB source stepping and a complete original catalog remain separate open integration gates. Local evidence: 262 Node tests, 23 developer browser tests and 14 source workspaces.

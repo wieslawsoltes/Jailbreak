@@ -1,0 +1,13 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="SteppingLab.MainView">
+  <StackPanel Margin="28" Spacing="14">
+    <TextBlock Text="Pause. Inspect. Step." FontSize="28" FontWeight="Bold" />
+    <TextBlock Text="Enable In-IDE stepping in Develop, then set a source breakpoint. The IDE remains responsive while a method is suspended." TextWrapping="Wrap" />
+    <TextBox Name="Input" Text="This control is retained while stepping" />
+    <Button Name="NestedButton" Content="Run nested call" Click="RunNested" />
+    <Button Name="AsyncButton" Content="Run async call" Click="RunAsync" />
+    <Button Name="ExceptionButton" Content="Catch an exception" Click="RunException" />
+    <TextBlock Name="Status" Text="Ready" FontSize="22" />
+  </StackPanel>
+</UserControl>

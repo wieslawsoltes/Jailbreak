@@ -1,5 +1,7 @@
 # Jailbreak
 
+**New:** [In-IDE C# stepping](docs/cooperative-debugging.md), [content reparenting, binding/resource/template reload and expanded source designer](docs/boundary-expansion.md). Open **Develop** and the **Stepping Lab** example. Exact native/cooperative boundaries are documented; full original ControlCatalog is not yet passing.
+
 **New:** [Keyed panel hot reload and designer duplication](docs/milestone-structural-reload.md) preserve retained controls, input state and handler identity across supported insert/delete/reorder operations.
 
 **Core tools:** debugging, visual design and hot reload are mandatory project requirements. The primary IDE now has **Develop** tools and a **Developer Tools** source sample. See [the core contract](docs/core-development-tools.md) and [delivered tools, tests and remaining full-scope gaps](docs/milestone-development-tools.md).
