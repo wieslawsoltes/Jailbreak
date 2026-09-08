@@ -1,0 +1,13 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="DeveloperTools.MainView">
+  <StackPanel x:Name="Panel" Margin="28" Spacing="14">
+    <TextBlock Text="Design. Debug. Reload." FontSize="28" FontWeight="Bold" />
+    <TextBlock Text="Open Develop, enable tools, then select controls on the canvas." TextWrapping="Wrap" />
+    <TextBox x:Name="Input" Text="Type here: compatible reload keeps this value" />
+    <TextBlock x:Name="CounterLabel" Text="Count: 0" FontSize="22" />
+    <Button x:Name="IncrementButton" Content="Increment" Click="Increment" />
+    <TextBlock Text="Change count += 1 to count += 10 with hot reload enabled. The existing button handler and count survive." TextWrapping="Wrap" />
+    <!-- Designer edits preserve this comment and the surrounding source. -->
+  </StackPanel>
+</UserControl>
