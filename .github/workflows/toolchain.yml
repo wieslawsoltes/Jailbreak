@@ -26,6 +26,8 @@ jobs:
           dotnet-version: '8.0.x'
       - name: Verify fresh SDK binaries against CLR oracle
         run: node scripts/verify-msil-clr.mjs
+      - name: Verify exception regions and checked arithmetic against CLR
+        run: node scripts/verify-exceptions-clr.mjs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

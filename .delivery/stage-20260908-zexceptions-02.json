@@ -1,1 +1,1 @@
-{"message":"feat(ide): run exception DLL and NuGet examples and enforce fresh CLR and browser gates","sha256":"3863eea2ec0d7fe78292c510fca9e1703b409b3e103cefbc538d3658a62d9fa5","chunks":["eh-02-01.b64","eh-02-02.b64"]}
+{"message":"feat(ide): run exception DLL and NuGet examples and enforce fresh CLR and browser gates","sha256":"a82810df428bff5cb2e1c932bc01be169c62f8671314bb124e268e5c1e6ffa4d","chunks":["eh-02-fixed-01-1.b64","eh-02-fixed-01-2.b64","eh-02-fixed-02-1.b64","eh-02-fixed-02-2.b64"]}
