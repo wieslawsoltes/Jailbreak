@@ -2,7 +2,6 @@ name: Reproducible source snapshot
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/source-snapshot.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,4 +20,4 @@ jobs:
         with:
           name: jailbreak-source-snapshot
           path: /tmp/jailbreak-source
-          retention-days: 30
+          retention-days: 7
