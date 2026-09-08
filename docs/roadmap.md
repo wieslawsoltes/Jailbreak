@@ -14,6 +14,7 @@ The secondary earlier toolchain is preserved for regressions; feature expansion 
 - Bounded project/source evaluation, imports, conditions, per-project symbols and profiles.
 - Selected templates/themes, scoped parts, bindings and linked/merged XAML resources.
 - MSIL decoding/verification/JS emission, real managed DLL loading, explicit local NuGet conversion, binary method runner and C#/XAML-to-binary library bridge.
+- Typed exception regions, nested finally/fault, rethrow identity and checked arithmetic, with a shared source/binary exception hierarchy and 35 fresh CLR cases per conversion route.
 
 Exact scope is in the milestone guides. A package name or schema entry is not proof of API coverage.
 
@@ -21,7 +22,7 @@ Exact scope is in the milestone guides. A package name or schema entry is not pr
 
 | Layer | Next work | Required evidence |
 |---|---|---|
-| Managed semantics | Exception regions, generic/value types, delegates/interfaces, overloads, runtime library adapters | Positive/negative verifier tests and fresh CLR comparisons |
+| Managed semantics | Exception filters/custom exceptions, generic/value types, delegates/interfaces, overloads, runtime library adapters | Positive/negative verifier tests and fresh CLR comparisons |
 | Assembly/package linking | Assembly versions/load contexts, transitive package graph, exact NuGet TFM reduction, signatures/locks | Conflict/failure tests, reproducible assets, no task execution during ingestion |
 | Avalonia binary route | Framework adapters, embedded resources, compiled-XAML loader patterns, reflection gaps | Unchanged upstream DLL/source behavior, not only metadata counts |
 | UI | General input/list templates, routed input/layout, binding validation, collections/virtualization | Interaction, ownership/disposal, accessibility and scale gates |

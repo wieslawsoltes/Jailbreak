@@ -21,7 +21,7 @@ NuGet conversion is not NuGet restore: package tasks, installation scripts, nati
 
 The repository's owned `tests/fixtures/msil-src` project is built with the real .NET SDK. Its DLL and nupkg, plus CLR reference results, are the positive binary gates. Tests compare JavaScript output with the CLR oracle for arithmetic, overflow, loops, recursion, arrays, calls, instance properties and static initialization. Additional negative tests cover corrupt PE/ZIP data, unsupported IL and missing dependencies. Browser tests must load bytes through the workbench and execute converted methods inside its isolated preview.
 
-The existing source compiler, template and ControlCatalog gates remain required. Binary conversion does not automatically make arbitrary Avalonia DLLs compatible: compiled XAML loaders, generic framework code, reflection, value-type semantics, exception regions and native APIs need their own verified implementations. The full ControlCatalog target remains separate.
+The existing source compiler, template and ControlCatalog gates remain required. Binary conversion does not automatically make arbitrary Avalonia DLLs compatible: compiled XAML loaders, generic framework code, reflection, value-type semantics, exception filters and native APIs need their own verified implementations. The [exception milestone](milestone-exceptions.md) implements a bounded exception-region and checked-arithmetic subset in the verified route. The full ControlCatalog target remains separate.
 
 ## Source specifications
 

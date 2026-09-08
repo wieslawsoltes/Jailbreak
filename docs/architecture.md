@@ -24,4 +24,8 @@ The binary input path is `PE/CLI bytes or IL text → verified stack/control-flo
 
 Binary Studio is a client of those libraries, not another compiler. Both it and the primary source IDE build in workers and invoke application methods only in isolated previews. HTML exports contain emitted functions/runtime, not PE parsers or compilation workers.
 
-See [binary milestone](milestone-msil-nuget.md), [binary design](binary-compilation-design.md), and the [integrated roadmap](roadmap.md). Future exception/generic/package/framework expansion belongs in these layers with new conformance gates.
+See [binary milestone](milestone-msil-nuget.md), [binary design](binary-compilation-design.md), and the [integrated roadmap](roadmap.md). Further generic/package/framework expansion belongs in these layers with new conformance gates.
+
+## Exception and checked-arithmetic layer
+
+The managed PE reader and IL text frontend feed a single validated exception-region model. `msil-compiler/exception-regions.js` checks protected control-flow transitions; `msil-runtime/exception-frame.js` manages per-call unwind continuations used by emitted JavaScript. Ordinary methods keep their original non-EH path. Shared `dotnet-runtime/exceptions.js` constructors permit source C# to catch binary errors; `checked.js` provides exact overflow checks. No IL decoder is introduced into the runtime. See [exception milestone](milestone-exceptions.md) for supported catch types, verifier limits, browser examples and the 35-case CLR gate.

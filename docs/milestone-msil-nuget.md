@@ -48,7 +48,7 @@ The implemented core covers argument/local loads and stores, primitive constants
 
 The callable adapter inventory is exported by `adapterInventory()`. It currently includes selected `System.Object`, `System.String`, `System.Math` and `System.Console` methods with **exact signatures**, not arbitrary methods having similar names. Binary references must resolve to a supplied assembly or that adapter inventory. Unknown executable dependencies fail conversion. Runtime assembly lookup currently uses simple names and rejects duplicate names; it is not a strong-name/version/publisher validation or CLR load-context implementation.
 
-Unsupported areas include general generics, interfaces/explicit overrides, delegates/function pointers, boxing, byrefs/pointers, custom value types/decimal, exception-handler regions/filter/finally/rethrow, checked conversion/arithmetic opcodes, reflection, `calli`, indirect loads/stores, native platform calls, async state-machine framework dependencies and arbitrary .NET APIs. Floating-to-integer conversions outside the documented exact numeric range throw rather than silently claiming CLR out-of-range behavior. Static constructors are lazily initialized per type with cached failure; exact `beforefieldinit` scheduling parity is not claimed. Same-arity overloads must be invoked by metadata token; source-bridge overload resolution is not a complete external C# type checker.
+Unsupported areas include general generics, interfaces/explicit overrides, delegates/function pointers, boxing, byrefs/pointers, custom value types/decimal, exception filters, custom exception types, native-width checked conversions, reflection, `calli`, indirect loads/stores, native platform calls, async state-machine framework dependencies and arbitrary .NET APIs. Floating-to-integer conversions outside the documented exact numeric range throw rather than silently claiming CLR out-of-range behavior. Static constructors are lazily initialized per type with cached failure; exact `beforefieldinit` scheduling parity is not claimed. Same-arity overloads must be invoked by metadata token; source-bridge overload resolution is not a complete external C# type checker.
 
 ## IL source examples
 
@@ -115,7 +115,7 @@ Local validation covers 37 new Node tests, eight new Chromium checks, unchanged 
 
 ## Next layers in the same architecture
 
-The follow-on work is incremental: richer reference/value-type verification, exception regions and structured control flow; generic/delegate/interface semantics and framework adapters; stronger assembly identity and overload binding; actual NuGet dependency/TFM resolution and authenticated provenance; embedded resources/compiled-XAML activation; then larger unchanged Avalonia library/catalog conversion gates. The existing source route remains essential for source generators, editing and transparent diagnostics. Each extension needs negative tests and a CLR or upstream behavioral oracle before its compatibility gate can pass.
+The follow-on work is incremental: richer reference/value-type verification and exception filters; generic/delegate/interface semantics and framework adapters; stronger assembly identity and overload binding; actual NuGet dependency/TFM resolution and authenticated provenance; embedded resources/compiled-XAML activation; then larger unchanged Avalonia library/catalog conversion gates. The existing source route remains essential for source generators, editing and transparent diagnostics. Each extension needs negative tests and a CLR or upstream behavioral oracle before its compatibility gate can pass.
 
 ## Specifications
 
@@ -125,3 +125,7 @@ The follow-on work is incremental: richer reference/value-type verification, exc
 - nuspec: https://learn.microsoft.com/en-us/nuget/reference/nuspec
 
 These describe the source formats. They do not imply implementation of every behavior in those specifications.
+
+## Follow-on exception milestone
+
+Typed catches, nested finally/fault, leave/rethrow and checked fixed-width arithmetic are now implemented in the same verified route. See [exception recovery](milestone-exceptions.md) for the exact subset, shared C# behavior and independent 35-case CLR evidence. Other limits above still apply.

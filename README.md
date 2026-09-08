@@ -1,5 +1,7 @@
 # Jailbreak
 
+**New:** typed MSIL catches, nested finally/fault, rethrow and checked arithmetic now run through DLL, NuGet, Binary Studio and the source/binary bridge. See [exception recovery milestone](docs/milestone-exceptions.md) and the **ExceptionLibrary** UI sample. Full ControlCatalog compatibility is still an unfinished target.
+
 Browser-native **C#, Avalonia-style XAML and MSIL → JavaScript** compilers, reusable runtime libraries and a web IDE. Supported applications run with HTML and optional WebGPU surfaces, without a .NET runtime.
 
 [Open the primary IDE](https://wieslawsoltes.github.io/Jailbreak/) · [Binary Studio](https://wieslawsoltes.github.io/Jailbreak/binary/) · [Secondary IDE](https://wieslawsoltes.github.io/Jailbreak/browser/ide/) · [Toolchain CI](https://github.com/wieslawsoltes/Jailbreak/actions/workflows/toolchain.yml) · [Batched-source CI](https://github.com/wieslawsoltes/Jailbreak/actions/workflows/delivery.yml)
@@ -12,7 +14,7 @@ The primary toolchain now compiles real managed DLLs and an ILAsm subset to nati
 
 Open **[Binary Studio](https://wieslawsoltes.github.io/Jailbreak/binary/)** for editable IL examples, real DLL/nupkg upload, method/disassembly inspection and offline runner export. In the primary source IDE, select **Binary Library** or **Nuget Library**: compiled C#/XAML handlers call the actual converted DLL, including stateful objects. DLL/package bytes round-trip in workspace JSON.
 
-NuGet conversion selects an exact `lib/<tfm>` group from supplied local packages; it is not automatic NuGet restore. Native/ref-only assets, unsupported IL/generics/exception regions, unknown executable dependencies and invalid binaries are diagnostics rather than empty stubs. Conversion supports a bounded managed subset, not arbitrary Avalonia DLLs.
+NuGet conversion selects an exact `lib/<tfm>` group from supplied local packages; it is not automatic NuGet restore. Native/ref-only assets, unsupported IL/generics/exception filters, unknown executable dependencies and invalid binaries are diagnostics rather than empty stubs. Conversion supports a bounded managed subset, not arbitrary Avalonia DLLs.
 
 [Binary milestone, APIs and examples](docs/milestone-msil-nuget.md) · [Integrated roadmap](docs/roadmap.md) · [Architecture](docs/architecture.md)
 
