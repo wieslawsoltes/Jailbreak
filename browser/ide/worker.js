@@ -1,0 +1,2 @@
+import {compileWorkspace} from '../packages/project/index.js';
+self.onmessage=({data})=>{const start=performance.now();try{const result=compileWorkspace(data.files,data.options);self.postMessage({id:data.id,result,elapsed:performance.now()-start});}catch(error){self.postMessage({id:data.id,result:{ok:false,diagnostics:[{code:'JB0001',severity:'error',message:error.message}]},elapsed:performance.now()-start});}};
