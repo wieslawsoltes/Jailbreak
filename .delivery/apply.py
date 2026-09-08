@@ -1,7 +1,7 @@
 """Materialize checksum-verified source batches as ordinary reviewable commits.
 
-Transport only: never imported by compilers or applications. Delta batches also
-verify each original source file so concurrent edits cannot be overwritten.
+Transport only. Original source hashes protect concurrent changes. The MSIL
+integration map preserves the concurrently added legacy binary entry points.
 """
 import base64
 import gzip
@@ -11,6 +11,7 @@ import json
 import pathlib
 import re
 import subprocess
+from integration import integrate
 
 root = pathlib.Path(__file__).resolve().parent.parent
 state_path = root / '.delivery/applied.json'
@@ -54,7 +55,6 @@ for bundle_path in sorted((root / '.delivery').glob('stage-*.json')):
         files, patches = dict(decoded['files']), decoded['patches']
     else:
         files, patches = decoded, {}
-    # Preflight the entire stage before changing any file.
     for name, patch in patches.items():
         if name in files:
             raise ValueError('A source path cannot be both replaced and patched')
@@ -72,6 +72,17 @@ for bundle_path in sorted((root / '.delivery').glob('stage-*.json')):
         for start, end, replacement in reversed(patch['edits']):
             text = text[:start] + replacement + text[end:]
         files[name] = text
+    if bundle_path.name.startswith('stage-20260908-msil-'):
+        integrated = {}
+        for name, content in files.items():
+            new_name, content = integrate(name, content)
+            existing = safe_path(new_name)
+            if name not in patches and existing.exists() and existing.read_bytes() != content.encode('utf-8'):
+                raise ValueError('Concurrent new source would be overwritten: ' + new_name)
+            if new_name in integrated:
+                raise ValueError('Duplicate integrated source path')
+            integrated[new_name] = content
+        files = integrated
     destinations = {}
     for name, content in files.items():
         if not isinstance(content, str):

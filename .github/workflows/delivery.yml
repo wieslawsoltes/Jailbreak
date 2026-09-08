@@ -21,10 +21,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Archive transport integrity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: msil-delivery-evidence
+          path: |
+            .delivery/msil-*.b64
+            .delivery/stage-20260908-msil-*.json
+          include-hidden-files: true
       - name: Materialize verified source stages
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python3 .delivery/repair.py
           python3 .delivery/apply.py
       - name: Validate source before publishing commits
         run: |
