@@ -41,9 +41,12 @@ export function compileXaml(text, options = {}) {
     if(uri?.startsWith('clr-namespace:')||uri?.startsWith('using:'))type=uri.replace(/^(clr-namespace:|using:)/,'').split(';')[0]+'.'+local;
     else if(uri&&!AVA.has(uri)&&uri!==X&&!uri.includes('markup-compatibility'))report('JB1102',`Unsupported XAML namespace '${uri}'`,node);
     if(local.includes('.')) {
-      const property=local.slice(local.lastIndexOf('.')+1);
+      const property=local.slice(local.lastIndexOf('.')+1),owner=local.slice(0,local.lastIndexOf('.'));
+      const structuralProperties={Setter:['Value'],Style:['Setters'],DataTemplate:['Content'],ResourceDictionary:['MergedDictionaries']};
+      if(Object.hasOwn(controlDefinitions,owner)?!hasProperty(owner,property):!(structuralProperties[owner]?.includes(property)||customTypes.includes(type.slice(0,type.lastIndexOf('.')))))report('JB1113',`Unsupported property element '${type}'`,node);
       return {kind:'property',property,children:node.children.map(c=>lower(c,ns)).filter(Boolean),span:node.span};
     }
+    if(type.startsWith('System.')&&['String','Boolean','Int32','Double'].includes(local))type=local;
     const builtin=Object.hasOwn(controlDefinitions,type),structural=structuralTypes.includes(type);
     if(!builtin&&!structural&&!customTypes.includes(type))report('JB1103',`Unknown XAML type '${type}'`,node);
     dependencies.add(type);
