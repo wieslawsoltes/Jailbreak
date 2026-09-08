@@ -1,0 +1,16 @@
+{
+  "name": "jailbreak",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Browser-native C# and Avalonia XAML to JavaScript toolchain",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "build": "node scripts/build.mjs",
+    "serve": "node scripts/serve.mjs",
+    "gate": "node scripts/gate.mjs",
+    "check": "node scripts/check.mjs"
+  },
+  "engines": { "node": ">=22" }
+}
