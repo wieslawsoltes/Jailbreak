@@ -1,0 +1,15 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {SourceFile, splitTopLevel, escapeJs} from '../packages/compiler-core/index.js';
+import {parseXml} from '../packages/compiler-core/xml.js';
+import {compileXaml, parseMarkup} from '../packages/xaml-compiler/index.js';
+test('source locations include CRLF and non-ASCII text',()=>{const f=new SourceFile('a','one\r\nπ\nlast');assert.deepEqual(f.location(7),{file:'a',offset:7,line:3,column:1});});
+test('XML parses quoted >, comments, CDATA and entities',()=>{const r=parseXml('<Root Value="a &gt; b"><!-- hi --><![CDATA[<x>]]><Child Text="&#x1f680;"/></Root>');assert.equal(r.diagnostics.length,0);assert.equal(r.root.attributes.Value,'a > b');assert.equal(r.root.children[0].text,'<x>');assert.equal(r.root.children[1].attributes.Text,'🚀');});
+test('XML rejects DTD, duplicate attributes and mismatched elements',()=>{for(const text of ['<!DOCTYPE a><a/>','<a x="1" x="2"/>','<a></b>'])assert.equal(parseXml(text).diagnostics[0].severity,'error');});
+test('XML reports exact source file and location',()=>{const r=parseXml('<Root>\n  <Child>\n</Root>','A.axaml');assert.equal(r.diagnostics[0].file,'A.axaml');assert.equal(r.diagnostics[0].line,3);});
+test('markup supports nested resources in bindings',()=>{const b=parseMarkup("{Binding Name, Mode=TwoWay, Converter={StaticResource Converter}, StringFormat='Hello, {0}'}");assert.equal(b.path,'Name');assert.equal(b.Converter.key,'Converter');assert.equal(b.StringFormat,'Hello, {0}');assert.equal(parseMarkup('{x:Null}'),null);assert.equal(parseMarkup('{}{literal}'),'{literal}');});
+test('XAML compiles named controls, attached properties and events',()=>{const r=compileXaml('<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Demo.Window"><Grid ColumnDefinitions="*,Auto"><Button x:Name="go" Grid.Column="1" Click="OnClick">Go</Button></Grid></Window>');assert.equal(r.success,true,JSON.stringify(r.diagnostics));assert.deepEqual(r.ir.names,['go']);assert.match(r.code,/JB.registerXaml/);});
+test('unknown controls and properties fail compilation rather than disappear',()=>{assert.equal(compileXaml('<HolographicBox/>').success,false);const r=compileXaml('<Button Imaginary="1"/>');assert.equal(r.diagnostics[0].code,'JB1106');assert.equal(r.code,'');});
+test('unsupported binding and template syntax is explicit',()=>{assert.equal(compileXaml('<TextBlock Text="{Binding Name, RelativeSource={RelativeSource Self}}"/>').success,false);assert.equal(compileXaml('<ControlTemplate><Button/></ControlTemplate>').success,false);});
+test('duplicate names fail and property elements are preserved',()=>{assert.equal(compileXaml('<StackPanel><Button Name="a"/><Button Name="a"/></StackPanel>').success,false);const r=compileXaml('<Border><Border.Background><SolidColorBrush Color="Red"/></Border.Background></Border>');assert.equal(r.ir.root.children[0].property,'Background');});
+test('JavaScript serialization cannot inject a closing script tag',()=>assert.equal(escapeJs('</script>'), '"\\u003c/script>"'));
