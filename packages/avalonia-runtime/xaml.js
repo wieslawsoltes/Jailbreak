@@ -124,5 +124,16 @@ export function createXamlRuntime(api, types, documents) {
     safely(scope,()=>{build(ir.root,null,scope,instance);finish(scope);});instance._xamlLoaded=ir;return instance;
   }
   function createFromXaml(id){const ir=documents.get(id);if(!ir)throw new Error('XAML '+id+' was not registered');const Type=resolveType(ir.className??ir.root.type);const instance=new Type();if(instance._xamlLoaded!==ir)loadXaml(instance,id);return instance;}
-  return {loadXaml,createFromXaml,applicationResources,resolveType};
+  // Stage a builtin subtree without exporting names or mounting DOM nodes.
+  function prepareXamlFragment(node,parent,owner){
+    const liveNames=parent._nameScope,scope={names:new Map(liveNames),owner,pending:[],created:[],exportNames:false,templatedParent:null};
+    const root=safely(scope,()=>{const value=build(node,parent,scope);finish(scope);return value;});
+    const added=new Map([...scope.names].filter(([key,value])=>liveNames.get(key)!==value));
+    return {root,created:scope.created,names:added,scope:liveNames,attach(){
+      scope.names=liveNames;
+      for(const c of scope.created)c._nameScope=liveNames;
+      for(const [key,value]of added){liveNames.set(key,value);Object.defineProperty(owner,key,{value,writable:true,enumerable:true,configurable:true});}
+    }};
+  }
+  return {loadXaml,createFromXaml,applicationResources,resolveType,prepareXamlFragment};
 }

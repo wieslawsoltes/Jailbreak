@@ -1,4 +1,4 @@
-import {inspectSource,editProperty,insertControl,removeControl,moveControl,EditHistory,palette} from './designer.js';
+import {inspectSource,editProperty,insertControl,removeControl,moveControl,duplicateControl,EditHistory,palette} from './designer.js';
 import {planReload,reloadScript} from './reload.js';
 import {mappedScript,updateGeneratedLocations} from './source-map.js';
 
@@ -20,7 +20,8 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
   const refresh=el('button','Refresh tree'),pick=el('button','Select on canvas');refresh.type=pick.type='button';refresh.id='dev-refresh';pick.id='dev-pick';pick.setAttribute('aria-pressed','false');
   const tree=el('div');tree.className='dev-list';tree.id='dev-tree';tree.setAttribute('role','tree');const row=el('div');row.className='dev-row';row.append(refresh,pick);
   const toolbox=el('select');toolbox.id='dev-toolbox';toolbox.setAttribute('aria-label','Control palette');for(const type of palette){const o=el('option',type);o.value=type;toolbox.append(o);}
-  const add=el('button','Insert'),remove=el('button','Delete'),up=el('button','Move up'),down=el('button','Move down');for(const b of [add,remove,up,down])b.type='button';const tools=el('div');tools.className='dev-row';tools.append(toolbox,add,remove,up,down);
+  const duplicate=el('button','Duplicate');duplicate.id='dev-duplicate';duplicate.type='button';
+  const add=el('button','Insert'),remove=el('button','Delete'),up=el('button','Move up'),down=el('button','Move down');for(const b of [add,remove,up,down])b.type='button';const tools=el('div');tools.className='dev-row';tools.append(toolbox,add,duplicate,remove,up,down);
   const undo=el('button','Undo design'),redo=el('button','Redo design');undo.type=redo.type='button';const historyRow=el('div');historyRow.className='dev-row';historyRow.append(undo,redo);
   hierarchy.append(el('h3','Visual hierarchy & palette'),row,tree,tools,historyRow);
   const selection=el('div','Select a visual to inspect its source.'),propertyList=el('div');propertyList.id='dev-properties';propertyList.className='dev-list';
@@ -47,7 +48,7 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
     const bound=running?.debug?.sites?.some(p=>b.language==='javascript'?p.generatedLine===b.line:p.file===b.file&&p.line===b.line)||running?.debug?.xamlSites?.some(p=>p.file===b.file&&p.line===b.line);
     const button=el('button',`${bound?'●':'○'} ${b.file}:${b.line}${b.condition?' ['+b.condition+']':''}${b.log?' log':''} ×`);button.type='button';button.title='Click to remove; ○ means unbound';button.onclick=()=>{settings.breakpoints.splice(index,1);renderBreakpoints();sync();};breakpointList.append(button);
   }}
-  function sourceEdit(make){if(!selected?.source)throw new Error('This visual has no editable source identity');if(selected.template)throw new Error('Template instance: edit the template source directly');const {file,offset}=selected.source,files=getFiles();if(runningFiles?.[file]!==files[file])throw new Error('Source differs from the running preview; build/restart before editing this selection');const transaction=make(files[file],file,offset);history.apply(files,transaction);applySource(transaction.file);selected=null;propertyList.replaceChildren();tell('Source updated. Build applies compatible hot edits; structural changes require Restart app.');build();}
+  function sourceEdit(make){if(!selected?.source)throw new Error('This visual has no editable source identity');if(selected.template)throw new Error('Template instance: edit the template source directly');const {file,offset}=selected.source,files=getFiles();if(runningFiles?.[file]!==files[file])throw new Error('Source differs from the running preview; build/restart before editing this selection');const transaction=make(files[file],file,offset);history.apply(files,transaction);applySource(transaction.file);selected=null;propertyList.replaceChildren();tell('Source updated. Build applies compatible hot edits; supported panel edits reload in place.');build();}
   function renderSelection(value){selected=value;selection.replaceChildren();const source=value.source;const jump=el('button',value.type+(source?' · '+source.file+':'+source.line:' · generated visual'));jump.type='button';jump.onclick=()=>source&&openFile(source.file,source.offset);selection.append(jump);runtimeProperties.textContent=JSON.stringify(value.properties,null,2);propertyList.replaceChildren();
     if(!source||value.template){propertyList.append(el('p',value.template?'Template instance: inspect here; edit its template in source.':'No source mapping for this generated visual.'));return;}
     const files=getFiles();if(runningFiles?.[source.file]!==files[source.file]){propertyList.append(el('p','Source changed; build/restart before designer edits.'));return;}
@@ -59,6 +60,7 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
   button.onclick=()=>{panel.hidden=!panel.hidden;if(!panel.hidden)send('inspect');};close.onclick=()=>panel.hidden=true;
   enabled.onchange=()=>{sync();tell('Development mode changed. Compile to restart with the selected instrumentation.');build(true);};hot.onchange=native.onchange=throwBreak.onchange=sync;watches.onchange=sync;
   restart.onclick=()=>build(true);refresh.onclick=()=>send('inspect');pick.onclick=()=>{selecting=!selecting;pick.setAttribute('aria-pressed',String(selecting));send('pick',{value:selecting});};
+  duplicate.onclick=()=>guarded(()=>sourceEdit(duplicateControl));
   add.onclick=()=>guarded(()=>sourceEdit((t,f,o)=>insertControl(t,f,o,toolbox.value)));remove.onclick=()=>guarded(()=>sourceEdit(removeControl));up.onclick=()=>guarded(()=>sourceEdit((t,f,o)=>moveControl(t,f,o,'up')));down.onclick=()=>guarded(()=>sourceEdit((t,f,o)=>moveControl(t,f,o,'down')));
   set.onclick=()=>guarded(()=>sourceEdit((t,f,o)=>editProperty(t,f,o,propName.value,propValue.value)));
   undo.onclick=()=>guarded(()=>{const t=history.undo(getFiles());if(t){selected=null;applySource(t.file);build();}});redo.onclick=()=>guarded(()=>{const t=history.redo(getFiles());if(t){selected=null;applySource(t.file);build();}});
@@ -79,7 +81,8 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
       if(event==='tree'){tree.replaceChildren();const rows=new Map(payload.map(r=>[r.id,r]));for(const node of payload){let depth=0,parent=rows.get(node.parent);while(parent&&depth<20){depth++;parent=rows.get(parent.parent);}const button=el('button','  '.repeat(depth)+node.type+(node.name?' #'+node.name:''));button.type='button';button.dataset.visualId=node.id;button.setAttribute('role','treeitem');button.setAttribute('aria-selected',String(node.selected));button.onclick=()=>send('select',{id:node.id});tree.append(button);}}
       else if(event==='selected')renderSelection(payload);
       else if(event==='resize')guarded(()=>{if(payload.id!==selected?.id)throw new Error('Stale resize selection');sourceEdit((text,file,offset)=>{const first=editProperty(text,file,offset,'Width',String(payload.width)),second=editProperty(first.after,file,offset,'Height',String(payload.height));return {...second,before:text};});});
-      else if(event==='reloaded'){revision=payload.revision;if(pending){accept(pending.next,pending.sources);pending=null;}tell(`Hot reload ${revision}: ${payload.properties} properties, ${payload.methods} methods; application state retained.`);if(selected)send('select',{id:selected.id});}
+      else if(event==='reloaded'){revision=payload.revision;if(pending){accept(pending.next,pending.sources);pending=null;}tell(`Hot reload ${revision}: ${payload.properties} properties, ${payload.methods} methods, ${payload.added??0} added / ${payload.removed??0} removed; application state retained.`);if(selected)send('select',{id:selected.id});}
+      else if(event==='reload-warning'){output.textContent=payload.message;}
       else if(['reload-error','tool-error'].includes(event)){pending=null;tell(payload.message);}
       else if(event.startsWith('debug-')||event==='watches'){output.textContent=JSON.stringify(payload,null,2);if(event==='debug-hit')tell('Breakpoint hit. Native pause/step/resume is controlled by browser DevTools.');}
     }

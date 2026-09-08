@@ -48,7 +48,8 @@ export function insertControl(text,file,offset,type){
   const eol=text.includes('\r\n')?'\r\n':'\n',lineStart=text.lastIndexOf('\n',node.span.start)+1,indent=/^\s*/.exec(text.slice(lineStart,node.span.start))[0],childIndent=indent+'  ';
   const prefix=node.tag.includes(':')?node.tag.split(':')[0]+':':'';
   const content=type==='TextBlock'?' Text="New text"':type==='Button'?' Content="New button"':type==='TextBox'?' Text=""':type==='CheckBox'?' Content="New option"':'';
-  const child=`<${prefix}${type}${content} />`;let next,selection;
+  const used=new Set(flatten(xml(text,file).root).map(e=>e.node.attributes.Name??e.node.attributes['x:Name']));let n=1;while(used.has(type+n))n++;
+  const child=`<${prefix}${type} Name="${type+n}"${content} />`;let next,selection;
   if(text.slice(node.span.end-2,node.span.end)==='/>'){
     const start=node.span.end-2,added='>'+eol+childIndent+child+eol+indent+`</${node.tag}>`;
     selection=start+1+eol.length+childIndent.length;next=text.slice(0,start)+added+text.slice(node.span.end);
@@ -79,3 +80,27 @@ export class EditHistory {
   redo(files){const t=this.redoStack.at(-1);if(!t)return null;if(files[t.file]!==t.before)throw new Error('Source changed after undo');files[t.file]=t.after;this.redoStack.pop();this.undoStack.push(t);return t;}
 }
 export function sourceLocation(text,file,offset){return new SourceFile(file,text).location(offset);}
+
+/** Duplicate a literal subtree without duplicating names or rewriting unrelated source. */
+export function duplicateControl(text,file,offset){
+  if(file.endsWith('.cs'))throw new Error('Duplicate currently requires a XAML control');
+  const {node,parent,root}=selected(text,file,offset);
+  if(!parent||!['Panel','StackPanel','Grid','Canvas','WrapPanel','DockPanel'].includes(localName(parent.tag)))throw new Error('Duplicate requires a control inside a panel');
+  const used=new Set(flatten(root).flatMap(({node})=>Object.entries(node.attributes).filter(([key])=>key==='Name'||key==='x:Name').map(([,value])=>value)));
+  const edits=[];let hasRootName=false;
+  for(const {node:child}of flatten(node))for(const [key,value]of Object.entries(child.attributes)){
+    if(value.startsWith('{')&&!value.startsWith('{}'))throw new Error('Duplicate with bindings/resources requires explicit source editing');
+    if(key==='Name'||key==='x:Name'){
+      if(child===node)hasRootName=true;
+      let next=value+'Copy',n=2;while(used.has(next))next=value+'Copy'+n++;used.add(next);
+      const span=child.attributeSpans[key];edits.push([span.start-node.span.start,span.end-node.span.start,`${key}="${next}"`]);
+    }
+  }
+  let copy=text.slice(node.span.start,node.span.end);
+  for(const [start,end,value]of edits.sort((a,b)=>b[0]-a[0]))copy=copy.slice(0,start)+value+copy.slice(end);
+  if(!hasRootName){let n=1;const base=localName(node.tag);while(used.has(base+n))n++;const start=1+node.tag.length;copy=copy.slice(0,start)+` Name="${base+n}"`+copy.slice(start);}
+  const eol=text.includes('\r\n')?'\r\n':'\n',lineStart=text.lastIndexOf('\n',node.span.start)+1;
+  const leading=text.slice(lineStart,node.span.start),separator=/^\s*$/.test(leading)?eol+leading:'';
+  const next=text.slice(0,node.span.end)+separator+copy+text.slice(node.span.end);
+  xml(next,file);return {file,before:text,after:next,selection:node.span.end+separator.length};
+}

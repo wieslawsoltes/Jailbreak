@@ -28,7 +28,7 @@ export class StyledObject extends DotObject {
   ClearValue(property,priority=priorities.LocalValue){const name=this.propertyName(property),old=this.GetValue(property);this._values.get(name)?.delete(priority);const value=this.GetValue(property);if(!Object.is(old,value)){notify(this,name,value,old);this.onPropertyChanged?.(name,value,old);}}
   IsSet(property){return this._values.has(this.propertyName(property))&&this._values.get(this.propertyName(property)).size>0;}
   track(disposable){if(typeof disposable==='function')this._disposables.push(disposable);else if(disposable?.Dispose)this._disposables.push(()=>disposable.Dispose());return disposable;}
-  Dispose(){if(this._disposed)return;this._disposed=true;for(const dispose of this._disposables.splice(0))dispose();this.PropertyChanged.clear();}
+  Dispose(){if(this._disposed)return;this._disposed=true;const errors=[];for(const dispose of this._disposables.splice(0)){try{dispose();}catch(error){errors.push(error);}}this.PropertyChanged.clear();if(errors.length)throw new AggregateError(errors,'Control subscription cleanup failed');}
 }
 export { ResourceDictionary } from './resources.js';
 export function observePath(source,path,callback){

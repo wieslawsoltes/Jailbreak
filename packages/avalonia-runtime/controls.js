@@ -91,7 +91,7 @@ export class Control extends StyledObject {
   get Percentage(){return progressState(this.Minimum,this.Maximum,this.Value).percentage;}
   get currentItems(){return Array.from(this.ItemsSource??this.Items??[]);}
   contentText(){const content=this.Content??this.Text??'';return content instanceof Control?content.element?.textContent??'':accessText(content);}
-  renderContent(){if(renderDataContent(this))return;const content=this.Content;const controls=content instanceof Control?[content]:this.Children.filter(x=>x instanceof Control);if(controls.length){for(const child of controls){if(!(this.type==='ContentPresenter'&&this.TemplatedParent))child.parent=this;child.mount(this.container);}for(const node of [...this.container.childNodes])if(!controls.some(c=>c.element===node))node.remove();}else {const text=this.contentText();if(this.container.textContent!==text)this.container.textContent=text;}}
+  renderContent(){if(renderDataContent(this))return;const content=this.Content;const controls=content instanceof Control?[content]:this.Children.filter(x=>x instanceof Control);if(controls.length){for(const [at,child]of controls.entries()){if(!(this.type==='ContentPresenter'&&this.TemplatedParent))child.parent=this;child.mount(this.container);if(this.container.children[at]!==child.element)this.container.insertBefore(child.element,this.container.children[at]??null);}const elements=new Set(controls.map(c=>c.element));for(const node of [...this.container.childNodes])if(!elements.has(node))node.remove();}else {const text=this.contentText();if(this.container.textContent!==text)this.container.textContent=text;}}
   itemControl(item,index){const old=this._itemCache[index];if(old&&old.item===item)return old.control;old?.control?.Dispose();let control;if(item instanceof Control)control=item;else if(this.ItemTemplate?.build)control=this.ItemTemplate.build(item,this);else {control=new Control('TextBlock');control.Text=formatValue(item);}control.parent=this;this._itemCache[index]={item,control};return control;}
   renderItems(){
     const items=this.currentItems,t=this.type;
@@ -153,7 +153,18 @@ export class Control extends StyledObject {
     if(this.Theme?.kind==='presetTheme')element.classList.add('jb-scroll-page');
     this._dirty.clear();
   }
-  Dispose(){if(this._disposed)return;this.Unloaded.Invoke(this,new RoutedEventArgs(this));releaseControlTemplate(this);for(const child of this.visualChildren)child.Dispose();for(const c of this._itemCache)c?.control?.Dispose();this._offItems?.();this._offCommand?.();this.Resources.Dispose();this.root._radios?.delete(this);this.element?.remove();queue.delete(this);for(const name of eventNames)this[name].clear();super.Dispose();}
+  Dispose(){
+    if(this._disposed||this._disposing)return;this._disposing=true;
+    const errors=[],run=fn=>{try{fn();}catch(error){errors.push(error);}};
+    run(()=>this.Unloaded.Invoke(this,new RoutedEventArgs(this)));
+    run(()=>releaseControlTemplate(this));
+    for(const child of this.visualChildren)run(()=>child.Dispose());
+    for(const c of this._itemCache)run(()=>c?.control?.Dispose());
+    run(()=>this._offItems?.());run(()=>this._offCommand?.());run(()=>this.Resources.Dispose());
+    this.root._radios?.delete(this);this.element?.remove();queue.delete(this);
+    for(const name of eventNames)this[name].clear();run(()=>super.Dispose());this._disposing=false;
+    if(errors.length)throw new AggregateError(errors,'Control disposal failed after completing cleanup');
+  }
 }
 const properties=new Set([...commonProperties,...Object.values(controlDefinitions).flatMap(p=>p.split(' ')),'Content','Child','Header','Text','DataContext']);
 for(const property of properties){if(!property||property.includes('.')||property in Control.prototype||['Children','Items','Resources','Styles'].includes(property))continue;Object.defineProperty(Control.prototype,property,{get(){return this.GetValue(property);},set(value){this.SetValue(property,value);},configurable:true});}
