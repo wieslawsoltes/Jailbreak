@@ -29,3 +29,7 @@ See [binary milestone](milestone-msil-nuget.md), [binary design](binary-compilat
 ## Exception and checked-arithmetic layer
 
 The managed PE reader and IL text frontend feed a single validated exception-region model. `msil-compiler/exception-regions.js` checks protected control-flow transitions; `msil-runtime/exception-frame.js` manages per-call unwind continuations used by emitted JavaScript. Ordinary methods keep their original non-EH path. Shared `dotnet-runtime/exceptions.js` constructors permit source C# to catch binary errors; `checked.js` provides exact overflow checks. No IL decoder is introduced into the runtime. See [exception milestone](milestone-exceptions.md) for supported catch types, verifier limits, browser examples and the 35-case CLR gate.
+
+## Core developer tooling
+
+`packages/development` separates source maps and safe watches, source-edit transactions, reload planning, per-preview inspection and the IDE client. Primary compilers produce debug sites and source identities only in development builds. The preview agent runs inside the opaque-origin frame; the IDE exchanges bounded serializable records and authenticated session commands. Compatible method/literal-property reloads keep original control instances. Native pause/step/live frames use browser DevTools; autonomous in-IDE stepping is a distinct mandatory remaining transport. See [core requirements](core-development-tools.md) and [delivered scope](milestone-development-tools.md).

@@ -18,6 +18,10 @@ The secondary earlier toolchain is preserved for regressions; feature expansion 
 
 Exact scope is in the milestone guides. A package name or schema entry is not proof of API coverage.
 
+## Mandatory development-tool integration
+
+Full C#/XAML/generated-JavaScript debugging, a full visual designer for C#/XAML UI and state-preserving hot reload are core requirements throughout development, not a final optional phase. Each new compiler/control/runtime capability must add source identity, debug coverage, designer editability rules and reload/disposal evidence, or document a blocking gap. [Core contract](core-development-tools.md) · [current implementation](milestone-development-tools.md).
+
 ## Expansion sequence and acceptance evidence
 
 | Layer | Next work | Required evidence |
@@ -27,7 +31,7 @@ Exact scope is in the milestone guides. A package name or schema entry is not pr
 | Avalonia binary route | Framework adapters, embedded resources, compiled-XAML loader patterns, reflection gaps | Unchanged upstream DLL/source behavior, not only metadata counts |
 | UI | General input/list templates, routed input/layout, binding validation, collections/virtualization | Interaction, ownership/disposal, accessibility and scale gates |
 | Rendering | Retained GPU drawing, text/shaping, clipping/transforms, device recovery | Physical GPU runs, rendering comparisons and measured performance |
-| IDE | Unified source/binary dependency graph, incremental caching, source maps/debugging | Edit→compile→run correctness, stale-result rejection, offline exports |
+| IDE | Full debugger transport, full C#/XAML visual design, structural/resource hot reload, unified source/binary graph, caching | Edit→compile→run correctness, stale-result rejection, offline exports |
 | Full catalog | Catalog shell, remaining controls, themes/platform integration | Complete original app linked and exercised; retain `--require-full` failure until achieved |
 
 Do not raise compatibility percentages by suppressing unsupported instructions, skipping methods without reporting them, using ref-only assemblies as implementations, or replacing original catalog pages with similar-looking demos. Track integrity, compilation, construction, interaction and visual fidelity as different gates.
