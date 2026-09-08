@@ -1,7 +1,8 @@
 import { SourceFile, DiagnosticBag, CompileError } from './index.js';
 const names = /^[A-Za-z_][\w.:-]*/;
 function decode(text, offset) {
-  return text.replace(/&([^;]+);/g, (_, e) => {
+  return text.replace(/&([^;]*);|&/g, (_, e) => {
+    if (e === undefined) throw new CompileError('JB1003', 'Unterminated XML entity; escape & as &amp;', offset);
     const v = {lt:'<',gt:'>',amp:'&',quot:'"',apos:"'"}[e]; if (v !== undefined) return v;
     if (/^#x[0-9a-f]+$/i.test(e) || /^#\d+$/.test(e)) {
       const n = e[1] === 'x' ? parseInt(e.slice(2),16) : Number(e.slice(1));
