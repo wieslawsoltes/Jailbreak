@@ -31,8 +31,21 @@ export function parseIL(text,{path='source.il',maxTokens=200000}={}){
         expect('.method');const start=peek().start,mods=modifiers(['public','private','family','hidebysig','static','instance','virtual','newslot','final','specialname','rtspecialname']),returnType=type(),methodName=name(),params=parameters(true);expect('cil');expect('managed');expect('{');
         if(mods.includes('static')&&mods.includes('instance'))error('Method cannot be both static and instance',start);
         const method={token:0x06000000+(++methodId),name:methodName,owner:currentType.name,assembly:a.name,flags:(mods.includes('public')?6:1)|(mods.includes('static')?16:0)|(mods.includes('virtual')?64:0)|(mods.includes('newslot')?256:0),implFlags:0,static:mods.includes('static'),virtual:mods.includes('virtual'),signature:{hasThis:!mods.includes('static'),explicitThis:false,callingConvention:0,genericArity:0,returnType,parameters:params},body:{code:new Uint8Array(),locals:[],initLocals:true,maxStack:8,offset:start,codeOffset:0,hasExceptionSections:false},instructions:[]};
-        const labels=new Map();let offset=0;
+        const labels=new Map();let offset=0;method.body.exceptionClauses=[];
+        let nesting=0;
+        function block(){if(++nesting>64)error('IL exception nesting budget exceeded',peek().start);
         while(!take('}')){
+          if(take('.try')){
+            expect('{');const tryOffset=offset;block();const tryLength=offset-tryOffset;let count=0;
+            while(['catch','finally','fault'].includes(peek().value)){
+              const kind=name(),catchType=kind==='catch'?typeReference():undefined;
+              expect('{');const handlerOffset=offset;block();
+              method.body.exceptionClauses.push({kind,tryOffset,tryLength,handlerOffset,handlerLength:offset-handlerOffset,...(catchType?{catchType}:{})});count++;
+            }
+            if(!count)error('A .try block requires catch, finally or fault',peek().start);
+            method.body.hasExceptionSections=true;continue;
+          }
+
           if(take('.maxstack')){method.body.maxStack=number();continue;}
           if(take('.entrypoint')){a.entryPoint=method.token;continue;}
           if(take('.locals')){method.body.initLocals=take('init');expect('(');while(!take(')')){if(take('[')){if(number()!==method.body.locals.length)error('Locals must have sequential indices');expect(']');}method.body.locals.push(type());if(![')',','].includes(peek().value))name();if(peek().value!==')')expect(',');}continue;}
@@ -52,6 +65,9 @@ export function parseIL(text,{path='source.il',maxTokens=200000}={}){
           if(op.operand==='f32')operand=Math.fround(operand);
           method.instructions.push({offset,name:op.name,operand,next:offset+n,sourceOffset:token.start});offset+=n;
         }
+        nesting--;
+        }
+        block();
         for(const i of method.instructions){const k=byName.get(i.name).operand;if(k.startsWith('branch')){if(!labels.has(i.operand))error('Unknown branch label '+i.operand,i.sourceOffset);i.operand=labels.get(i.operand);if(k==='branch8'&&(i.operand-i.next < -128||i.operand-i.next > 127))error('Short branch target exceeds signed-byte displacement',i.sourceOffset);}else if(k==='switch')i.operand=i.operand.map(label=>{if(!labels.has(label))error('Unknown switch label '+label,i.sourceOffset);return labels.get(label);});}
         a.methods.push(method);currentType.methods.push(method.token);
       }

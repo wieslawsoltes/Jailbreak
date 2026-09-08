@@ -1,3 +1,5 @@
+import { createExceptionFrame, ExecutionLimitError } from './exception-frame.js';
+import { matchesException, resolveExceptionType } from '../dotnet-runtime/exceptions.js';
 import * as DN from '../dotnet-runtime/index.js';
 import { methodKey, resolveAdapter } from './adapters.js';
 import { typeName, stackType } from '../compiler-core/managed-types.js';
@@ -5,7 +7,7 @@ export { adapterInventory } from './adapters.js';
 const fieldKey=f=>`${f.assembly}::${f.owner}::${f.token}`;
 const slot=m=>`${m.name}(${m.signature.parameters.map(typeName).join(',')}):${typeName(m.signature.returnType)}`;
 const initial=t=>stackType(t)==='ref'?null:stackType(t)==='i8'?0n:0;
-function requireObject(value){if(value==null)throw new DN.ArgumentNullException('NullReferenceException');return value;}
+function requireObject(value){if(value==null)throw new DN.NullReferenceException('NullReferenceException');return value;}
 /** Runtime for emitted method functions. No opcode interpreter, PE loader, eval, or network. */
 export function createBinaryRuntime({instructionBudget=1000000,maxDepth=256,maxArrayLength=1000000,log=()=>{}}={}){
   const assemblies=new Map(),types=new Map();let remaining=instructionBudget,depth=0,active=0,linked=false;
@@ -24,7 +26,7 @@ export function createBinaryRuntime({instructionBudget=1000000,maxDepth=256,maxA
     if(!m.static)requireObject(self);
     if(virtual&&m.virtual&&self?.$binaryType){let current=self.$binaryType;while(current){const override=current.context.descriptor.methods.find(x=>x.owner===current.record.name&&x.virtual&&slot(x)===slot(m));if(override){if(current.record.name===m.owner||!(override.flags&0x100)){context=current.context;m=override;break;}}if(current.record.name===m.owner&&current.context===context)break;current=current.base;}}
     if(!initializing&&(m.static||m.name==='.ctor'))initType(findType(context.descriptor.name,m.owner));
-    if(++depth>maxDepth){depth--;throw new DN.InvalidOperationException('Binary execution recursion budget exceeded');}
+    if(++depth>maxDepth){depth--;throw new ExecutionLimitError('Binary execution recursion budget exceeded');}
     try{const fn=context.functions[m.token];if(typeof fn!=='function')throw new DN.NotSupportedException('No emitted method body');return fn(self,args.map((v,i)=>['i4','i8','f'].includes(stackType(m.signature.parameters[i]))?coerce(m.signature.parameters[i],v):v));}finally{depth--;}
   }
   function coerce(type,value){
@@ -55,13 +57,14 @@ export function createBinaryRuntime({instructionBudget=1000000,maxDepth=256,maxA
   const runtime={assemblies,types,D:DN,
     register(descriptor,factory){if(descriptor.format!=='msil-js-v1'||assemblies.has(descriptor.name))throw new Error('Invalid/duplicate binary assembly registration');if(linked)throw new Error('Register every assembly before linking');
       const C={descriptor,records:new Map([...descriptor.methods,...descriptor.fields,...descriptor.members].map(m=>[m.token,m])),D:DN,
-        tick(cost=1){remaining-=cost;if(remaining<0)throw new DN.InvalidOperationException('Binary execution instruction budget exceeded');},
+        tick(cost=1){remaining-=cost;if(remaining<0)throw new ExecutionLimitError('Binary execution instruction budget exceeded');},
         call(token,self,args,virtual=false){const target=resolve(C,token,'method');if(target.adapter){if(target.record.signature.hasThis)requireObject(self);return target.adapter(self,args,host);}return invokeRecord(target.context,target.record,self,args,virtual);},
-        construct(token,args){const target=resolve(C,token,'method');if(target.adapter)throw new DN.NotSupportedException('External constructor allocation unsupported');const type=findType(target.context.descriptor.name,target.record.owner),object=allocate(type);invokeRecord(target.context,target.record,object,args);return object;},
+        construct(token,args){const target=resolve(C,token,'method');if(target.adapter){const ExceptionType=resolveExceptionType({assembly:target.record.assembly,name:target.record.owner});if(ExceptionType)return new ExceptionType(...args);throw new DN.NotSupportedException('External constructor allocation unsupported');}const type=findType(target.context.descriptor.name,target.record.owner),object=allocate(type);invokeRecord(target.context,target.record,object,args);return object;},
         field(token,self,value,write=false){const target=resolve(C,token,'field'),f=target.record,type=findType(target.context.descriptor.name,f.owner);if(f.static)initType(type);const store=f.static?type.staticFields:requireObject(self).$fields;if(!(store instanceof Map)||!store.has(fieldKey(f)))throw new DN.InvalidOperationException('Object does not contain requested field');if(write)store.set(fieldKey(f),coerce(f.type,value));return store.get(fieldKey(f));},
         array(type,length){if(!Number.isInteger(length)||length<0||length>maxArrayLength)throw new DN.ArgumentException('Array allocation budget exceeded');C.tick(length);return DN.newArray(length,type==='i8'?0n:type==='ref'?null:0);},
         coerce,
-        long(op,a,b){a=BigInt(a);if(b!==undefined)b=BigInt(b);let v;switch(op){case 'add':v=a+b;break;case 'sub':v=a-b;break;case 'mul':v=a*b;break;case 'div':if(!b)throw new DN.DivideByZeroException();if(a===-(1n<<63n)&&b===-1n)throw new RangeError('OverflowException');v=a/b;break;case 'rem':if(!b)throw new DN.DivideByZeroException();v=a%b;break;case 'div.un':case 'rem.un':a=BigInt.asUintN(64,a);b=BigInt.asUintN(64,b);if(!b)throw new DN.DivideByZeroException();v=op==='div.un'?a/b:a%b;break;case 'and':v=a&b;break;case 'or':v=a|b;break;case 'xor':v=a^b;break;case 'shl':v=a<<(b&63n);break;case 'shr':v=a>>(b&63n);break;case 'shr.un':v=BigInt.asUintN(64,a)>>(b&63n);break;case 'neg':v=-a;break;case 'not':v=~a;break;default:throw new Error('Unsupported long operation');}return BigInt.asIntN(64,v);},
+        exceptionFrame:clauses=>createExceptionFrame(clauses,matchesException),
+        long(op,a,b){a=BigInt(a);if(b!==undefined)b=BigInt(b);let v;switch(op){case 'add':v=a+b;break;case 'sub':v=a-b;break;case 'mul':v=a*b;break;case 'div':if(!b)throw new DN.DivideByZeroException();if(a===-(1n<<63n)&&b===-1n)throw new DN.OverflowException('Integer division overflow');v=a/b;break;case 'rem':if(!b)throw new DN.DivideByZeroException();v=a%b;break;case 'div.un':case 'rem.un':a=BigInt.asUintN(64,a);b=BigInt.asUintN(64,b);if(!b)throw new DN.DivideByZeroException();v=op==='div.un'?a/b:a%b;break;case 'and':v=a&b;break;case 'or':v=a|b;break;case 'xor':v=a^b;break;case 'shl':v=a<<(b&63n);break;case 'shr':v=a>>(b&63n);break;case 'shr.un':v=BigInt.asUintN(64,a)>>(b&63n);break;case 'neg':v=-a;break;case 'not':v=~a;break;default:throw new Error('Unsupported long operation');}return BigInt.asIntN(64,v);},
         convert(op,value,from){if(op==='r.un')return from==='i8'?Number(BigInt.asUintN(64,value)):Number(value>>>0);if(op==='r4')return Math.fround(Number(value));if(op==='r8')return Number(value);if(op==='i8'||op==='u8'){if(op==='u8'&&from==='i4')return BigInt(value>>>0);if(typeof value==='number'){if(!Number.isSafeInteger(Math.trunc(value)))throw new RangeError('Conversion beyond exact numeric profile');value=BigInt(Math.trunc(value));}return BigInt.asIntN(64,value);}const n=typeof value==='bigint'?Number(BigInt.asIntN(32,value)):Math.trunc(value);if(!Number.isFinite(n))throw new RangeError('Non-finite integer conversion');return ({i1:()=>n<<24>>24,u1:()=>n&255,i2:()=>n<<16>>16,u2:()=>n&65535,i4:()=>n|0,u4:()=>n|0})[op]();}
       };
       C.functions=factory(C);assemblies.set(descriptor.name,C);for(const record of descriptor.types){const staticFields=new Map(descriptor.fields.filter(f=>f.owner===record.name&&f.static).map(f=>[fieldKey(f),initial(f.type)]));types.set(`${descriptor.name}::${record.name}`,{record,context:C,staticFields,state:'new',base:null,wrapper:null});}return C;

@@ -5,10 +5,12 @@ const j=escapeJs;
 function literal(v){return typeof v==='bigint'?v+'n':typeof v==='number'&&!Number.isFinite(v)?Number.isNaN(v)?'NaN':v>0?'Infinity':'-Infinity':j(v);}
 /** Ahead-of-time emission: one native JavaScript case per basic block, never an opcode interpreter. */
 export function emitMethod(assembly,method,verified){
-  const {instructions,types}=verified,tokens=new Map([...assembly.methods,...assembly.members,...assembly.fields].map(m=>[m.token,m]));
+  const {instructions,types,regions}=verified,tokens=new Map([...assembly.methods,...assembly.members,...assembly.fields].map(m=>[m.token,m]));
   const leaders=new Set([instructions[0].offset]);
-  for(const i of instructions){const op=baseOpcode(i.name);if(op==='switch'){i.operand.forEach(x=>leaders.add(x));leaders.add(i.next);}else if(/^b(?:r|eq|ge|gt|le|lt|ne)/.test(op)&&op!=='break'){leaders.add(i.operand);leaders.add(i.next);}else if(op==='ret'||op==='throw')leaders.add(i.next);}
-  const lines=['function(self,parameters){',`const arg=${method.static?'parameters.slice()':'[self,...parameters]'}, local=[${method.body.locals.map(t=>stackType(t)==='ref'?'null':stackType(t)==='i8'?'0n':'0').join(',')}], s=[];let pc=${instructions[0].offset},a,b,v,argv;`,`while(true){switch(pc){`];
+  for(const r of regions.scopes){leaders.add(r.start);leaders.add(r.end);}
+  for(const i of instructions){const op=baseOpcode(i.name);if(op==='leave'){leaders.add(i.operand);leaders.add(i.next);}else if(op==='switch'){i.operand.forEach(x=>leaders.add(x));leaders.add(i.next);}else if(/^b(?:r|eq|ge|gt|le|lt|ne)/.test(op)&&op!=='break'){leaders.add(i.operand);leaders.add(i.next);}else if(['ret','throw','rethrow','endfinally'].includes(op))leaders.add(i.next);}
+  const eh=regions.clauses.length>0;
+  const lines=['function(self,parameters){',eh?`const eh=C.exceptionFrame(${j(regions.clauses)});`:'',`const arg=${method.static?'parameters.slice()':'[self,...parameters]'}, local=[${method.body.locals.map(t=>stackType(t)==='ref'?'null':stackType(t)==='i8'?'0n':'0').join(',')}], s=[];let pc=${instructions[0].offset},a,b,v,argv;`,eh?'while(true){let action;try{switch(pc){':'while(true){switch(pc){'];
   let currentBlock=null;
   for(let n=0;n<instructions.length;n++){
     const i=instructions[n],op=baseOpcode(i.name),type=types.get(i.offset);if(leaders.has(i.offset)){if(currentBlock!==null)lines.push(`pc=${i.offset};continue;`);lines.push(`case ${i.offset}: C.tick(${blockCost(n)});`);currentBlock=i.offset;}
@@ -25,6 +27,8 @@ export function emitMethod(assembly,method,verified){
     else if(['add','sub','mul','div','div.un','rem','rem.un','and','or','xor','shl','shr','shr.un'].includes(op)){
       lines.push('b=s.pop();a=s.pop();');if(type==='i8')push(`C.long(${j(op)},a,b)`);else if(type==='i4'){const e={add:'C.D.iadd(a,b)',sub:'C.D.isub(a,b)',mul:'C.D.imul(a,b)',div:'C.D.idiv(a,b)',rem:'C.D.irem(a,b)','div.un':'C.D.idiv(a>>>0,b>>>0)','rem.un':'C.D.irem(a>>>0,b>>>0)',and:'a&b',or:'a|b',xor:'a^b',shl:'a<<b',shr:'a>>b','shr.un':'(a>>>b)|0'};push(e[op]);}else push(`a ${{add:'+',sub:'-',mul:'*',div:'/',rem:'%'}[op]} b`);
     }
+    else if(/^(add|sub|mul)\.ovf(\.un)?$/.test(op)){lines.push('b=s.pop();a=s.pop();');push(`C.D.checkedBinary(${j(op)},a,b,${j(type)})`);}
+    else if(/^conv\.ovf\.[iu][1248](\.un)?$/.test(op))push(`C.D.checkedConvert(${j(op)},s.pop(),${j(type)})`);
     else if(op==='neg'||op==='not')push(type==='i8'?`C.long(${j(op)},${pop})`:type==='i4'?op==='neg'?`C.D.isub(0,${pop})`:`~${pop}`:`-${pop}`);
     else if(['ceq','cgt','cgt.un','clt','clt.un','beq','bge','bgt','ble','blt','bne.un','bge.un','bgt.un','ble.un','blt.un'].includes(op)){
       lines.push('b=s.pop();a=s.pop();');const compare=op.replace('.un',''),operator={ceq:'===',cgt:'>',clt:'<',beq:'===',bge:'>=',bgt:'>',ble:'<=',blt:'<','bne':'!=='}[compare];let left='a',right='b';
@@ -32,6 +36,9 @@ export function emitMethod(assembly,method,verified){
       let cond=`${left} ${operator} ${right}`;if(type==='ref'&&op==='cgt.un')cond='a!==b';if(type==='f'&&op.endsWith('.un'))cond=`Number.isNaN(a)||Number.isNaN(b)||(${cond})`;
       if(op[0]==='b'){lines.push(`pc=(${cond})?${i.operand}:${i.next};continue;`);currentBlock=null;}else push(`(${cond})?1:0`);
     }
+    else if(op==='leave'){lines.push(eh?`s.length=0;action=eh.leave(pc,${i.operand});break;`:`s.length=0;pc=${i.operand};continue;`);currentBlock=null;}
+    else if(op==='endfinally'){lines.push('action=eh.endFinally(pc);break;');currentBlock=null;}
+    else if(op==='rethrow'){lines.push('throw eh.rethrow(pc);');currentBlock=null;}
     else if(op==='br'){lines.push(`pc=${i.operand};continue;`);currentBlock=null;}
     else if(op==='brfalse'||op==='brtrue'){lines.push(`v=s.pop();pc=${op==='brfalse'?'!':''}(v!==0&&v!==0n&&v!==null)?${i.operand}:${i.next};continue;`);currentBlock=null;}
     else if(op==='switch'){lines.push(`v=s.pop();pc=(v>>>0)<${i.operand.length}?[${i.operand.join(',')}][v>>>0]:${i.next};continue;`);currentBlock=null;}
@@ -44,9 +51,9 @@ export function emitMethod(assembly,method,verified){
     else if(op.startsWith('stelem.')){lines.push('v=s.pop();b=s.pop();a=s.pop();');const conv={'stelem.i1':'v<<24>>24','stelem.i2':'v<<16>>16','stelem.i4':'v|0','stelem.r4':'Math.fround(v)'};lines.push(`C.D.setIndex(a,b,${conv[op]??'v'});`);}
     else if(op.startsWith('conv.'))push(`C.convert(${j(op.slice(5))},s.pop(),${j(type)})`);
     else if(op==='ret'){lines.push(method.signature.returnType==='void'?'return;':`return C.coerce(${j(method.signature.returnType)},s.pop());`);currentBlock=null;}
-    else if(op==='throw'){lines.push('throw s.pop();');currentBlock=null;}
+    else if(op==='throw'){lines.push('throw s.pop()??new C.D.NullReferenceException();');currentBlock=null;}
     else if(!['nop','break'].includes(op))throw new Error('Emitter has no implementation for '+op);
   }
-  lines.push('default:throw new Error("Invalid emitted block");','}}}');return lines.join('\n');
+  lines.push('default:throw new Error("Invalid emitted block");',eh?' }}catch(error){action=eh.raise(error,pc);} if(action.kind==="throw")throw action.error;pc=action.target;s.length=0;if(action.kind==="catch")s.push(action.error);}}':'}}}');return lines.join('\n');
   function blockCost(start){let end=start+1;while(end<instructions.length&&!leaders.has(instructions[end].offset))end++;return end-start;}
 }

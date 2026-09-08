@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="RecoveryDemo.MainView">
+  <StackPanel Margin="28" Spacing="16">
+    <TextBlock Text="Managed exceptions across C# and DLL boundaries" FontSize="27" FontWeight="Bold" TextWrapping="Wrap" />
+    <TextBlock Text="This XAML/C# view calls a real converted DLL. Typed catches and finally blocks run as JavaScript, including nested cleanup inside the library." TextWrapping="Wrap" />
+    <Button Content="Recover inside DLL" Click="Recover" />
+    <Button Content="Catch DLL overflow in C#" Click="CatchOverflow" />
+    <Button Content="Run nested cleanup" Click="NestedCleanup" />
+    <TextBlock Name="Result" Text="Ready" FontSize="20" TextWrapping="Wrap" />
+    <TextBlock Name="Cleanup" Text="No cleanup run yet" />
+  </StackPanel>
+</UserControl>

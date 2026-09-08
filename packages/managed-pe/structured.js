@@ -1,3 +1,4 @@
+import { readExceptionSections } from './exception-sections.js';
 import { Reader, BinaryError, align, bytesOf } from './reader.js';
 import { tableSchemas, tableNames, codedIndices, decodeCoded } from './metadata-schema.js';
 import { readSignature } from './signatures.js';
@@ -47,7 +48,8 @@ export function readAssembly(input,{path='assembly.dll',maxBytes=32*1024*1024,ma
     else throw new BinaryError('Unsupported method body header',at);
     if(size>maxMethodBytes||maxStack>4096)throw new BinaryError('Method body budget exceeded',at);mapRva(method.RVA,h.pos-at+size);const code=h.slice(size),locals=localToken?signature(row(localToken).Signature,'locals'):[];
     if(localToken&&localToken>>>24!==17)throw new BinaryError('Invalid local signature token');
-    return {offset:at,codeOffset:h.pos-size,code,maxStack,locals,initLocals,hasExceptionSections:moreSections};
+    const exceptionClauses=moreSections?readExceptionSections(r,h.pos,size,resolveType,(offset,length)=>mapRva(method.RVA+offset-at,length)):[];
+    return {offset:at,codeOffset:h.pos-size,code,maxStack,locals,initLocals,hasExceptionSections:moreSections,exceptionClauses};
   }
   for(let i=0;i<types.length;i++){
     const type=types[i],raw=tables[2][i],next=tables[2][i+1];

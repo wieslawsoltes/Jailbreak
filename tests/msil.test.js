@@ -65,7 +65,7 @@ test('incompatible stacks at joins fail before execution',()=>{
  const r=compileIL(il('ldarg.0 brtrue.s other ldc.i4.1 br.s done other: ldc.r8 1 done: ret',{params:'int32 x'}));assert.equal(r.success,false);assert.equal(r.code,'');
 });
 test('unsupported IL and exception sections are errors, never placeholder stubs',()=>{
- for(const body of ['ldarg.0 box [System.Runtime]System.Int32 ret','ldarg.0 conv.ovf.i4 ret','ldtoken [System.Runtime]System.Int32 ret'])assert.equal(compileIL(il(body,{params:'int32 a'})).success,false);
+ for(const body of ['ldarg.0 box [System.Runtime]System.Int32 ret','ldarg.0 conv.ovf.i ret','ldtoken [System.Runtime]System.Int32 ret'])assert.equal(compileIL(il(body,{params:'int32 a'})).success,false);
  const a=readAssembly(dll);a.methods[0].body.hasExceptionSections=true;const r=compileAssemblies([{assembly:a,path:'eh.dll'}]);assert.equal(r.success,false);assert.ok(r.diagnostics.some(d=>d.code==='JB6104'));
 });
 test('unresolved binary dependency calls and duplicate assembly identities are errors',()=>{

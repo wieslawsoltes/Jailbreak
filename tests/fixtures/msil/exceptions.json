@@ -1,0 +1,519 @@
+{
+  "sourceCommit": "ad7c682a2c366af891ff2985aaa210f4d7e9bc83",
+  "sourceProject": "tests/fixtures/exception-src/ExceptionLibrary.csproj",
+  "files": {
+    "Jailbreak.ExceptionExamples.dll": {
+      "base64": "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bmVyTWVzc2FnZQBDaGVja2VkRG91YmxlAFN5c3RlbS5SdW50aW1lAERlYnVnZ2FibGVBdHRyaWJ1dGUAQXNzZW1ibHlUaXRsZUF0dHJpYnV0ZQBUYXJnZXRGcmFtZXdvcmtBdHRyaWJ1dGUAQXNzZW1ibHlGaWxlVmVyc2lvbkF0dHJpYnV0ZQBBc3NlbWJseUluZm9ybWF0aW9uYWxWZXJzaW9uQXR0cmlidXRlAEFzc2VtYmx5Q29uZmlndXJhdGlvbkF0dHJpYnV0ZQBSZWZTYWZldHlSdWxlc0F0dHJpYnV0ZQBDb21waWxhdGlvblJlbGF4YXRpb25zQXR0cmlidXRlAEFzc2VtYmx5UHJvZHVjdEF0dHJpYnV0ZQBBc3NlbWJseUNvbXBhbnlBdHRyaWJ1dGUAUnVudGltZUNvbXBhdGliaWxpdHlBdHRyaWJ1dGUAQ2hlY2tlZEJ5dGUAdmFsdWUAU3lzdGVtLlJ1bnRpbWUuVmVyc2lvbmluZwBDaGVja2VkTG9uZwB3aGljaABUaHJvd09yaWdpbmFsAG9yaWdpbmFsAEphaWxicmVhay5FeGNlcHRpb25FeGFtcGxlcy5kbGwAQ2F0Y2hOdWxsAFN5c3RlbQBTeXN0ZW0uUmVmbGVjdGlvbgBBcml0aG1ldGljRXhjZXB0aW9uAE51bGxSZWZlcmVuY2VFeGNlcHRpb24ASW5kZXhPdXRPZlJhbmdlRXhjZXB0aW9uAEFyZ3VtZW50TnVsbEV4Y2VwdGlvbgBTeXN0ZW1FeGNlcHRpb24ASW52YWxpZE9wZXJhdGlvbkV4Y2VwdGlvbgBEaXZpZGVCeVplcm9FeGNlcHRpb24AZ2V0X0lubmVyRXhjZXB0aW9uAEFyZ3VtZW50RXhjZXB0aW9uAE92ZXJmbG93RXhjZXB0aW9uAENhdGNoT3JkZXIAZGl2aXNvcgAuY3RvcgBTeXN0ZW0uRGlhZ25vc3RpY3MAQ2F0Y2hCb3VuZHMAU3lzdGVtLlJ1bnRpbWUuQ29tcGlsZXJTZXJ2aWNlcwBEZWJ1Z2dpbmdNb2RlcwBKYWlsYnJlYWsuRXhjZXB0aW9uRXhhbXBsZXMARmluYWxseVdpbnMAQ2hlY2tlZFN1YnRyYWN0AE9iamVjdABSZXNldABDYXRjaE92ZXJmbG93AGluZGV4AE5lc3Rl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",
+      "sha256": "01fee62748ae668c2919df8e5a42d0411d7f4b350ef7c44b90f48baa00294e06"
+    },
+    "Jailbreak.ExceptionExamples.1.0.0.nupkg": {
+      "base64": "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",
+      "sha256": "b1704ba64e678a9d1d7e3154eb16169d54af1a5c92eed18ac152c14fb29ed839"
+    }
+  },
+  "oracle": [
+    {
+      "name": "divide",
+      "value": 42,
+      "exception": null,
+      "trace": 0
+    },
+    {
+      "name": "divide-zero",
+      "value": -1,
+      "exception": null,
+      "trace": 0
+    },
+    {
+      "name": "catch-argument",
+      "value": 10,
+      "exception": null,
+      "trace": 0
+    },
+    {
+      "name": "catch-system",
+      "value": 20,
+      "exception": null,
+      "trace": 0
+    },
+    {
+      "name": "catch-base",
+      "value": 30,
+      "exception": null,
+      "trace": 0
+    },
+    {
+      "name": "message",
+      "value": "owned message",
+      "exception": null,
+      "trace": 0
+    },
+    {
+      "name": "finally-return",
+      "value": 6,
+      "exception": null,
+      "trace": 123
+    },
+    {
+      "name": "finally-unhandled",
+      "value": null,
+      "exception": "DivideByZeroException",
+      "trace": 123
+    },
+    {
+      "name": "catch-finally-ok",
+      "value": 6,
+      "exception": null,
+      "trace": 1235
+    },
+    {
+      "name": "catch-finally-error",
+      "value": -4,
+      "exception": null,
+      "trace": 12345
+    },
+    {
+      "name": "rethrow-identity",
+      "value": true,
+      "exception": null,
+      "trace": 0
+    },
+    {
+      "name": "finally-replaces-error",
+      "value": 12,
+      "exception": null,
+      "trace": 12
+    },
+    {
+      "name": "cleanup-local-catch-ok",
+      "value": 6,
+      "exception": null,
+      "trace": 78
+    },
+    {
+      "name": "cleanup-local-catch-unwind",
+      "value": 789,
+      "exception": null,
+      "trace": 789
+    },
+    {
+      "name": "throw-null",
+      "value": 42,
+      "exception": null,
+      "trace": 0
+    },
+    {
+      "name": "array-bounds",
+      "value": -2,
+      "exception": null,
+      "trace": 0
+    },
+    {
+      "name": "array-valid",
+      "value": 0,
+      "exception": null,
+      "trace": 0
+    },
+    {
+      "name": "checked-add",
+      "value": 42,
+      "exception": null,
+      "trace": 0
+    },
+    {
+      "name": "checked-add-overflow",
+      "value": null,
+      "exception": "OverflowException",
+      "trace": 0
+    },
+    {
+      "name": "checked-sub-overflow",
+      "value": null,
+      "exception": "OverflowException",
+      "trace": 0
+    },
+    {
+      "name": "checked-uint",
+      "value": 2147483649,
+      "exception": null,
+      "trace": 0
+    },
+    {
+      "name": "checked-uint-overflow",
+      "value": null,
+      "exception": "OverflowException",
+      "trace": 0
+    },
+    {
+      "name": "checked-multiply",
+      "value": 1000000,
+      "exception": null,
+      "trace": 0
+    },
+    {
+      "name": "checked-product-overflow",
+      "value": null,
+      "exception": "OverflowException",
+      "trace": 0
+    },
+    {
+      "name": "checked-long",
+      "value": "9007199254740993",
+      "exception": null,
+      "trace": 0
+    },
+    {
+      "name": "checked-long-overflow",
+      "value": null,
+      "exception": "OverflowException",
+      "trace": 0
+    },
+    {
+      "name": "checked-byte",
+      "value": 255,
+      "exception": null,
+      "trace": 0
+    },
+    {
+      "name": "checked-byte-overflow",
+      "value": null,
+      "exception": "OverflowException",
+      "trace": 0
+    },
+    {
+      "name": "checked-byte-negative",
+      "value": null,
+      "exception": "OverflowException",
+      "trace": 0
+    },
+    {
+      "name": "checked-double",
+      "value": -42,
+      "exception": null,
+      "trace": 0
+    },
+    {
+      "name": "checked-double-overflow",
+      "value": null,
+      "exception": "OverflowException",
+      "trace": 0
+    },
+    {
+      "name": "checked-double-nan",
+      "value": null,
+      "exception": "OverflowException",
+      "trace": 0
+    },
+    {
+      "name": "checked-double-infinity",
+      "value": null,
+      "exception": "OverflowException",
+      "trace": 0
+    },
+    {
+      "name": "catch-overflow",
+      "value": -10,
+      "exception": null,
+      "trace": 0
+    },
+    {
+      "name": "inner-message",
+      "value": "inner",
+      "exception": null,
+      "trace": 0
+    }
+  ],
+  "regions": [
+    {
+      "method": "Trace",
+      "token": 100663297,
+      "clauses": []
+    },
+    {
+      "method": "Reset",
+      "token": 100663298,
+      "clauses": []
+    },
+    {
+      "method": "SafeDivide",
+      "token": 100663299,
+      "clauses": [
+        {
+          "kind": "catch",
+          "tryOffset": 0,
+          "tryLength": 6,
+          "handlerOffset": 6,
+          "handlerLength": 5,
+          "catchType": "System.DivideByZeroException"
+        }
+      ]
+    },
+    {
+      "method": "CatchOrder",
+      "token": 100663300,
+      "clauses": [
+        {
+          "kind": "catch",
+          "tryOffset": 0,
+          "tryLength": 40,
+          "handlerOffset": 40,
+          "handlerLength": 6,
+          "catchType": "System.ArgumentException"
+        },
+        {
+          "kind": "catch",
+          "tryOffset": 0,
+          "tryLength": 40,
+          "handlerOffset": 46,
+          "handlerLength": 6,
+          "catchType": "System.SystemException"
+        },
+        {
+          "kind": "catch",
+          "tryOffset": 0,
+          "tryLength": 40,
+          "handlerOffset": 52,
+          "handlerLength": 6,
+          "catchType": "System.Exception"
+        }
+      ]
+    },
+    {
+      "method": "Message",
+      "token": 100663301,
+      "clauses": [
+        {
+          "kind": "catch",
+          "tryOffset": 0,
+          "tryLength": 11,
+          "handlerOffset": 11,
+          "handlerLength": 8,
+          "catchType": "System.Exception"
+        }
+      ]
+    },
+    {
+      "method": "NestedFinally",
+      "token": 100663302,
+      "clauses": [
+        {
+          "kind": "finally",
+          "tryOffset": 6,
+          "tryLength": 13,
+          "handlerOffset": 19,
+          "handlerLength": 16,
+          "catchType": null
+        },
+        {
+          "kind": "finally",
+          "tryOffset": 6,
+          "tryLength": 29,
+          "handlerOffset": 35,
+          "handlerLength": 16,
+          "catchType": null
+        }
+      ]
+    },
+    {
+      "method": "CatchFinally",
+      "token": 100663303,
+      "clauses": [
+        {
+          "kind": "catch",
+          "tryOffset": 6,
+          "tryLength": 9,
+          "handlerOffset": 15,
+          "handlerLength": 21,
+          "catchType": "System.ArithmeticException"
+        },
+        {
+          "kind": "finally",
+          "tryOffset": 6,
+          "tryLength": 30,
+          "handlerOffset": 36,
+          "handlerLength": 16,
+          "catchType": null
+        }
+      ]
+    },
+    {
+      "method": "ThrowOriginal",
+      "token": 100663304,
+      "clauses": [
+        {
+          "kind": "catch",
+          "tryOffset": 0,
+          "tryLength": 6,
+          "handlerOffset": 6,
+          "handlerLength": 3,
+          "catchType": "System.Exception"
+        }
+      ]
+    },
+    {
+      "method": "RethrowIdentity",
+      "token": 100663305,
+      "clauses": [
+        {
+          "kind": "catch",
+          "tryOffset": 15,
+          "tryLength": 9,
+          "handlerOffset": 24,
+          "handlerLength": 10,
+          "catchType": "System.Exception"
+        }
+      ]
+    },
+    {
+      "method": "FinallyWins",
+      "token": 100663306,
+      "clauses": [
+        {
+          "kind": "finally",
+          "tryOffset": 6,
+          "tryLength": 11,
+          "handlerOffset": 17,
+          "handlerLength": 17,
+          "catchType": null
+        },
+        {
+          "kind": "catch",
+          "tryOffset": 6,
+          "tryLength": 28,
+          "handlerOffset": 34,
+          "handlerLength": 24,
+          "catchType": "System.InvalidOperationException"
+        }
+      ]
+    },
+    {
+      "method": "NestedCatchInFinally",
+      "token": 100663307,
+      "clauses": [
+        {
+          "kind": "catch",
+          "tryOffset": 14,
+          "tryLength": 11,
+          "handlerOffset": 25,
+          "handlerLength": 9,
+          "catchType": "System.ArgumentException"
+        },
+        {
+          "kind": "finally",
+          "tryOffset": 14,
+          "tryLength": 22,
+          "handlerOffset": 36,
+          "handlerLength": 16,
+          "catchType": null
+        },
+        {
+          "kind": "finally",
+          "tryOffset": 6,
+          "tryLength": 7,
+          "handlerOffset": 13,
+          "handlerLength": 40,
+          "catchType": null
+        },
+        {
+          "kind": "catch",
+          "tryOffset": 6,
+          "tryLength": 47,
+          "handlerOffset": 53,
+          "handlerLength": 25,
+          "catchType": "System.DivideByZeroException"
+        }
+      ]
+    },
+    {
+      "method": "CatchNull",
+      "token": 100663308,
+      "clauses": [
+        {
+          "kind": "catch",
+          "tryOffset": 0,
+          "tryLength": 2,
+          "handlerOffset": 2,
+          "handlerLength": 6,
+          "catchType": "System.NullReferenceException"
+        }
+      ]
+    },
+    {
+      "method": "CatchBounds",
+      "token": 100663309,
+      "clauses": [
+        {
+          "kind": "catch",
+          "tryOffset": 0,
+          "tryLength": 11,
+          "handlerOffset": 11,
+          "handlerLength": 6,
+          "catchType": "System.IndexOutOfRangeException"
+        }
+      ]
+    },
+    {
+      "method": "CheckedAdd",
+      "token": 100663310,
+      "clauses": []
+    },
+    {
+      "method": "CheckedUnsigned",
+      "token": 100663311,
+      "clauses": []
+    },
+    {
+      "method": "CheckedMultiply",
+      "token": 100663312,
+      "clauses": []
+    },
+    {
+      "method": "CheckedLong",
+      "token": 100663313,
+      "clauses": []
+    },
+    {
+      "method": "CheckedByte",
+      "token": 100663314,
+      "clauses": []
+    },
+    {
+      "method": "CheckedDouble",
+      "token": 100663315,
+      "clauses": []
+    },
+    {
+      "method": "CheckedSubtract",
+      "token": 100663316,
+      "clauses": []
+    },
+    {
+      "method": "CatchOverflow",
+      "token": 100663317,
+      "clauses": [
+        {
+          "kind": "catch",
+          "tryOffset": 0,
+          "tryLength": 6,
+          "handlerOffset": 6,
+          "handlerLength": 6,
+          "catchType": "System.OverflowException"
+        }
+      ]
+    },
+    {
+      "method": "InnerMessage",
+      "token": 100663318,
+      "clauses": [
+        {
+          "kind": "catch",
+          "tryOffset": 0,
+          "tryLength": 21,
+          "handlerOffset": 21,
+          "handlerLength": 13,
+          "catchType": "System.Exception"
+        }
+      ]
+    }
+  ]
+}

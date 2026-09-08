@@ -1,3 +1,6 @@
+import { Exception, SystemException, ArithmeticException, OverflowException, DivideByZeroException, NullReferenceException, IndexOutOfRangeException, InvalidCastException, ArgumentException, ArgumentNullException, ArgumentOutOfRangeException, InvalidOperationException, NotSupportedException, FormatException, TypeInitializationException } from './exceptions.js';
+export { Exception, SystemException, ArithmeticException, OverflowException, DivideByZeroException, NullReferenceException, IndexOutOfRangeException, InvalidCastException, ArgumentException, ArgumentNullException, ArgumentOutOfRangeException, InvalidOperationException, NotSupportedException, FormatException, TypeInitializationException } from './exceptions.js';
+export { checkedBinary, checkedConvert } from './checked.js';
 /** Deliberately small, independently reusable .NET-style JavaScript standard library. */
 export class Event {
   constructor(){this.handlers=[];}
@@ -20,12 +23,6 @@ export class DotObject {
   GetType(){return {Name:this.constructor.name,FullName:this.$type??this.constructor.name};}
 }
 export class ObservableObject extends DotObject {}
-export class Exception extends Error { constructor(message='',inner=null){super(message);this.InnerException=inner;}get Message(){return this.message;}get StackTrace(){return this.stack;} }
-export class ArgumentException extends Exception {}
-export class ArgumentNullException extends ArgumentException {}
-export class InvalidOperationException extends Exception {}
-export class NotSupportedException extends Exception {}
-export class DivideByZeroException extends Exception {}
 export function notify(object,name,value,old){if(!Object.is(value,old))object.PropertyChanged?.Invoke(object,{PropertyName:name,NewValue:value,OldValue:old});}
 export function eventAdd(object,name,handler){if(!object[name]?.add)throw new InvalidOperationException(`'${name}' is not an event`);return object[name].add(handler);}
 export function eventRemove(object,name,handler){object[name]?.remove(handler);}
@@ -64,9 +61,9 @@ export class HashSet extends Set { get Count(){return this.size;}Add(value){cons
 export class Queue extends List { Enqueue(value){this.Add(value);}Dequeue(){if(!this.length)throw new InvalidOperationException('Queue is empty');return this.shift();}Peek(){if(!this.length)throw new InvalidOperationException('Queue is empty');return this[0];} }
 export class Stack extends List { Push(value){this.Add(value);}Pop(){if(!this.length)throw new InvalidOperationException('Stack is empty');return this.pop();}Peek(){if(!this.length)throw new InvalidOperationException('Stack is empty');return this.at(-1);} }
 export function iterate(value){if(value==null||!value[Symbol.iterator])throw new ArgumentException('Value is not enumerable');return value;}
-export function length(value){if(value==null)throw new ArgumentNullException('Cannot read Length/Count of null');if(typeof value.Count==='number')return value.Count;if(typeof value.Length==='number')return value.Length;return value.length??value.size;}
-export function getIndex(value,key,optional=false){if(value==null){if(optional)return undefined;throw new ArgumentNullException('Indexing null');}if(value instanceof Map){if(!value.has(key))throw new InvalidOperationException('Key not found');return value.get(key);}if((Array.isArray(value)||typeof value==='string')&&(!Number.isInteger(key)||key<0||key>=value.length))throw new ArgumentException('Index out of range');return value[key];}
-export function setIndex(value,key,item){if(value instanceof Map)value.set(key,item);else {if(Array.isArray(value)&&(!Number.isInteger(key)||key<0||key>=value.length))throw new ArgumentException('Index out of range');value[key]=item;}return item;}
+export function length(value){if(value==null)throw new NullReferenceException('Cannot read Length/Count of null');if(typeof value.Count==='number')return value.Count;if(typeof value.Length==='number')return value.Length;return value.length??value.size;}
+export function getIndex(value,key,optional=false){if(value==null){if(optional)return undefined;throw new NullReferenceException('Indexing null');}if(value instanceof Map){if(!value.has(key))throw new InvalidOperationException('Key not found');return value.get(key);}if((Array.isArray(value)||typeof value==='string')&&(!Number.isInteger(key)||key<0||key>=value.length))throw new IndexOutOfRangeException('Index out of range');return value[key];}
+export function setIndex(value,key,item){if(value==null)throw new NullReferenceException('Indexing null');if(value instanceof Map)value.set(key,item);else {if(Array.isArray(value)&&(!Number.isInteger(key)||key<0||key>=value.length))throw new IndexOutOfRangeException('Index out of range');value[key]=item;}return item;}
 export function updateIndex(value,key,op,right){const left=getIndex(value,key);return setIndex(value,key,({'+=':()=>left+right,'-=':()=>left-right,'*=':()=>left*right,'/=':()=>left/right,'%=':()=>left%right,'??=':()=>left??right}[op]??(()=>{throw new NotSupportedException(op);}))());}
 export function incrementIndex(value,key,delta,postfix){const old=getIndex(value,key),next=old+delta;setIndex(value,key,next);return postfix?old:next;}
 export function newArray(length,initial=null){if(!Number.isInteger(length)||length<0||length>10000000)throw new ArgumentException('Invalid or excessive array length');return Array(length).fill(initial);}
@@ -115,7 +112,7 @@ export function invoke(value,name,args=[],optional=false){
   if(Enumerable[name])return Enumerable[name](value,...args);throw new NotSupportedException(`Method '${name}' is not available`);
 }
 export const iadd=(a,b)=>(a+b)|0, isub=(a,b)=>(a-b)|0, imul=(a,b)=>Math.imul(a,b);
-export function idiv(a,b){if(b===0)throw new DivideByZeroException('Attempted to divide by zero');if(a===-2147483648&&b===-1)throw new ArgumentException('Integer division overflow');return Math.trunc(a/b)|0;}
+export function idiv(a,b){if(b===0)throw new DivideByZeroException('Attempted to divide by zero');if(a===-2147483648&&b===-1)throw new OverflowException('Integer division overflow');return Math.trunc(a/b)|0;}
 export function irem(a,b){if(b===0)throw new DivideByZeroException('Attempted to divide by zero');return (a%b)|0;}
 export function toInt(value){return Math.trunc(Number(value))|0;}
 export const Convert={ToInt32:toInt,ToDouble:Number,ToString:formatValue,ToBoolean:value=>typeof value==='string'?value.toLowerCase()==='true':!!value,Parse:value=>{const n=Number(value);if(!Number.isFinite(n))throw new ArgumentException('Invalid number');return n;}};

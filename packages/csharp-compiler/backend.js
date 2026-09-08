@@ -1,9 +1,10 @@
+import { exceptionTypeNames } from '../dotnet-runtime/exceptions.js';
 import { DiagnosticBag, identifier, escapeJs } from '../compiler-core/index.js';
 import { parseCSharp, parseExpression } from './parser.js';
 import { controlDefinitions, commonProperties, eventNames } from '../avalonia-runtime/schema.js';
 export { lexCSharp } from './lexer.js';
 export { parseCSharp } from './parser.js';
-const builtins = new Set(('Object ObservableObject AvaloniaObject AvaloniaProperty StyledProperty StyledElement Exception ArgumentException ArgumentNullException InvalidOperationException NotSupportedException DivideByZeroException List ObservableCollection Dictionary HashSet Queue Stack StringBuilder Event EventArgs TemplateAppliedEventArgs RoutedEventArgs PropertyChangedEventArgs PropertyChangedEventHandler EventHandler Action Func Task CancellationTokenSource RelayCommand DelegateCommand ReactiveCommand Math Console String Convert Enumerable Array DateTime TimeSpan Guid Debug Enum AvaloniaXamlLoader Brushes Colors Thickness CornerRadius Point Size Rect Vector Color SolidColorBrush Uri Binding ApplicationLifetime Dispatcher BindingMode').split(' ').concat(Object.keys(controlDefinitions)));
+const builtins = new Set(('Object ObservableObject AvaloniaObject AvaloniaProperty StyledProperty StyledElement Exception ArgumentException ArgumentNullException InvalidOperationException NotSupportedException DivideByZeroException List ObservableCollection Dictionary HashSet Queue Stack StringBuilder Event EventArgs TemplateAppliedEventArgs RoutedEventArgs PropertyChangedEventArgs PropertyChangedEventHandler EventHandler Action Func Task CancellationTokenSource RelayCommand DelegateCommand ReactiveCommand Math Console String Convert Enumerable Array DateTime TimeSpan Guid Debug Enum AvaloniaXamlLoader Brushes Colors Thickness CornerRadius Point Size Rect Vector Color SolidColorBrush Uri Binding ApplicationLifetime Dispatcher BindingMode').split(' ').concat(Object.keys(controlDefinitions),exceptionTypeNames().map(n=>n.slice(7))));
 const interfaces = new Set('IDisposable INotifyPropertyChanged INotifyCollectionChanged ICommand IEnumerable ICollection IList IReadOnlyList IDictionary IEquatable IComparable IValueConverter'.split(' '));
 const primitive = new Set('object string bool byte sbyte short ushort int uint float double char void var dynamic'.split(' '));
 const linqMethods = new Set('Where Select SelectMany Any All Count First FirstOrDefault Last LastOrDefault Single SingleOrDefault Sum Average Min Max OrderBy OrderByDescending ThenBy ThenByDescending Take Skip Concat Distinct Reverse ToList ToArray Contains Aggregate'.split(' '));
@@ -172,7 +173,7 @@ export function compileCSharp(input, options={}) {
       }
       case 'if':return `if (${expr(s.test,ctx)}) ${stmt(s.consequent,clone(ctx))}${s.alternate?' else '+stmt(s.alternate,clone(ctx)):''}`;
       case 'return':return 'return'+(s.expression?' '+expr(s.expression,ctx):'')+';';
-      case 'throw':return 'throw '+(s.expression?expr(s.expression,ctx):ctx.catchName??'__error')+';';
+      case 'throw':return 'throw '+(s.expression?'('+expr(s.expression,ctx)+' ?? new JB.NullReferenceException())':ctx.catchName??'__error')+';';
       case 'break':case 'continue':return s.kind+';';
       case 'while':return `while (${expr(s.test,ctx)}) ${stmt(s.body,clone(ctx))}`;
       case 'do':return `do ${stmt(s.body,clone(ctx))} while (${expr(s.test,ctx)});`;
