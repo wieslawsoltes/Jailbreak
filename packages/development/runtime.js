@@ -125,7 +125,7 @@ export function createDevelopmentSession(JB,{debug={},report=()=>{},nativeBreaks
     if(selected?._disposed){selected=null;overlay?.remove();overlay=null;resizeObserver?.disconnect();}
     emit('reloaded',{revision,properties:changes.length,methods:methods.length,environments:environmentChanges.length,added:structure.added,removed:structure.removed,panels:structure.groups});emit('tree',tree());highlight();return {revision};
   }
-  const api={co,handler:(object,name)=>co.eventFunction(JB.method(object,name)),configure,hit,inspect,tree,select,applyReload,watchResults,
+  const api={binaryHit:(point,read)=>hitPoint(point,read),co,handler:(object,name)=>co.eventFunction(JB.method(object,name)),configure,hit,inspect,tree,select,applyReload,watchResults,
     read(fn){try{return fn();}catch{return '[unavailable]';}},
     throwing(error,point){emit('debug-exception',{point,error:snapshot(error),message:error?.message??String(error),stack:error?.stack});if(!co.active&&breakOnThrow&&nativeBreaks){debugger;}return error;},
     get revision(){return revision;},

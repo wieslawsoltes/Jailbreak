@@ -4,16 +4,18 @@ import { baseOpcode, argumentIndex } from './verification.js';
 const j=escapeJs;
 function literal(v){return typeof v==='bigint'?v+'n':typeof v==='number'&&!Number.isFinite(v)?Number.isNaN(v)?'NaN':v>0?'Infinity':'-Infinity':j(v);}
 /** Ahead-of-time emission: one native JavaScript case per basic block, never an opcode interpreter. */
-export function emitMethod(assembly,method,verified){
+export function emitMethod(assembly,method,verified,{sites=[]}={}){
   const {instructions,types,regions}=verified,tokens=new Map([...assembly.methods,...assembly.members,...assembly.fields].map(m=>[m.token,m]));
   const leaders=new Set([instructions[0].offset]);
   for(const r of regions.scopes){leaders.add(r.start);leaders.add(r.end);}
   for(const i of instructions){const op=baseOpcode(i.name);if(op==='leave'){leaders.add(i.operand);leaders.add(i.next);}else if(op==='switch'){i.operand.forEach(x=>leaders.add(x));leaders.add(i.next);}else if(/^b(?:r|eq|ge|gt|le|lt|ne)/.test(op)&&op!=='break'){leaders.add(i.operand);leaders.add(i.next);}else if(['ret','throw','rethrow','endfinally'].includes(op))leaders.add(i.next);}
   const eh=regions.clauses.length>0;
   const lines=['function(self,parameters){',eh?`const eh=C.exceptionFrame(${j(regions.clauses)});`:'',`const arg=${method.static?'parameters.slice()':'[self,...parameters]'}, local=[${method.body.locals.map(t=>stackType(t)==='ref'?'null':stackType(t)==='i8'?'0n':'0').join(',')}], s=[];let pc=${instructions[0].offset},a,b,v,argv;`,eh?'while(true){let action;try{switch(pc){':'while(true){switch(pc){'];
+  const debugPoints=new Map(sites.map(s=>[s.point.ilOffset,s]));
   let currentBlock=null;
   for(let n=0;n<instructions.length;n++){
     const i=instructions[n],op=baseOpcode(i.name),type=types.get(i.offset);if(leaders.has(i.offset)){if(currentBlock!==null)lines.push(`pc=${i.offset};continue;`);lines.push(`case ${i.offset}: C.tick(${blockCost(n)});`);currentBlock=i.offset;}
+    const site=debugPoints.get(i.offset);if(site){const locals=site.locals.map(l=>`[${j(l.name)}]:local[${l.slot}]`),args=method.signature.parameters.map((_,a)=>`[${j(method.parameterNames?.[a]||'arg'+a)}]:arg[${a+(method.static?0:1)}]`);lines.push(`/*@jb:${site.point.id}*/if(C.debugHit(${j(site.point)},()=>({this:self,${[...args,...locals].join(',')}}))){debugger;}`);}
     lines.push(`// IL_${i.offset.toString(16).padStart(4,'0')} ${i.name}`);
     const push=e=>lines.push(`s.push(${e});`),pop='s.pop()';
     if(/^ldarg(?:\.|$)/.test(op))push(`arg[${argumentIndex(i)}]`);

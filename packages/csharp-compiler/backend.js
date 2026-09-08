@@ -104,7 +104,7 @@ export function compileCSharp(input, options={}) {
           if(name==='FindControl'||name==='FindName')return `${obj}.${name}(${args.join(',')})`;
           if(name==='GetType')return `JB.getType(${obj})`;
           if(stringMethods.has(name))return `JB.invoke(${obj},${escapeJs(name)},[${args.join(',')}],${!!m.optional})`;
-          if(linqMethods.has(name)&&flatName(m.object)!=='Enumerable')return `JB.Enumerable.${name}(${obj}${args.length?','+args.join(','):''})`;
+          if(linqMethods.has(name)&&flatName(m.object)!=='Enumerable'&&!resolve(flatName(m.object)??'')&&!resolve(infer(m.object,ctx)??''))return `JB.Enumerable.${name}(${obj}${args.length?','+args.join(','):''})`;
         }
         if(ctx.cooperative){
           if(e.callee.kind==='member')return `(yield* $co.applyReference($co.reference(${expr(e.callee.object,ctx)},${escapeJs(e.callee.name)},${!!e.callee.optional}),(function*(){return [${args.join(',')}];}).call(this)))`;

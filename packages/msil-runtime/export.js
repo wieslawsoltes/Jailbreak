@@ -1,11 +1,13 @@
+import {mappedScript} from '../development/source-map.js';
 import { escapeJs } from '../compiler-core/index.js';
 /** Export an offline method runner. Callers embed the result in sandbox="allow-scripts". */
-export function createBinaryApplicationHtml(compilation,runtimeSource,{channel='binary-preview'}={}){
+export function createBinaryApplicationHtml(compilation,runtimeSource,{channel='binary-preview',development={}}={}){
   if(!compilation.success)throw new Error('Cannot export a failed binary conversion');
   const methods=compilation.assemblies.flatMap(a=>a.methods.filter(m=>m.public&&m.name[0]!=='.').map(m=>({...m,assembly:a.name})));
-  const script=`${runtimeSource}\nconst channel=${escapeJs(channel)}, methods=${escapeJs(methods)};
+  let script=`${runtimeSource}\nconst channel=${escapeJs(channel)}, methods=${escapeJs(methods)};
 const send=(kind,value)=>parent.postMessage({channel,kind,value},'*');
 const MS=createBinaryRuntime({log:value=>send('log',String(value))});
+${compilation.debug?`let debugSettings=${escapeJs(development)};MS.setDebugger((point,read)=>{if(!debugSettings.breakpoints?.some(b=>b.file===point.file&&Number(b.line)===point.line))return false;const values=Object.fromEntries(Object.entries(read()).map(([k,v])=>[k,typeof v==='bigint'?v.toString():v==null||['string','number','boolean'].includes(typeof v)?v:'[object]']));send('debug-hit',{point,locals:values});return debugSettings.nativeBreaks===true;});addEventListener('message',event=>{if(event.source===parent&&event.data?.channel===channel&&event.data.kind==='configure-debug')debugSettings=event.data.settings??{};});`:''}
 ${compilation.code}
 MS.link();window.binaryRuntime=MS;
 const select=document.getElementById('method'),args=document.getElementById('args'),ctor=document.getElementById('ctor'),out=document.getElementById('result'),instances=new Map();
@@ -14,5 +16,6 @@ function invoke(assembly,token,values,constructorArgs=[]){try{const m=methods.fi
 document.getElementById('run').onclick=()=>{try{const m=methods.find(m=>m.assembly+':'+m.token===select.value);if(!m)throw new Error('No callable public method');invoke(m.assembly,m.token,JSON.parse(args.value),JSON.parse(ctor.value));}catch(e){out.textContent=e.message;send('error',e.message);}};
 window.addEventListener('message',e=>{if(e.source!==parent||e.data?.channel!==channel||e.data?.kind!=='invoke')return;const m=e.data;invoke(m.assembly,m.token,m.args,m.constructorArgs);});
 send('ready',{assemblies:MS.stats().assemblies,methods:methods.length});`;
+  if(compilation.debug)script=mappedScript(script,compilation.debug,compilation.debug.sources);
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none';script-src 'unsafe-inline';style-src 'unsafe-inline';connect-src 'none';base-uri 'none';form-action 'none'"><title>Jailbreak · converted library</title><style>body{margin:0;padding:24px;font:14px system-ui;background:#f7f8fc;color:#222b40}h2{margin:0 0 8px}p{color:#637089;line-height:1.6}label{display:block;margin:12px 0 4px}input,select,button{box-sizing:border-box;width:100%;padding:9px;font:inherit;border:1px solid #ccd2e0;border-radius:6px;background:white;color:#222b40}button{margin:14px 0;background:#6156d9;color:white;cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere;border-radius:8px;padding:18px;background:#e9ecf5;min-height:60px}</style></head><body><h2>Converted library</h2><p>Native JavaScript method functions. No .NET runtime or runtime IL interpreter.</p><label for="method">Method</label><select id="method"></select><label for="args">Method arguments (JSON array)</label><input id="args" value="[40,2]"><label for="ctor">Constructor arguments for instance methods</label><input id="ctor" value="[]"><button id="run">Invoke converted method</button><pre id="result" role="status">Ready</pre><script>${script.replace(/<\/script/gi,'<\\/script')}</script></body></html>`;
 }

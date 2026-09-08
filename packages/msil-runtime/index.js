@@ -10,7 +10,7 @@ const initial=t=>stackType(t)==='ref'?null:stackType(t)==='i8'?0n:0;
 function requireObject(value){if(value==null)throw new DN.NullReferenceException('NullReferenceException');return value;}
 /** Runtime for emitted method functions. No opcode interpreter, PE loader, eval, or network. */
 export function createBinaryRuntime({instructionBudget=1000000,maxDepth=256,maxArrayLength=1000000,log=()=>{}}={}){
-  const assemblies=new Map(),types=new Map();let remaining=instructionBudget,depth=0,active=0,linked=false;
+  const assemblies=new Map(),types=new Map();let remaining=instructionBudget,depth=0,active=0,linked=false,debuggerHook=null;
   const host={log};
   function transaction(fn){if(!active)remaining=instructionBudget;active++;try{return fn();}finally{active--;}}
   function findType(assembly,name){const t=types.get(`${assembly}::${name}`);if(!t)throw new DN.NotSupportedException(`Missing binary type [${assembly}]${name}`);return t;}
@@ -55,8 +55,10 @@ export function createBinaryRuntime({instructionBudget=1000000,maxDepth=256,maxA
     linked=true;
   }
   const runtime={assemblies,types,D:DN,
+    setDebugger(hook){if(hook!=null&&typeof hook!=='function')throw new TypeError('Debugger hook must be a function');debuggerHook=hook;},
     register(descriptor,factory){if(descriptor.format!=='msil-js-v1'||assemblies.has(descriptor.name))throw new Error('Invalid/duplicate binary assembly registration');if(linked)throw new Error('Register every assembly before linking');
       const C={descriptor,records:new Map([...descriptor.methods,...descriptor.fields,...descriptor.members].map(m=>[m.token,m])),D:DN,
+        debugHit(point,locals){try{return debuggerHook?.(point,locals)===true;}catch{return false;}},
         tick(cost=1){remaining-=cost;if(remaining<0)throw new ExecutionLimitError('Binary execution instruction budget exceeded');},
         call(token,self,args,virtual=false){const target=resolve(C,token,'method');if(target.adapter){if(target.record.signature.hasThis)requireObject(self);return target.adapter(self,args,host);}return invokeRecord(target.context,target.record,self,args,virtual);},
         construct(token,args){const target=resolve(C,token,'method');if(target.adapter){const ExceptionType=resolveExceptionType({assembly:target.record.assembly,name:target.record.owner});if(ExceptionType)return new ExceptionType(...args);throw new DN.NotSupportedException('External constructor allocation unsupported');}const type=findType(target.context.descriptor.name,target.record.owner),object=allocate(type);invokeRecord(target.context,target.record,object,args);return object;},

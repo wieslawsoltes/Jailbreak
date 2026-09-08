@@ -1,6 +1,6 @@
 import { readZip } from './zip.js';
 import { parseXml } from '../compiler-core/xml.js';
-import { compileAssemblies } from '../msil-compiler/verified.js';
+import { compileDebugAssemblies } from '../msil-compiler/debug.js';
 export { readZip, crc32 } from './zip.js';
 const local=n=>n.tag?.split(':').at(-1),children=n=>n?.children?.filter(c=>c.kind==='element')??[],text=n=>n?.children?.filter(c=>c.kind==='text').map(c=>c.text).join('').trim()??'';
 const one=(n,name)=>children(n).find(c=>local(c)===name);
@@ -30,10 +30,10 @@ export async function convertNugetPackages(inputs,options={}){
     report.selectedFramework=target;report.selectedFiles=report.frameworks[target]??[];packages.push(report);
     if(!target||!report.selectedFiles.length){diag(available.length?`Choose an exact implementation framework: ${available.join(', ')}`:'No executable lib/<tfm> DLLs; ref/, runtime-specific and native assets are not implementation substitutes',input.path);continue;}
     report.dependencies=report.dependencyGroups.filter(g=>!g.framework||g.framework===target).flatMap(g=>g.dependencies);
-    for(const file of report.selectedFiles)assemblyInputs.push({bytes:await zip.read(file),path:report.id+'/'+file});
+    for(const file of report.selectedFiles){const pdbPath=file.replace(/\.dll$/i,'.pdb');assemblyInputs.push({bytes:await zip.read(file),pdb:options.debug&&zip.entries.has(pdbPath)?await zip.read(pdbPath):undefined,path:report.id+'/'+file});}
     if(report.ignoredAssets.length)diag('Build tasks, analyzers, native/runtime-specific and ref assets are inventoried but not executed or converted',input.path,'JB6304','warning');
     if(report.signed)diag('Package signature is not verified; CRC checks detect corruption, not publisher authenticity',input.path,'JB6304','warning');
   }catch(e){diag(e.message,input.path,e.code??'JB6301');}}
   const identities=new Set();for(const pkg of packages){const id=pkg.id.toLowerCase();if(identities.has(id))diag('Multiple versions/duplicates of package '+pkg.id,pkg.path);identities.add(id);for(const dep of pkg.dependencies??[]){const found=packages.find(p=>p.id.toLowerCase()===dep.id?.toLowerCase());if(!found)diag(`Supply dependency ${dep.id} ${dep.version}; automatic NuGet restore is not implemented`,pkg.path);else try{if(!satisfiesVersion(found.version,dep.version))diag(`Dependency version mismatch for ${dep.id}`,pkg.path);}catch(e){diag(e.message,pkg.path);}}}
-  const compiled=compileAssemblies(assemblyInputs,options);diagnostics.push(...compiled.diagnostics);const success=compiled.success&&!diagnostics.some(d=>d.severity==='error');return {...compiled,success,code:success?compiled.code:'',diagnostics,packages};
+  const compiled=await compileDebugAssemblies(assemblyInputs,options);diagnostics.push(...compiled.diagnostics);const success=compiled.success&&!diagnostics.some(d=>d.severity==='error');return {...compiled,success,code:success?compiled.code:'',diagnostics,packages};
 }

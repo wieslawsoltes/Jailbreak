@@ -1,3 +1,4 @@
+import {readDebugDirectory} from './debug-directory.js';
 import { readExceptionSections } from './exception-sections.js';
 import { Reader, BinaryError, align, bytesOf } from './reader.js';
 import { tableSchemas, tableNames, codedIndices, decodeCoded } from './metadata-schema.js';
@@ -6,7 +7,7 @@ export { BinaryError } from './reader.js';
 export { typeName, stackType } from './signatures.js';
 
 /** Decode a managed PE image without loading it into the OS or executing any method. */
-export function readAssembly(input,{path='assembly.dll',maxBytes=32*1024*1024,maxRows=200000,maxMethodBytes=1024*1024}={}){
+export function readAssembly(input,{path='assembly.dll',maxBytes=32*1024*1024,maxRows=200000,maxMethodBytes=1024*1024,debug=false,maxPdbBytes=16*1024*1024}={}){
   const bytes=bytesOf(input);if(bytes.length>maxBytes)throw new BinaryError('Managed image exceeds byte budget');const r=new Reader(bytes);
   if(r.u16()!==0x5a4d)throw new BinaryError('Not a PE image: missing MZ signature');r.seek(0x3c);const pe=r.u32();r.seek(pe);
   if(r.u32()!==0x4550)throw new BinaryError('Invalid PE signature',pe);
@@ -16,6 +17,8 @@ export function readAssembly(input,{path='assembly.dll',maxBytes=32*1024*1024,ma
   r.seek(optionalStart+optionalSize);const sections=[];
   for(let i=0;i<sectionCount;i++){const name=new TextDecoder().decode(r.slice(8)).replace(/\0.*$/,''),virtualSize=r.u32(),rva=r.u32(),size=r.u32(),offset=r.u32();r.skip(16);r.check(offset,size);sections.push({name,virtualSize,rva,size,offset});}
   function mapRva(rva,n=1){const matches=sections.filter(s=>rva>=s.rva&&rva+n<=s.rva+s.size);if(matches.length!==1)throw new BinaryError('RVA does not map uniquely to file-backed data: 0x'+rva.toString(16),rva);return r.check(matches[0].offset+rva-matches[0].rva,n);}
+  let debugDirectory;
+  if(debug){optional.seek(optionalStart+directoryOffset+6*8);const drva=optional.u32(),dsize=optional.u32();debugDirectory=readDebugDirectory(bytes,drva,dsize,mapRva,{maxBytes:maxPdbBytes});}
   const cli=r.sub(mapRva(cliRva,72),72);const cb=cli.u32();if(cb<72)throw new BinaryError('Invalid CLR header size');cli.skip(4);const metadataRva=cli.u32(),metadataSize=cli.u32(),flags=cli.u32(),entryPoint=cli.u32();const resourcesRva=cli.u32(),resourcesSize=cli.u32();cli.seek(cli.start+64);const nativeHeader=cli.u32();cli.u32();
   const metadata=r.sub(mapRva(metadataRva,metadataSize),metadataSize);if(metadata.u32()!==0x424a5342)throw new BinaryError('Invalid CLI metadata signature',metadata.start);metadata.skip(8);const versionSize=metadata.u32();if(versionSize>1024)throw new BinaryError('Invalid metadata version length');const version=metadata.utf8(versionSize).replace(/\0.*$/,'');metadata.seek(align(metadata.pos));metadata.u16();const streamCount=metadata.u16();if(streamCount>32)throw new BinaryError('Metadata stream budget exceeded');const streams=new Map();
   for(let i=0;i<streamCount;i++){const offset=metadata.u32(),size=metadata.u32(),name=metadata.zeroString(32);metadata.seek(align(metadata.pos));if(streams.has(name))throw new BinaryError('Duplicate CLI stream '+name);metadata.check(metadata.start+offset,size);streams.set(name,{offset:metadata.start+offset,size});}
@@ -49,7 +52,7 @@ export function readAssembly(input,{path='assembly.dll',maxBytes=32*1024*1024,ma
     if(size>maxMethodBytes||maxStack>4096)throw new BinaryError('Method body budget exceeded',at);mapRva(method.RVA,h.pos-at+size);const code=h.slice(size),locals=localToken?signature(row(localToken).Signature,'locals'):[];
     if(localToken&&localToken>>>24!==17)throw new BinaryError('Invalid local signature token');
     const exceptionClauses=moreSections?readExceptionSections(r,h.pos,size,resolveType,(offset,length)=>mapRva(method.RVA+offset-at,length)):[];
-    return {offset:at,codeOffset:h.pos-size,code,maxStack,locals,initLocals,hasExceptionSections:moreSections,exceptionClauses};
+    return {offset:at,codeOffset:h.pos-size,code,maxStack,locals,localToken,initLocals,hasExceptionSections:moreSections,exceptionClauses};
   }
   for(let i=0;i<types.length;i++){
     const type=types[i],raw=tables[2][i],next=tables[2][i+1];
@@ -61,7 +64,7 @@ export function readAssembly(input,{path='assembly.dll',maxBytes=32*1024*1024,ma
   for(const m of tables[10]){const parent=m.Class>>>24;if(![1,2,27].includes(parent))throw new BinaryError('Unsupported member reference parent',0,'JB6004');const owner=resolveType(m.Class),raw=blob(m.Signature),field=raw[0]===6;members.push({token:m.token,name:m.Name,owner:owner.name,assembly:owner.assembly,kind:field?'field':'method',...(field?{type:signature(m.Signature,'field')}:{signature:signature(m.Signature,'method')})});}
   for(const map of tables[21]){const type=types[map.Parent-1];if(!type)throw new BinaryError('Invalid property owner');const idx=tables[21].indexOf(map),end=tables[21][idx+1]?.PropertyList??tables[23].length+1;for(let i=map.PropertyList;i<end;i++){const p=tables[23][i-1];if(!p)throw new BinaryError('Invalid property table range');const sem=tables[24].filter(s=>s.Association===p.token);type.properties.push({name:p.Name,get:sem.find(s=>s.Semantics&2)?.Method??null,set:sem.find(s=>s.Semantics&1)?.Method??null});}}
   const userStrings={}; // Strings are decoded on demand by the IL decoder, not searched heuristically.
-  return {format:'cli-assembly-v1',path,name,version:[assemblyRow.MajorVersion,assemblyRow.MinorVersion,assemblyRow.BuildNumber,assemblyRow.RevisionNumber].join('.'),machine,is64,characteristics,cliFlags:flags,nativeHeader,entryPoint,metadataVersion:version,references,types,methods,fields,members,userStrings,
+  return {format:'cli-assembly-v1',debugDirectory,rowCounts:counts,path,name,version:[assemblyRow.MajorVersion,assemblyRow.MinorVersion,assemblyRow.BuildNumber,assemblyRow.RevisionNumber].join('.'),machine,is64,characteristics,cliFlags:flags,nativeHeader,entryPoint,metadataVersion:version,references,types,methods,fields,members,userStrings,
     resources:tables[40].map(x=>({name:x.Name,offset:x.Offset,embedded:!x.Implementation})),
     features:{referenceAssembly:tables[12].some(attr=>attr.Parent===0x20000001&&members.some(m=>m.token===attr.Type&&m.owner==='System.Runtime.CompilerServices.ReferenceAssemblyAttribute')),literalFields:fields.some(f=>f.flags&64),generics:counts[42]>0,methodSpecs:counts[43]>0,explicitOverrides:counts[25]>0,fieldRva:counts[29]>0,exportedTypes:counts[39]>0},
     tables:Object.fromEntries(counts.map((n,i)=>[tableNames[i],n]).filter(([,n])=>n)),

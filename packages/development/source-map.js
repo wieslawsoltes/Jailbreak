@@ -7,15 +7,15 @@ export function vlq(value){
   return result;
 }
 export function createSourceMap(code,sites,files,{file='jailbreak-app.js'}={}){
-  const sources=[...new Set(sites.map(p=>p.file))],byId=new Map(sites.map(p=>[p.id,p])),points=[];
+  const sources=[...new Set(sites.map(p=>p.file))],byId=new Map(sites.map(p=>[String(p.id),p])),points=[];
   let offset=0,line=0,column=0;
   const advance=end=>{for(;offset<end;offset++){if(code[offset]==='\n'){line++;column=0;}else column++;}};
-  for(const match of code.matchAll(/^\/\*@jb:(\d+)\*\//gm)){
-    advance(match.index+match[0].length);const point=byId.get(Number(match[1]));
+  for(const match of code.matchAll(/^\/\*@jb:([\w]+)\*\//gm)){
+    advance(match.index+match[0].length);const point=byId.get(match[1]);
     if(point){
       const mapping={generatedLine:line,generatedColumn:column,source:sources.indexOf(point.file),line:point.line-1,column:point.column-1,id:point.id};points.push(mapping);
       const tail=code.indexOf('\n',offset);
-      if((code.slice(offset).startsWith('if(JB.dev?.hit(')||code.slice(offset).startsWith('yield $co.checkpoint('))&&tail>=0)points.push({...mapping,generatedLine:line+1,generatedColumn:0});
+      if((code.slice(offset).startsWith('if(C.debugHit(')||code.slice(offset).startsWith('if(JB.dev?.hit(')||code.slice(offset).startsWith('yield $co.checkpoint('))&&tail>=0)points.push({...mapping,generatedLine:line+1,generatedColumn:0});
     }
   }
   let source=0,originalLine=0,originalColumn=0,lastLine=0,lastColumn=0,mappings='',first=true;
@@ -33,10 +33,10 @@ export function inlineSourceMap(map){
   return '//# sourceMappingURL=data:application/json;charset=utf-8;base64,'+btoa(binary);
 }
 /** Resolve emitted sequence points after prefixes/wrappers have been composed. */
-export function mappedScript(code,debug,files){return code+'\n//# sourceURL=jailbreak-app.js\n'+inlineSourceMap(createSourceMap(code,debug?.sites??[],files));}
+export function mappedScript(code,debug,files){files={...Object.fromEntries(files instanceof Map?files:Object.entries(files??{})),...debug?.sources};return code+'\n//# sourceURL=jailbreak-app.js\n'+inlineSourceMap(createSourceMap(code,debug?.sites??[],files));}
 
 export function updateGeneratedLocations(code, debug){
-  const sites=new Map((debug?.sites??[]).map(p=>[p.id,p]));let line=1,last=0;
-  for(const match of code.matchAll(/^\/\*@jb:(\d+)\*\//gm)){for(;last<match.index;last++)if(code[last]==='\n')line++;const point=sites.get(Number(match[1]));if(point)point.generatedLine=line;}
+  const sites=new Map((debug?.sites??[]).map(p=>[String(p.id),p]));let line=1,last=0;
+  for(const match of code.matchAll(/^\/\*@jb:([\w]+)\*\//gm)){for(;last<match.index;last++)if(code[last]==='\n')line++;const point=sites.get(match[1]);if(point)point.generatedLine=line;}
   return debug;
 }
