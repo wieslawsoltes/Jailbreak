@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>Jailbreak.BinaryExamples</AssemblyName>
+    <RootNamespace>BinaryExamples</RootNamespace>
+    <PackageId>Jailbreak.BinaryExamples</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Jailbreak contributors</Authors>
+    <Description>Owned regression fixtures for MSIL-to-JavaScript conversion.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Optimize>true</Optimize>
+    <DebugType>none</DebugType>
+    <Deterministic>true</Deterministic>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup><Compile Include="Library.cs" /></ItemGroup>
+</Project>
