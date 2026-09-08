@@ -30,13 +30,7 @@ export class StyledObject extends DotObject {
   track(disposable){if(typeof disposable==='function')this._disposables.push(disposable);else if(disposable?.Dispose)this._disposables.push(()=>disposable.Dispose());return disposable;}
   Dispose(){if(this._disposed)return;this._disposed=true;for(const dispose of this._disposables.splice(0))dispose();this.PropertyChanged.clear();}
 }
-export class ResourceDictionary extends Map {
-  constructor(...args){super(...args);this.listeners=new Set();}
-  set(key,value){super.set(key,value);for(const callback of this.listeners??[])callback(key,value);return this;}
-  Add(key,value){if(this.has(key))throw new Error('Duplicate resource '+key);this.set(key,value);}
-  Set(key,value){return this.set(key,value);}get Count(){return this.size;}
-  subscribe(callback){this.listeners.add(callback);return ()=>this.listeners.delete(callback);}
-}
+export { ResourceDictionary } from './resources.js';
 export function observePath(source,path,callback){
   const segments=pathSegments(path);let subscriptions=[];
   const dispose=()=>{for(const off of subscriptions)off();subscriptions=[];};

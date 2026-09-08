@@ -1,3 +1,5 @@
+import { TemplateAppliedEventArgs } from './templates.js';
+export { TemplateAppliedEventArgs } from './templates.js';
 import * as DN from '../dotnet-runtime/index.js';
 import { Control, controls, flushLayout } from './controls.js';
 import { StyledObject, AvaloniaProperty, ResourceDictionary } from './properties.js';
@@ -30,7 +32,7 @@ export function createRuntime() {
   const types=new Map(),documents=new Map();
   const api={...DN,...controls,Object:DN.DotObject,String:DN.StringApi,Math:DN.MathApi,Array:{Empty:()=>[],...Array},
     DelegateCommand:DN.RelayCommand,AvaloniaObject:StyledObject,StyledElement:StyledObject,AvaloniaProperty,StyledProperty:AvaloniaProperty,
-    ResourceDictionary,Thickness,CornerRadius,Point,Vector:Point,Size,Rect,Color,SolidColorBrush,Uri,Colors,Brushes,Dispatcher,BindingMode,Binding,
+    ResourceDictionary,TemplateAppliedEventArgs,Thickness,CornerRadius,Point,Vector:Point,Size,Rect,Color,SolidColorBrush,Uri,Colors,Brushes,Dispatcher,BindingMode,Binding,
     runtimeCss,flushLayout,types,documents};
   api.defineType=(name,type)=>{if(types.has(name))throw new Error(`Duplicate runtime type '${name}'`);types.set(name,type);if(typeof type==='function')Object.defineProperty(type,'$fullName',{value:name,configurable:true});return type;};
   for(const [name,type]of Object.entries(controls))types.set(name,type);

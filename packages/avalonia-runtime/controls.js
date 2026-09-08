@@ -1,3 +1,5 @@
+import { renderProgress, progressState } from './progress.js';
+import { applyControlTheme, applyControlTemplate, renderControlTemplate, releaseControlTemplate, renderDataContent } from './templates.js';
 import { Event, ObservableCollection, RoutedEventArgs, notify, formatValue, DateTime } from '../dotnet-runtime/index.js';
 import { StyledObject, AvaloniaProperty, ResourceDictionary } from './properties.js';
 import { controlDefinitions,commonProperties,eventNames } from './schema.js';
@@ -25,7 +27,7 @@ export class Control extends StyledObject {
   get Children(){return this._children;}get Items(){return this._children;}
   get effectiveEnabled(){return this.IsEnabled!==false&&(!this.parent||this.parent.effectiveEnabled);}
   get root(){let value=this;while(value.parent)value=value.parent;return value;}
-  get visualChildren(){return [...new Set([...this.Children,this.Content,...this._generated].filter(x=>x instanceof Control))];}
+  get visualChildren(){return [...new Set([...this.Children,...(this.type==='ContentPresenter'&&this.TemplatedParent?[]:[this.Content]),this._templateInstance?.root,this._contentTemplateRoot,...this._generated].filter(x=>x instanceof Control))];}
   SetValue(property,value,priority=1000){const name=this.propertyName(property);
     if(numericProperties.has(name)&&value!=null&&value!=='Auto'&&value!=='NaN')value=Number(value);
     if(boolProperties.has(name)&&typeof value==='string')value=value.toLowerCase()==='true';
@@ -34,10 +36,11 @@ export class Control extends StyledObject {
   }
   onPropertyChanged(name,value,old){
     if(name==='DataContext'||name==='IsEnabled')for(const child of this.visualChildren)child.inheritChanged(name);
-    if(name==='Content'&&value instanceof Control){value.parent=this;value.inheritChanged('DataContext');}
-    if(name==='Content'&&old instanceof Control&&old!==value){old.element?.remove();old.parent=null;}
+    if(name==='Content'&&!(this.type==='ContentPresenter'&&this.TemplatedParent)&&value instanceof Control){value.parent=this;value.inheritChanged('DataContext');}
+    if(name==='Content'&&!(this.type==='ContentPresenter'&&this.TemplatedParent)&&old instanceof Control&&old!==value){old.element?.remove();old.parent=null;}
     if(name==='ItemsSource'){this._offItems?.();this._offItems=value?.CollectionChanged?.add(()=>this.invalidate('items'));}
     if(name==='Command'){this._offCommand?.();this._offCommand=value?.CanExecuteChanged?.add(()=>this.invalidate('Command'));}
+    if(this.type==='ProgressBar'&&['Value','Minimum','Maximum'].includes(name)){const percentage=this.Percentage;if(!Object.is(this._lastPercentage,percentage)){const previous=this._lastPercentage;this._lastPercentage=percentage;notify(this,'Percentage',percentage,previous);}}
     if(name==='Header')this.parent?.invalidate('children');
     if((name==='Minimum'||name==='Maximum')&&this.Value!=null)this.SetValue('Value',this.Value);
     this.invalidate(name);
@@ -45,16 +48,19 @@ export class Control extends StyledObject {
   inheritChanged(name){notify(this,name,this.GetValue(name),Symbol());this.invalidate(name);for(const child of this.visualChildren)child.inheritChanged(name);}
   invalidate(name='*'){this._dirty.add(name);schedule(this);}
   addChild(child){this.Children.Add(child);}
-  FindControl(name){const scope=this.scope?.names;if(scope?.has(name))return scope.get(name);if(this.Name===name)return this;for(const child of this.visualChildren){const found=child.FindControl(name);if(found)return found;}return null;}
+  FindControl(name){if(this._nameScope)return this._nameScope.get(name)??null;const scope=this.scope?.names;if(scope?.has(name))return scope.get(name);if(this.Name===name)return this;for(const child of this.visualChildren){const found=child.FindControl(name);if(found)return found;}return null;}
   FindName(name){return this.FindControl(name);}
   InitializeComponent(){if(!Control.xamlLoader)throw new Error('XAML loader is not installed');Control.xamlLoader(this);}
+  ApplyTemplate(){applyControlTheme(this);return applyControlTemplate(this);}
+  OnApplyTemplate(args){}
+  FindTemplateChild(name){return this._templateInstance?.names.get(name)??null;}
   Focus(){(this.input??this.element)?.focus();return true;}
   Show(){this.IsVisible=true;}Hide(){this.IsVisible=false;}Close(){this.Dispose();}
   RaiseEvent(name,event=null){if(typeof name!=='string'){event=name;name=event.RoutedEvent?.Name??'Click';}return this.raise(name,event);}
   raise(name,event=null){const args=event instanceof RoutedEventArgs?event:new RoutedEventArgs(this,event);let current=this;while(current){current[name]?.Invoke(current,args);if(args.Handled)break;current=current.parent;}return args;}
   mount(host){if(this._disposed)throw new Error('Cannot mount a disposed control');if(!this.element)this.createElement();if(this.element.parentNode!==host)host.append(this.element);this.render();if(!this._loaded){this._loaded=true;queueMicrotask(()=>{if(!this._disposed)this.Loaded.Invoke(this,new RoutedEventArgs(this));});}return this.element;}
   createElement(){
-    const t=this.type,tags={Button:'button',RepeatButton:'button',ToggleButton:'button',TextBlock:'div',Label:'label',TextBox:this.AcceptsReturn?'textarea':'input',AutoCompleteBox:'input',NumericUpDown:'input',Slider:'input',ScrollBar:'input',ProgressBar:'progress',ComboBox:'select',Separator:'hr',CheckBox:'label',RadioButton:'label',ToggleSwitch:'label',Expander:'details',Image:'img',DatePicker:'input',CalendarDatePicker:'input',Calendar:'input',TimePicker:'input',Run:'span',LineBreak:'br'};
+    const t=this.type,tags={Button:'button',RepeatButton:'button',ToggleButton:'button',TextBlock:'div',Label:'label',TextBox:this.AcceptsReturn?'textarea':'input',AutoCompleteBox:'input',NumericUpDown:'input',Slider:'input',ScrollBar:'input',ProgressBar:'div',ComboBox:'select',Separator:'hr',CheckBox:'label',RadioButton:'label',ToggleSwitch:'label',Expander:'details',Image:'img',DatePicker:'input',CalendarDatePicker:'input',Calendar:'input',TimePicker:'input',Run:'span',LineBreak:'br'};
     this.element=document.createElement(tags[t]??'div');this.element.id=this.uid;this.container=this.element;
     if(['Button','RepeatButton','ToggleButton'].includes(t))this.element.type='button';
     if(['CheckBox','RadioButton','ToggleSwitch'].includes(t)){this.input=document.createElement('input');this.input.type=t==='RadioButton'?'radio':'checkbox';if(t==='ToggleSwitch')this.input.setAttribute('role','switch');this.label=document.createElement('span');this.element.append(this.input,this.label);this.container=this.label;
@@ -82,9 +88,10 @@ export class Control extends StyledObject {
   }
   enforceRadioGroup(){if(this.type!=='RadioButton'||!this.IsChecked)return;const group=this.GroupName||this.parent?.uid||this.uid;const root=this.root;root._radios??=new Set();for(const radio of root._radios)if(radio!==this&&(radio.GroupName||radio.parent?.uid||radio.uid)===group)radio.IsChecked=false;root._radios.add(this);}
   select(index,event){if(index<0||index>=this.currentItems.length)return;this.SelectedIndex=index;this.SelectedItem=this.currentItems[index];this.raise('SelectionChanged',event);}
+  get Percentage(){return progressState(this.Minimum,this.Maximum,this.Value).percentage;}
   get currentItems(){return Array.from(this.ItemsSource??this.Items??[]);}
   contentText(){const content=this.Content??this.Text??'';return content instanceof Control?content.element?.textContent??'':accessText(content);}
-  renderContent(){const content=this.Content;const controls=content instanceof Control?[content]:this.Children.filter(x=>x instanceof Control);if(controls.length){for(const child of controls){child.parent=this;child.mount(this.container);}for(const node of [...this.container.childNodes])if(!controls.some(c=>c.element===node))node.remove();}else {const text=this.contentText();if(this.container.textContent!==text)this.container.textContent=text;}}
+  renderContent(){if(renderDataContent(this))return;const content=this.Content;const controls=content instanceof Control?[content]:this.Children.filter(x=>x instanceof Control);if(controls.length){for(const child of controls){if(!(this.type==='ContentPresenter'&&this.TemplatedParent))child.parent=this;child.mount(this.container);}for(const node of [...this.container.childNodes])if(!controls.some(c=>c.element===node))node.remove();}else {const text=this.contentText();if(this.container.textContent!==text)this.container.textContent=text;}}
   itemControl(item,index){const old=this._itemCache[index];if(old&&old.item===item)return old.control;old?.control?.Dispose();let control;if(item instanceof Control)control=item;else if(this.ItemTemplate?.build)control=this.ItemTemplate.build(item,this);else {control=new Control('TextBlock');control.Text=formatValue(item);}control.parent=this;this._itemCache[index]={item,control};return control;}
   renderItems(){
     const items=this.currentItems,t=this.type;
@@ -119,14 +126,16 @@ export class Control extends StyledObject {
     for(let i=items.length;i<this._itemCache.length;i++)this._itemCache[i]?.control?.Dispose();this._itemCache.length=items.length;
   }
   render(){
-    if(!this.element||this._disposed)return;applyStyles(this);const t=this.type,element=this.element,dirty=this._dirty;applyCommon(this);
+    if(!this.element||this._disposed)return;applyControlTheme(this);applyStyles(this);const t=this.type,element=this.element,dirty=this._dirty;applyCommon(this);
     if(this.input)this.input.disabled=!this.effectiveEnabled;if('disabled'in element)element.disabled=!this.effectiveEnabled||(!!this.Command&&this.Command.CanExecute?.(this.CommandParameter)===false);
+    if(renderControlTemplate(this)){this._dirty.clear();return;}
     if(['StackPanel','WrapPanel'].includes(t)){element.style.flexDirection=this.Orientation==='Horizontal'?'row':'column';element.style.gap=dimension(this.Spacing);}
     if(t==='Grid'){element.style.gridTemplateColumns=gridTracks(this.ColumnDefinitions);element.style.gridTemplateRows=gridTracks(this.RowDefinitions);element.style.rowGap=dimension(this.RowSpacing);element.style.columnGap=dimension(this.ColumnSpacing);}
     if(t==='DockPanel'){element.style.display=this.IsVisible===false?'none':'grid';element.style.gridTemplateColumns='auto minmax(0,1fr) auto';element.style.gridTemplateRows='auto minmax(0,1fr) auto';for(const child of this.Children){if(!(child instanceof Control))continue;const dock=child.GetValue('DockPanel.Dock')??'Left';child.mount(this.container);const areas={Top:'1 / 1 / 2 / 4',Bottom:'3 / 1 / 4 / 4',Left:'2 / 1 / 3 / 2',Right:'2 / 3 / 3 / 4'};child.element.style.gridArea=this.LastChildFill&&child===this.Children.at(-1)?'2 / 2 / 3 / 3':areas[dock];}}
     if(t==='TextBlock'||t==='Run'){if(element.textContent!==formatValue(this.Text))element.textContent=formatValue(this.Text);element.style.textAlign=this.TextAlignment?.toLowerCase()??'';element.style.whiteSpace=this.TextWrapping==='NoWrap'?'nowrap':'pre-wrap';if(this.TextTrimming&&this.TextTrimming!=='None'){element.style.overflow='hidden';element.style.textOverflow='ellipsis';}}
     else if(['TextBox','AutoCompleteBox'].includes(t)){if(element.value!==String(this.Text??''))element.value=String(this.Text??'');element.placeholder=this.Watermark??'';element.readOnly=!!this.IsReadOnly;if(this.MaxLength>0)element.maxLength=this.MaxLength;else element.removeAttribute('maxlength');}
-    else if(['Slider','ScrollBar','NumericUpDown','ProgressBar'].includes(t)){element.min=this.Minimum??0;element.max=this.Maximum??100;if(t==='ProgressBar'&&this.IsIndeterminate)element.removeAttribute('value');else element.value=this.Value??0;if(t!=='ProgressBar')element.step=this.IsSnapToTickEnabled?this.TickFrequency??1:t==='NumericUpDown'?this.Increment??1:'any';if(t==='NumericUpDown')element.readOnly=!!this.IsReadOnly;if(this.Orientation==='Vertical'&&(t==='Slider'||t==='ScrollBar'))element.style.writingMode='vertical-lr';else element.style.writingMode='';}
+    else if(t==='ProgressBar')renderProgress(this);
+    else if(['Slider','ScrollBar','NumericUpDown'].includes(t)){element.min=this.Minimum??0;element.max=this.Maximum??100;if(t==='ProgressBar'&&this.IsIndeterminate)element.removeAttribute('value');else element.value=this.Value??0;if(t!=='ProgressBar')element.step=this.IsSnapToTickEnabled?this.TickFrequency??1:t==='NumericUpDown'?this.Increment??1:'any';if(t==='NumericUpDown')element.readOnly=!!this.IsReadOnly;if(this.Orientation==='Vertical'&&(t==='Slider'||t==='ScrollBar'))element.style.writingMode='vertical-lr';else element.style.writingMode='';}
     else if(['CheckBox','RadioButton','ToggleSwitch'].includes(t)){this.input.checked=!!this.IsChecked;this.input.indeterminate=this.IsChecked==null;this.input.setAttribute('aria-checked',this.IsChecked==null?'mixed':String(!!this.IsChecked));if(t==='RadioButton'){this.input.name=(this.root.uid+'-'+(this.GroupName||this.parent?.uid||this.uid));this.enforceRadioGroup();}this.renderContent();}
     else if(['DatePicker','CalendarDatePicker','Calendar'].includes(t)){const date=this.SelectedDate?.value??this.SelectedDate;const value=date instanceof Date?`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`:date??'';if(element.value!==value)element.value=value;}
     else if(t==='TimePicker')element.value=this.SelectedTime??'';
@@ -144,7 +153,7 @@ export class Control extends StyledObject {
     if(this.Theme?.kind==='presetTheme')element.classList.add('jb-scroll-page');
     this._dirty.clear();
   }
-  Dispose(){if(this._disposed)return;this.Unloaded.Invoke(this,new RoutedEventArgs(this));for(const child of this.visualChildren)child.Dispose();for(const c of this._itemCache)c?.control?.Dispose();this._offItems?.();this._offCommand?.();this.root._radios?.delete(this);this.element?.remove();queue.delete(this);for(const name of eventNames)this[name].clear();super.Dispose();}
+  Dispose(){if(this._disposed)return;this.Unloaded.Invoke(this,new RoutedEventArgs(this));releaseControlTemplate(this);for(const child of this.visualChildren)child.Dispose();for(const c of this._itemCache)c?.control?.Dispose();this._offItems?.();this._offCommand?.();this.Resources.Dispose();this.root._radios?.delete(this);this.element?.remove();queue.delete(this);for(const name of eventNames)this[name].clear();super.Dispose();}
 }
 const properties=new Set([...commonProperties,...Object.values(controlDefinitions).flatMap(p=>p.split(' ')),'Content','Child','Header','Text','DataContext']);
 for(const property of properties){if(!property||property.includes('.')||property in Control.prototype||['Children','Items','Resources','Styles'].includes(property))continue;Object.defineProperty(Control.prototype,property,{get(){return this.GetValue(property);},set(value){this.SetValue(property,value);},configurable:true});}

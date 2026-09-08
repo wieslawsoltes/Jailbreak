@@ -1,3 +1,5 @@
+import { matches } from './selectors.js';
+export { matches } from './selectors.js';
 export function thickness(value){
   if(value==null)return '';
   if(typeof value==='object'&&'Left'in value)return `${value.Top}px ${value.Right}px ${value.Bottom}px ${value.Left}px`;
@@ -7,15 +9,7 @@ export function thickness(value){
 export function dimension(value){if(value==null||value==='Auto'||value==='NaN'||value===Infinity)return '';if(typeof value==='number')return value+'px';if(/^\d+(\.\d+)?%$/.test(value))return value;const n=Number(value);return Number.isFinite(n)?n+'px':'';}
 export function brush(value){if(value==null)return '';if(typeof value==='object')value=value.Color??value.color??value.value??String(value);value=String(value);if(/^#[0-9a-f]{8}$/i.test(value))return `rgba(${parseInt(value.slice(3,5),16)},${parseInt(value.slice(5,7),16)},${parseInt(value.slice(7,9),16)},${parseInt(value.slice(1,3),16)/255})`;if(/^[A-Za-z]+$/.test(value)||/^#[\da-f]{3,6}$/i.test(value)||/^rgba?\([\d.,%\s]+\)$/.test(value))return value;return '';}
 export function gridTracks(value){if(!value)return '';if(Array.isArray(value))value=value.map(x=>x.Height??x.Width??'*').join(',');return String(value).split(',').map(s=>{s=s.trim();if(s==='Auto')return 'max-content';if(s.endsWith('*'))return `minmax(0,${Number(s.slice(0,-1))||1}fr)`;return dimension(s)||'auto';}).join(' ');}
-function partMatches(control,selector){
-  const type=selector.match(/^[\w]+/)?.[0];if(type&&type!==control.type&&type!==control.$type?.split('.').at(-1))return false;
-  for(const name of selector.matchAll(/\.([\w-]+)/g))if(!String(control.Classes??'').split(/\s+/).includes(name[1]))return false;
-  for(const name of selector.matchAll(/#([\w-]+)/g))if(control.Name!==name[1])return false;
-  for(const name of selector.matchAll(/:([\w-]+)/g)){const p=name[1];if(p==='disabled'&&control.effectiveEnabled)return false;else if(p==='checked'&&!control.IsChecked)return false;else if(!['disabled','checked'].includes(p)&&!control.pseudos.has(p))return false;}
-  return true;
-}
-export function matches(control,selector){return String(selector).split(',').some(alternative=>{const parts=alternative.trim().split(/\s+/);let current=control;if(!partMatches(current,parts.pop()))return false;while(parts.length){const part=parts.pop();current=current.parent;while(current&&!partMatches(current,part))current=current.parent;if(!current)return false;}return true;});}
-export function applyStyles(control){const chain=[];for(let c=control;c;c=c.parent)chain.unshift(c);const styles=chain.flatMap(c=>c.Styles??[]),next=new Map();for(let i=0;i<styles.length;i++){const style=styles[i];if(!matches(control,style.selector))continue;for(const [property,value]of Object.entries(style.setters))next.set(`${i}:${property}`,{property,value,priority:100+i/1000});}
+export function applyStyles(control){const chain=[];for(let c=control;c;c=c.parent)chain.unshift(c);const styles=chain.flatMap(c=>c.Styles??[]),next=new Map();for(let i=0;i<styles.length;i++){const style=styles[i];if(!matches(control,style.selector))continue;for(const [property,value]of Object.entries(style.resolveSetters?.(control)??style.setters))next.set(`${i}:${property}`,{property,value,priority:100+i/1000});}
   for(const [key,old]of control._styleValues??[])if(!next.has(key))control.ClearValue(old.property,old.priority);
   for(const {property,value,priority}of next.values())control.SetValue(property,value,priority);control._styleValues=next;
 }
