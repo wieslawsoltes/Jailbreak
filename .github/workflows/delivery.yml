@@ -6,16 +6,13 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
-  pages: write
-  id-token: write
+  actions: write
 concurrency:
   group: jailbreak-delivery
   cancel-in-progress: false
 jobs:
   source:
     runs-on: ubuntu-latest
-    outputs:
-      site: ${{ steps.site.outputs.ready }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,39 +26,15 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           python3 .delivery/apply.py
-      - name: Test source before publishing commits
+      - name: Validate source before publishing commits
         run: |
-          if test -f package.json; then npm test; fi
+          npm test
+          npm run gate
+          npm run build
+          npm run check
       - name: Publish source commits
         run: git push origin HEAD:main
-      - name: Build static IDE
-        id: site
-        run: |
-          if test -f scripts/build.mjs; then
-            npm run build
-            echo 'ready=true' >> "$GITHUB_OUTPUT"
-          fi
-      - uses: actions/upload-artifact@v4
-        if: steps.site.outputs.ready == 'true'
-        with:
-          name: jailbreak-static-site
-          path: site
-      - uses: actions/upload-pages-artifact@v3
-        if: steps.site.outputs.ready == 'true'
-        with:
-          path: site
-  deploy:
-    if: needs.source.outputs.site == 'true'
-    needs: source
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - name: Deploy IDE
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Verify browsers and deploy through the canonical pipeline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run toolchain.yml --ref main
