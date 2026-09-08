@@ -1,12 +1,12 @@
 import { readWatch, snapshot } from './watch.js';
 import { liveProperties } from './live-properties.js';
 /** Per-application developer session. Nothing here is enabled for release execution. */
-export function createDevelopmentSession(JB,{debug={},report=()=>{},nativeBreaks=true,breakpoints=[],watches=[]}={}){
+export function createDevelopmentSession(JB,{debug={},report=()=>{},nativeBreaks=true,breakpoints=[],watches=[],breakOnThrow=false}={}){
   const origins=new WeakMap(),bindings=new WeakMap(),boundMethods=new WeakMap();let points=new Map(),counts=new Map(),lastLocals=null,selected=null,picking=false,breakNext=false,disposed=false,revision=0;
   const originalMethod=JB.method;
   JB.method=(object,name)=>{let cache=boundMethods.get(object);if(!cache){cache=new Map();boundMethods.set(object,cache);}if(!cache.has(name))cache.set(name,(...args)=>object[name](...args));return cache.get(name);};
   const emit=(kind,payload)=>{if(!disposed)report(kind,payload);};
-  function configure(settings={}){if(settings.debug){debug=settings.debug;points=new Map((debug.sites??[]).map(p=>[p.id,p]));}if(settings.breakpoints)breakpoints=settings.breakpoints.slice(0,1000);if(settings.watches)watches=settings.watches.slice(0,50);if('nativeBreaks'in settings)nativeBreaks=!!settings.nativeBreaks;counts.clear();}
+  function configure(settings={}){if(settings.debug){debug=settings.debug;points=new Map((debug.sites??[]).map(p=>[p.id,p]));}if(settings.breakpoints)breakpoints=settings.breakpoints.slice(0,1000);if(settings.watches)watches=settings.watches.slice(0,50);if('nativeBreaks'in settings)nativeBreaks=!!settings.nativeBreaks;if('breakOnThrow'in settings)breakOnThrow=!!settings.breakOnThrow;counts.clear();}
   configure({debug});
   const registry=()=>{const result=[],seen=new Set();function visit(c,parent=null){if(!c||c._disposed||seen.has(c)||result.length>=5000)return;seen.add(c);result.push({c,parent});for(const child of c.visualChildren??[])visit(child,c.uid);}visit(JB.root);return result;};
   const resolve=id=>registry().find(e=>e.c.uid===id)?.c;
@@ -42,10 +42,19 @@ export function createDevelopmentSession(JB,{debug={},report=()=>{},nativeBreaks
     }
     return {id:c.uid,type:c.constructor.$fullName??c.type,source:origins.get(c)??null,template:!!c.TemplatedParent,properties:values};
   }
-  let overlay=null,resizeObserver=null;
+  let overlay=null,resizeObserver=null,drag=null;
+  function resizeHandle(){
+    const handle=document.createElement('button');handle.type='button';handle.setAttribute('aria-label','Resize selected visual');handle.style.cssText='position:absolute;right:-6px;bottom:-6px;width:12px;height:12px;padding:0;pointer-events:auto;cursor:nwse-resize;border:1px solid #fff;background:#7666eb;touch-action:none';
+    handle.addEventListener('pointerdown',event=>{if(!selected?.element)return;event.preventDefault();event.stopPropagation();const r=selected.element.getBoundingClientRect();drag={id:selected.uid,x:event.clientX,y:event.clientY,width:r.width,height:r.height};handle.setPointerCapture(event.pointerId);});
+    handle.addEventListener('pointermove',event=>{if(!drag)return;const width=Math.max(1,Math.round(drag.width+event.clientX-drag.x)),height=Math.max(1,Math.round(event.shiftKey?width*drag.height/drag.width:drag.height+event.clientY-drag.y));Object.assign(overlay.style,{width:width+'px',height:height+'px'});});
+    handle.addEventListener('pointerup',event=>{if(!drag)return;const value={id:drag.id,width:parseFloat(overlay.style.width),height:parseFloat(overlay.style.height)};drag=null;handle.releasePointerCapture(event.pointerId);highlight();emit('resize',value);});
+    handle.addEventListener('pointercancel',()=>{drag=null;highlight();});
+    handle.addEventListener('keydown',event=>{if(!selected?.element||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key))return;event.preventDefault();const r=selected.element.getBoundingClientRect(),delta=event.shiftKey?10:1;emit('resize',{id:selected.uid,width:Math.max(1,Math.round(r.width+({ArrowLeft:-delta,ArrowRight:delta}[event.key]??0))),height:Math.max(1,Math.round(r.height+({ArrowUp:-delta,ArrowDown:delta}[event.key]??0)))});});
+    overlay.append(handle);
+  }
   function highlight(){if(!overlay||!selected?.element)return;const r=selected.element.getBoundingClientRect();Object.assign(overlay.style,{left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px'});}
   function select(id){selected=resolve(id);if(!selected)throw new Error('Visual selection is no longer available');
-    if(globalThis.document){if(!overlay){overlay=document.createElement('div');overlay.setAttribute('aria-hidden','true');overlay.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;border:2px solid #7666eb;box-sizing:border-box;background:#7666eb0d';document.body.append(overlay);}
+    if(globalThis.document){if(!overlay){overlay=document.createElement('div');overlay.setAttribute('role','group');overlay.setAttribute('aria-label','Design selection');overlay.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;border:2px solid #7666eb;box-sizing:border-box;background:#7666eb0d';document.body.append(overlay);resizeHandle();}
       resizeObserver?.disconnect();if(globalThis.ResizeObserver){resizeObserver=new ResizeObserver(highlight);resizeObserver.observe(selected.element);}highlight();}
     const result=inspect(id);emit('selected',result);return result;
   }
@@ -68,6 +77,7 @@ export function createDevelopmentSession(JB,{debug={},report=()=>{},nativeBreaks
   }
   const api={configure,hit,inspect,tree,select,applyReload,watchResults,
     read(fn){try{return fn();}catch{return '[unavailable]';}},
+    throwing(error,point){emit('debug-exception',{point,error:snapshot(error),message:error?.message??String(error),stack:error?.stack});if(breakOnThrow&&nativeBreaks){debugger;}return error;},
     get revision(){return revision;},
     register(control,source){if(control?.uid){origins.set(control,{...source});if(source.language==='xaml'&&hitPoint(source,()=>({this:control}))) {debugger;}}return control;},
     created(value,source){if(value?.uid){origins.set(value,{...source});emit('constructed',{id:value.uid,source});}return value;},

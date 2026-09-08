@@ -1,6 +1,6 @@
 import {inspectSource,editProperty,insertControl,removeControl,moveControl,EditHistory,palette} from './designer.js';
 import {planReload,reloadScript} from './reload.js';
-import {mappedScript} from './source-map.js';
+import {mappedScript,updateGeneratedLocations} from './source-map.js';
 
 /** IDE client. The preview owns runtime objects; this client only sees serializable records. */
 export function createDevelopmentWorkbench({document:doc=globalThis.document,getFiles,getActive,openFile,applySource,build,persist,send,showGenerated=()=>{}}){
@@ -55,7 +55,7 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
       if(name==='Name'||name==='x:Name'||name==='x:Class')continue;const row=el('div');row.className='dev-property';const label=el('label',name),input=el('input');input.value=p.language==='csharp'?p.literal:p.literal??p.value;input.disabled=!p.editable;input.setAttribute('aria-label','Design '+name);const apply=el('button','Apply');apply.type='button';apply.disabled=!p.editable;apply.onclick=()=>guarded(()=>sourceEdit((text,file,offset)=>editProperty(text,file,offset,name,input.value)));label.append(input);row.append(el('span',name),input,apply);propertyList.append(row);
     }}catch(error){propertyList.append(el('p',error.message));}
   }
-  function accept(next,sources){running=next;runningFiles={...sources};renderBreakpoints();}
+  function accept(next,sources){updateGeneratedLocations(next.code,next.debug);running=next;runningFiles={...sources};renderBreakpoints();}
   button.onclick=()=>{panel.hidden=!panel.hidden;if(!panel.hidden)send('inspect');};close.onclick=()=>panel.hidden=true;
   enabled.onchange=()=>{sync();tell('Development mode changed. Compile to restart with the selected instrumentation.');build(true);};hot.onchange=native.onchange=throwBreak.onchange=sync;watches.onchange=sync;
   restart.onclick=()=>build(true);refresh.onclick=()=>send('inspect');pick.onclick=()=>{selecting=!selecting;pick.setAttribute('aria-pressed',String(selecting));send('pick',{value:selecting});};
@@ -72,7 +72,7 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
     failed(){tell(running?'Build failed; previous running app was preserved.':'Build failed.');},
     stop(){running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();},
     tryReload(next,sources,forceRestart=false){if(forceRestart||!running||!settings.enabled||!settings.hotReload)return false;if(pending){tell('A reload is already pending; restart or retry after its result.');return true;}
-      const plan=planReload(running,next);if(!plan.compatible){tell('Restart required: '+plan.reasons.join('; '));return true;}
+      updateGeneratedLocations(next.code,next.debug);const plan=planReload(running,next);if(!plan.compatible){tell('Restart required: '+plan.reasons.join('; '));return true;}
       const script=reloadScript(plan,running,next,revision+1);pending={next,sources:{...sources}};send('reload',{script:mappedScript(script,next.debug,sources)});tell('Applying transactional hot reload…');return true;
     },
     receive(message){const {event,payload}=message??{};

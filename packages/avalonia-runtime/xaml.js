@@ -19,7 +19,8 @@ export function createXamlRuntime(api, types, documents) {
   }
   function set(target,name,value){if(name==='Child')name='Content';if(target instanceof Control)target.SetValue(name,value);else target[name]=value;}
   function attr(target,name,value,scope){
-    if(eventNames.includes(name)){scope.pending.push(()=>{const handler=scope.owner[value];if(typeof handler!=='function')throw new Error('JB3004: Event handler '+value+' was not found');target.track(target[name].add(handler.bind(scope.owner)));});return;}
+    if(value?.kind)api.dev?.binding(target,name,value);
+    if(eventNames.includes(name)){scope.pending.push(()=>{const handler=scope.owner[value];if(typeof handler!=='function')throw new Error('JB3004: Event handler '+value+' was not found');target.track(target[name].add(api.dev?api.method(scope.owner,value):handler.bind(scope.owner)));});return;}
     if(value?.kind==='templateBinding'){
       if(!scope.templatedParent)throw new Error('JB3014: TemplateBinding has no templated parent');
       value={...value,kind:'binding',RelativeSource:{mode:'TemplatedParent'},Mode:'OneWay',priority:50};
@@ -101,6 +102,7 @@ export function createXamlRuntime(api, types, documents) {
     if(node.kind==='text')return node.text;if(node.kind==='object')return object(node,parent,scope);
     const Type=resolveType(node.type);if(typeof Type!=='function')throw new Error('JB3006: Type '+node.type+' is not registered');
     const target=existing??new Type();if(target instanceof Control){if(!existing)scope.created.push(target);target.parent=parent instanceof Control?parent:null;target._resourceParent=parent;target._nameScope=scope.names;if(scope.templatedParent)target.TemplatedParent=scope.templatedParent;}
+    if(node.source)api.dev?.register(target,node.source);
     const name=node.attributes.Name;if(name){scope.names.set(name,target);if(scope.exportNames)scope.owner[name]=target;}
     for(const child of node.children)if(child.kind==='property'&&['Resources','Styles'].includes(child.property))property(target,child,scope);
     for(const [name,value]of Object.entries(node.attributes))attr(target,name,value,scope);
