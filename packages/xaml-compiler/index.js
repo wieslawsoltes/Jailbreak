@@ -92,7 +92,7 @@ export function compileXaml(text, options = {}) {
       const allowed={ControlTemplate:['TargetType'],ControlTheme:['TargetType','BasedOn'],StyleInclude:['Source'],ResourceInclude:['Source']}[type];
       for(const attr of Object.keys(attributes))if(!allowed.includes(attr))report('JB1114',`Unsupported ${type} property ${attr}`,node);
     }
-    return {kind:structural?'object':'control',type,key,attributes,children:node.children.map(c=>lower(c,ns,childContext)).filter(Boolean),span:node.span};
+    return {source:options.debug?{...source.location(node.span.start),language:'xaml'}:undefined,kind:structural?'object':'control',type,key,attributes,children:node.children.map(c=>lower(c,ns,childContext)).filter(Boolean),span:node.span};
   }
   const root=parsed.root?lower(parsed.root):null;
   function validate(node){if(!node)return;if(['DataTemplate','ControlTemplate'].includes(node.type)){const children=node.children.flatMap(c=>c.kind==='property'&&c.property==='Content'?c.children:[c]).filter(c=>c.kind!=='text');if(children.length!==1||children[0].kind!=='control')report('JB1115',node.type+' requires exactly one visual root',node);}

@@ -59,12 +59,12 @@ export function compileProject(input,options={}) {
   const sourceFiles=[...selected].sort(),csFiles=sourceFiles.filter(p=>p.endsWith('.cs')).map(path=>({path,text:workspace.get(path)}));
   const declarations=csFiles.flatMap(f=>parseCSharp(f.text,f.path).ast?.declarations??[]);
   const typeNames=[...declarations.map(d=>d.fullName),...(options.externalTypes??[])],xaml=[],xamlNames={};
-  for(const path of sourceFiles.filter(p=>/\.a?xaml$/i.test(p))){const result=compileXaml(workspace.get(path),{path,customTypes:typeNames});xaml.push(result);bag.merge(result.diagnostics);if(result.ir.className){xamlNames[result.ir.className]=result.ir.names;if(!typeNames.includes(result.ir.className)){
+  for(const path of sourceFiles.filter(p=>/\.a?xaml$/i.test(p))){const result=compileXaml(workspace.get(path),{path,customTypes:typeNames,debug:options.debug});xaml.push(result);bag.merge(result.diagnostics);if(result.ir.className){xamlNames[result.ir.className]=result.ir.names;if(!typeNames.includes(result.ir.className)){
     const pieces=result.ir.className.split('.'),name=pieces.pop(),ns=pieces.join('.');
     csFiles.push({path:path+'.g.cs',text:(ns?'namespace '+ns+'; ':'')+`public partial class ${name} : ${result.ir.root.type} { }`});
   }}}
   const linked=linkXamlIncludes(xaml.map(x=>({...x.ir,sourceText:workspace.get(x.ir.path)})),{assemblies:options.xamlAssemblies??{}});bag.merge(linked.diagnostics);
-  const cs=compileCSharp(csFiles,{xamlNames,externalTypes:options.externalTypes});bag.merge(cs.diagnostics);
+  const cs=compileCSharp(csFiles,{xamlNames,externalTypes:options.externalTypes,debug:options.debug});bag.merge(cs.diagnostics);
   let entry=options.entryXaml?xaml.find(x=>x.ir.path===options.entryXaml||x.ir.className===options.entryXaml):null;
   if(!entry&&options.entryType)entry=xaml.find(x=>x.ir.className===options.entryType);
   if(!entry&&!options.entryXaml&&!options.entryType)entry=xaml.find(x=>x.ir.root?.type==='Window')??xaml.find(x=>x.ir.root?.type!=='Application'&&x.ir.root?.kind==='control');
@@ -72,7 +72,9 @@ export function compileProject(input,options={}) {
   if(options.entryXaml&&!entry)bag.add('JB4008',`Entry XAML '${options.entryXaml}' was not found`,new SourceFile(options.entryXaml,''));
   const assets={};for(const path of paths)if(workspace.get(path).startsWith('data:'))assets[path]=workspace.get(path);
   const manifest={format:1,entryXaml:entry?.ir.className??entry?.ir.path??null,entryType:options.entryType??entry?.ir.className??null,assets,xamlIncludes:linked.dependencies,projects:projects.map(p=>p.path)};
+  const debug=options.debug?{...cs.debug,xamlSites:[]}:undefined;
+  if(debug){const visit=node=>{if(node?.source)debug.xamlSites.push(node.source);for(const child of node?.children??[])visit(child);};for(const doc of xaml)visit(doc.ir.root);}
   const code=bag.hasErrors?'':[...xaml.map(x=>`JB.registerXaml(${escapeJs(x.ir.className??x.ir.path)}, ${escapeJs(x.ir)});`),cs.code].filter(Boolean).join('\n\n');
-  return {success:!bag.hasErrors,code,manifest,diagnostics:bag.items,xaml:xaml.map(x=>x.ir),types:cs.types,files:sourceFiles,stats:{milliseconds:performance.now()-start,sourceBytes:sourceFiles.reduce((n,p)=>n+workspace.get(p).length,0),generatedBytes:code.length,files:sourceFiles.length}};
+  return {success:!bag.hasErrors,code,manifest,diagnostics:bag.items,debug,xaml:xaml.map(x=>x.ir),types:cs.types,files:sourceFiles,stats:{milliseconds:performance.now()-start,sourceBytes:sourceFiles.reduce((n,p)=>n+workspace.get(p).length,0),generatedBytes:code.length,files:sourceFiles.length}};
 }
 export function executable(result){if(!result.success)throw new Error('Cannot run an unsuccessful compilation');if(!result.manifest.entryXaml&&!result.manifest.entryType)throw new Error('No UI entry point; this compilation is a library');return `(function(JB){\n${result.code}\nreturn JB.boot(${escapeJs(result.manifest)}, document.getElementById('app'));\n})(globalThis.Jailbreak);`;}

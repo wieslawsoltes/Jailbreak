@@ -30,7 +30,7 @@ export function compileCSharp(input, options={}) {
   const availableTypes=new Set([...declarations.keys(),...externalTypes]);
   const jsNames=new Map([...declarations].map(([name])=>[name,identifier(name)]));
   for(const name of externalTypes)if(!jsNames.has(name))jsNames.set(name,`(JB.types.get(${escapeJs(name)}))`);
-  const warnings=new Set();let current=null,currentSource=null;
+  const warnings=new Set(),debugSites=[],debugMethods=[];let current=null,currentSource=null,debugMethod='';
   const report=(code,message,node,severity='error')=>bag.add(code,message,currentSource??current?.source,node?.start??0,severity);
   function resolve(name,decl=current){
     if(availableTypes.has(name))return name;
@@ -137,7 +137,7 @@ export function compileCSharp(input, options={}) {
         let code=`new ${typeRef(t,e)}(${e.args.map(a=>expr(a,ctx)).join(',')})`;
         if(e.members?.length)code=`Object.assign(${code},{${e.members.map(m=>`${escapeJs(m.name)}:${expr(m.value,ctx)}`).join(',')}})`;
         if(e.items?.length)code=`JB.initializeCollection(${code},[${e.items.map(a=>a.kind==='initializerPair'?`[${a.items.map(x=>expr(x,ctx)).join(',')}]`:expr(a,ctx)).join(',')}])`;
-        return code;
+        return options.debug?`(JB.dev?JB.dev.created(${code},${escapeJs({...currentSource.location(e.start),language:'csharp'})}):${code})`:code;
       }
       case 'cast':{
         if(['int','short','byte','uint'].includes(e.type.name))return `JB.toInt(${expr(e.expression,ctx)})`;
@@ -161,27 +161,38 @@ export function compileCSharp(input, options={}) {
       default:report('JB2299',`Emitter missing expression '${e.kind}'`,e);return 'undefined';
     }
   }
+  function sequence(s,ctx){
+    if(!options.debug||!s)return '';
+    const location=(currentSource??current.source).location(s.start),id=debugSites.length;
+    debugSites.push({id,...location,language:'csharp',method:current.fullName+'.'+debugMethod});
+    const locals=[...ctx.locals.keys()].filter(n=>/^[A-Za-z_$][\w$]*$/.test(n));
+    return `\n/*@jb:${id}*/if(JB.dev?.hit(${id},()=>({this:${ctx.static?'null':'this'}${locals.map(n=>','+n+':JB.dev.read(()=>'+n+')').join('')}}))){debugger;}\n`;
+  }
+  function statementBody(s,ctx){
+    if(s?.kind==='block')return stmt(s,ctx);
+    return '{'+sequence(s,ctx)+stmt(s,ctx)+'}';
+  }
   function stmt(s,ctx){
     if(!s)return '{}';
     switch(s.kind){
-      case 'block':{const inner=clone(ctx);return '{\n'+s.statements.map(x=>stmt(x,inner)).join('\n')+'\n}';}
+      case 'block':{const inner=clone(ctx);return '{\n'+s.statements.map(x=>sequence(x,inner)+stmt(x,inner)).join('\n')+'\n}';}
       case 'empty':return ';';
       case 'expressionStatement':return expr(s.expression,ctx)+';';
-      case 'expressionBody':return '{ return '+expr(s.expression,ctx)+'; }';
+      case 'expressionBody':return '{ '+sequence(s,ctx)+'return '+expr(s.expression,ctx)+'; }';
       case 'local':{
         const parts=[];for(const v of s.variables){const type=s.type.name==='var'?{name:infer(v.init,ctx)??'object'}:s.type;const value=v.init?expr(v.init,ctx,type):defaultValue(type);ctx.locals.set(v.name,type);parts.push(`${v.name} = ${value}`);}return 'let '+parts.join(', ')+';';
       }
-      case 'if':return `if (${expr(s.test,ctx)}) ${stmt(s.consequent,clone(ctx))}${s.alternate?' else '+stmt(s.alternate,clone(ctx)):''}`;
+      case 'if':return `if (${expr(s.test,ctx)}) ${statementBody(s.consequent,clone(ctx))}${s.alternate?' else '+statementBody(s.alternate,clone(ctx)):''}`;
       case 'return':return 'return'+(s.expression?' '+expr(s.expression,ctx):'')+';';
-      case 'throw':return 'throw '+(s.expression?'('+expr(s.expression,ctx)+' ?? new JB.NullReferenceException())':ctx.catchName??'__error')+';';
+      case 'throw':{const value=s.expression?'('+expr(s.expression,ctx)+' ?? new JB.NullReferenceException())':ctx.catchName??'__error';return 'throw '+(options.debug?`(JB.dev?JB.dev.throwing(${value},${escapeJs({...currentSource.location(s.start),language:'csharp'})}):${value})`:value)+';';}
       case 'break':case 'continue':return s.kind+';';
-      case 'while':return `while (${expr(s.test,ctx)}) ${stmt(s.body,clone(ctx))}`;
-      case 'do':return `do ${stmt(s.body,clone(ctx))} while (${expr(s.test,ctx)});`;
-      case 'for':{const inner=clone(ctx),init=s.init?(s.init.kind==='local'?stmt(s.init,inner).replace(/;$/,''):expr(s.init,inner)):'';return `for (${init}; ${s.test?expr(s.test,inner):''}; ${s.update?expr(s.update,inner):''}) ${stmt(s.body,inner)}`;}
-      case 'foreach':{const inner=clone(ctx);inner.locals.set(s.name,s.type);return `for (const ${s.name} of JB.iterate(${expr(s.iterable,ctx)})) ${stmt(s.body,inner)}`;}
-      case 'switch':return `switch (${expr(s.expression,ctx)}) {\n${s.cases.map(c=>(c.value?'case '+expr(c.value,ctx):'default')+':\n'+c.statements.map(x=>stmt(x,ctx)).join('\n')).join('\n')}\n}`;
+      case 'while':return `while (${expr(s.test,ctx)}) ${statementBody(s.body,clone(ctx))}`;
+      case 'do':return `do ${statementBody(s.body,clone(ctx))} while (${expr(s.test,ctx)});`;
+      case 'for':{const inner=clone(ctx),init=s.init?(s.init.kind==='local'?stmt(s.init,inner).replace(/;$/,''):expr(s.init,inner)):'';return `for (${init}; ${s.test?expr(s.test,inner):''}; ${s.update?expr(s.update,inner):''}) ${statementBody(s.body,inner)}`;}
+      case 'foreach':{const inner=clone(ctx);inner.locals.set(s.name,s.type);return `for (const ${s.name} of JB.iterate(${expr(s.iterable,ctx)})) ${statementBody(s.body,inner)}`;}
+      case 'switch':return `switch (${expr(s.expression,ctx)}) {\n${s.cases.map(c=>(c.value?'case '+expr(c.value,ctx):'default')+':\n'+c.statements.map(x=>sequence(x,ctx)+stmt(x,ctx)).join('\n')).join('\n')}\n}`;
       case 'try':{
-        let code='try '+stmt(s.body,clone(ctx));if(s.catches.length){code+=' catch (__caught) {\n';for(let i=0;i<s.catches.length;i++){const c=s.catches[i],inner=clone(ctx);inner.locals.set(c.name,{name:c.type?.name??'Exception'});inner.catchName=c.name;code+=(i?'else ':'')+'if ('+(c.type?`JB.is(__caught,${typeRef(c.type)})`:'true')+') { const '+c.name+' = __caught; '+stmt(c.body,inner)+' }\n';}code+='else { throw __caught; }\n}';}if(s.finalizer)code+=' finally '+stmt(s.finalizer,clone(ctx));return code;
+        let code='try '+statementBody(s.body,clone(ctx));if(s.catches.length){code+=' catch (__caught) {\n';for(let i=0;i<s.catches.length;i++){const c=s.catches[i],inner=clone(ctx);inner.locals.set(c.name,{name:c.type?.name??'Exception'});inner.catchName=c.name;code+=(i?'else ':'')+'if ('+(c.type?`JB.is(__caught,${typeRef(c.type)})`:'true')+') { const '+c.name+' = __caught; '+stmt(c.body,inner)+' }\n';}code+='else { throw __caught; }\n}';}if(s.finalizer)code+=' finally '+stmt(s.finalizer,clone(ctx));return code;
       }
       default:report('JB2298',`Emitter missing statement '${s.kind}'`,s);return ';';
     }
@@ -201,7 +212,7 @@ export function compileCSharp(input, options={}) {
     for(const m of decl.members)if(m.type&&['long','ulong','decimal','dynamic'].includes(m.type.name))report('JB2212',`Type '${m.type.name}' requires an extended numeric/dynamic backend`,m);
     const classBases=decl.bases.filter(b=>!interfaces.has(b.name.split('.').at(-1))&&declarations.get(resolve(b.name))?.kind!=='interface');
     const base=classBases.length?typeRef(classBases[0]):'JB.Object';const body=[];
-    for(const m of decl.members){currentSource=m.source??decl.source;const stat=m.mods.includes('static')||m.mods.includes('const'),ctx=context({static:stat});
+    for(const m of decl.members){currentSource=m.source??decl.source;debugMethod=m.name;const stat=m.mods.includes('static')||m.mods.includes('const'),ctx=context({static:stat});
       if(m.kind==='field')body.push(`${stat?'static ':''}${m.name} = ${m.init?expr(m.init,ctx,m.type):defaultValue(m.type)};`);
       if(m.kind==='event')body.push(`${stat?'static ':''}${m.name} = new JB.Event();`);
       if(m.kind==='property'){
@@ -211,24 +222,32 @@ export function compileCSharp(input, options={}) {
       }
     }
     const constructors=decl.members.filter(m=>m.kind==='constructor');
-    const ctorBody=[];for(const m of constructors){currentSource=m.source??decl.source;const ctx=context();for(const p of m.parameters)ctx.locals.set(p.name,p.type);const min=m.parameters.filter(p=>!p.value&&!p.rest).length,max=m.parameters.some(p=>p.rest)?Infinity:m.parameters.length;
+    const ctorBody=[];for(const m of constructors){currentSource=m.source??decl.source;debugMethod=m.name;const ctx=context();for(const p of m.parameters)ctx.locals.set(p.name,p.type);const min=m.parameters.filter(p=>!p.value&&!p.rest).length,max=m.parameters.some(p=>p.rest)?Infinity:m.parameters.length;
       if(m.initializer&&constructors.length>1)report('JB2213','Multiple constructors with explicit base initializers are not implemented',m);
       ctorBody.push({m,ctx,min,max});}
-    if(constructors.length<=1){const c=ctorBody[0],params=c?c.m.parameters.map(p=>(p.rest?'...':'')+p.name+(p.value?' = '+expr(p.value,c.ctx):'')).join(','):'';
+    if(constructors.length<=1){const c=ctorBody[0];if(c){currentSource=c.m.source??decl.source;debugMethod='.ctor';}const params=c?c.m.parameters.map(p=>(p.rest?'...':'')+p.name+(p.value?' = '+expr(p.value,c.ctx):'')).join(','):'';
       const superArgs=c?.m.initializer?.args.map(a=>expr(a,c.ctx)).join(',')??'';
       body.push(`constructor(${params}) { super(${superArgs}); ${c?stmt(c.m.body,c.ctx):(options.xamlNames?.[decl.fullName]?'this.InitializeComponent();':'')} }`);
     } else {body.push(`constructor(...__args) { super();\n${ctorBody.map((c,i)=>(i?'else ':'')+`if (__args.length >= ${c.min} && __args.length <= ${c.max===Infinity?'Infinity':c.max}) { const [${c.m.parameters.map(p=>(p.rest?'...':'')+p.name+(p.value?' = '+expr(p.value,c.ctx):'')).join(',')}] = __args; ${stmt(c.m.body,c.ctx)} }`).join('\n')} else { throw new JB.ArgumentException('No constructor matches argument count'); } }`);}
     const groups=new Map();for(const m of decl.members.filter(m=>m.kind==='method')){const key=(m.mods.includes('static')?'static:':'')+m.name;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(m);}
     for(const group of groups.values()){
-      const arities=new Set();for(const m of group){currentSource=m.source??decl.source;const ctx=context({static:m.mods.includes('static'),async:m.mods.includes('async')});for(const p of m.parameters)ctx.locals.set(p.name,p.type);
+      const arities=new Set();for(const m of group){currentSource=m.source??decl.source;debugMethod=m.name;const ctx=context({static:m.mods.includes('static'),async:m.mods.includes('async')});for(const p of m.parameters)ctx.locals.set(p.name,p.type);
         if(arities.has(m.parameters.length))report('JB2214',`Overloads of '${m.name}' with the same arity need type-based overload resolution`,m);arities.add(m.parameters.length);
         const name=m.name+(group.length>1?'$'+m.parameters.length:'');const params=m.parameters.map(p=>(p.rest?'...':'')+p.name+(p.value?' = '+expr(p.value,ctx):'')).join(',');
-        body.push(`// ${currentSource.path}:${currentSource.location(m.start).line}\n${ctx.static?'static ':''}${ctx.async?'async ':''}${name}(${params}) ${m.body?stmt(m.body,ctx):`{ throw new JB.NotSupportedException('Abstract method ${m.name}'); }`}`);
+        const methodCode=`${ctx.async?'async ':''}${name}(${params}) ${m.body?stmt(m.body,ctx):`{ throw new JB.NotSupportedException('Abstract method ${m.name}'); }`}`;
+        body.push(`// ${currentSource.path}:${currentSource.location(m.start).line}\n${ctx.static?'static ':''}${methodCode}`);
+        if(options.debug)debugMethods.push({type:decl.fullName,name,static:ctx.static,code:methodCode});
       }
       if(group.length>1){const m=group[0],stat=m.mods.includes('static');body.push(`${stat?'static ':''}${m.name}(...args) { switch(args.length) { ${group.map(x=>`case ${x.parameters.length}: return this.${x.name}$${x.parameters.length}(...args);`).join(' ')} default: throw new JB.ArgumentException('No overload matches argument count'); } }`);}
     }
     chunks.push(`class ${js} extends ${base} {\n${body.join('\n')}\n}\nJB.defineType(${escapeJs(decl.fullName)}, ${js});`);
   }
+  const cleanShape=(node,key='')=>{
+    if(Array.isArray(node))return node.map(x=>cleanShape(x));
+    if(!node||typeof node!=='object')return node;
+    return Object.fromEntries(Object.entries(node).filter(([k])=>!['start','end','source'].includes(k)&&!(node.kind==='method'&&k==='body')).map(([k,v])=>[k,cleanShape(v,k)]));
+  };
+  const typeShapes=options.debug?[...declarations.values()].map(d=>cleanShape(d)):undefined;
   const code=bag.hasErrors?'':chunks.join('\n\n');
-  return {success:!bag.hasErrors,code,diagnostics:bag.items,types:[...declarations.values()].map(d=>({name:d.fullName,kind:d.kind,members:d.members.map(m=>({name:m.name,kind:m.kind}))})),ast:options.includeAst?units.map(u=>u.ast):undefined};
+  return {success:!bag.hasErrors,code,diagnostics:bag.items,debug:options.debug?{sites:debugSites,methods:debugMethods,typeShapes}:undefined,types:[...declarations.values()].map(d=>({name:d.fullName,kind:d.kind,members:d.members.map(m=>({name:m.name,kind:m.kind}))})),ast:options.includeAst?units.map(u=>u.ast):undefined};
 }
