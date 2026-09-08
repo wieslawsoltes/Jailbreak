@@ -19,6 +19,7 @@ export function compileProject(input, options = {}) {
   const prepared=prepareCompilation(workspace.files,project?[project]:[],options);
   diagnostics.push(...prepared.diagnostics);
   const backendOptions={...options}; delete backendOptions.projectPath; delete backendOptions.solutionPath;
+  backendOptions.xamlAssemblies=Object.fromEntries(prepared.projects.map(p=>[p.properties.AssemblyName||p.path.split('/').at(-1).replace(/\.csproj$/,''),p.path.includes('/')?p.path.slice(0,p.path.lastIndexOf('/')+1):'']));
   const result=compileBackend(prepared.files,backendOptions);
   diagnostics.push(...result.diagnostics);
   const success=result.success&&!diagnostics.some(d=>d.severity==='error');

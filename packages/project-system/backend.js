@@ -1,3 +1,4 @@
+import { linkXamlIncludes } from '../xaml-compiler/includes.js';
 import { SourceFile, DiagnosticBag, escapeJs } from '../compiler-core/index.js';
 import { parseXml } from '../compiler-core/xml.js';
 import { compileXaml } from '../xaml-compiler/index.js';
@@ -62,6 +63,7 @@ export function compileProject(input,options={}) {
     const pieces=result.ir.className.split('.'),name=pieces.pop(),ns=pieces.join('.');
     csFiles.push({path:path+'.g.cs',text:(ns?'namespace '+ns+'; ':'')+`public partial class ${name} : ${result.ir.root.type} { }`});
   }}}
+  const linked=linkXamlIncludes(xaml.map(x=>({...x.ir,sourceText:workspace.get(x.ir.path)})),{assemblies:options.xamlAssemblies??{}});bag.merge(linked.diagnostics);
   const cs=compileCSharp(csFiles,{xamlNames});bag.merge(cs.diagnostics);
   let entry=options.entryXaml?xaml.find(x=>x.ir.path===options.entryXaml||x.ir.className===options.entryXaml):null;
   if(!entry&&options.entryType)entry=xaml.find(x=>x.ir.className===options.entryType);
@@ -69,8 +71,8 @@ export function compileProject(input,options={}) {
   if(options.entryType&&!cs.types.some(t=>t.name===options.entryType))bag.add('JB4009',`Entry type '${options.entryType}' was not found`,new SourceFile(options.entryType,''));
   if(options.entryXaml&&!entry)bag.add('JB4008',`Entry XAML '${options.entryXaml}' was not found`,new SourceFile(options.entryXaml,''));
   const assets={};for(const path of paths)if(workspace.get(path).startsWith('data:'))assets[path]=workspace.get(path);
-  const manifest={format:1,entryXaml:entry?.ir.className??entry?.ir.path??null,entryType:options.entryType??entry?.ir.className??null,assets,projects:projects.map(p=>p.path)};
-  const code=bag.hasErrors?'':[...xaml.map(x=>x.code),cs.code].filter(Boolean).join('\n\n');
+  const manifest={format:1,entryXaml:entry?.ir.className??entry?.ir.path??null,entryType:options.entryType??entry?.ir.className??null,assets,xamlIncludes:linked.dependencies,projects:projects.map(p=>p.path)};
+  const code=bag.hasErrors?'':[...xaml.map(x=>`JB.registerXaml(${escapeJs(x.ir.className??x.ir.path)}, ${escapeJs(x.ir)});`),cs.code].filter(Boolean).join('\n\n');
   return {success:!bag.hasErrors,code,manifest,diagnostics:bag.items,xaml:xaml.map(x=>x.ir),types:cs.types,files:sourceFiles,stats:{milliseconds:performance.now()-start,sourceBytes:sourceFiles.reduce((n,p)=>n+workspace.get(p).length,0),generatedBytes:code.length,files:sourceFiles.length}};
 }
 export function executable(result){if(!result.success)throw new Error('Cannot run an unsuccessful compilation');if(!result.manifest.entryXaml&&!result.manifest.entryType)throw new Error('No UI entry point; this compilation is a library');return `(function(JB){\n${result.code}\nreturn JB.boot(${escapeJs(result.manifest)}, document.getElementById('app'));\n})(globalThis.Jailbreak);`;}
