@@ -1,5 +1,7 @@
 # Source, binary and UI compatibility roadmap
 
+**Update:** [Keyed panel structural reload and designer duplication](milestone-structural-reload.md) supersedes the initial restart-only rule for supported panel child changes. Other structural/resource/template changes remain restart-required.
+
 The long-term goal is to run existing Avalonia applications in browser HTML/JavaScript with reusable compiler, UI, rendering and tooling libraries. **Full unmodified ControlCatalog remains a failing target**, not a redefinition of the selected example gate.
 
 ## One architecture, complementary inputs

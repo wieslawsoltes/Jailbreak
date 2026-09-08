@@ -1,5 +1,7 @@
 # Developer tools: source debugging, visual design and hot reload
 
+**Update:** [Keyed panel structural reload and designer duplication](milestone-structural-reload.md) supersedes the initial restart-only rule for supported panel child changes. Other structural/resource/template changes remain restart-required.
+
 Debugging, visual design and hot reload are mandatory core features. The [core contract](core-development-tools.md) describes their required full end state and the integration obligations for every later compiler/runtime/control feature. This milestone delivers a working primary-IDE subset, not completion of that end state.
 
 ## Use the workbench

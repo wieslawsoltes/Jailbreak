@@ -1,5 +1,7 @@
 # Jailbreak
 
+**New:** [Keyed panel hot reload and designer duplication](docs/milestone-structural-reload.md) preserve retained controls, input state and handler identity across supported insert/delete/reorder operations.
+
 **Core tools:** debugging, visual design and hot reload are mandatory project requirements. The primary IDE now has **Develop** tools and a **Developer Tools** source sample. See [the core contract](docs/core-development-tools.md) and [delivered tools, tests and remaining full-scope gaps](docs/milestone-development-tools.md).
 
 **New:** typed MSIL catches, nested finally/fault, rethrow and checked arithmetic now run through DLL, NuGet, Binary Studio and the source/binary bridge. See [exception recovery milestone](docs/milestone-exceptions.md) and the **ExceptionLibrary** UI sample. Full ControlCatalog compatibility is still an unfinished target.
