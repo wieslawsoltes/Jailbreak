@@ -33,8 +33,7 @@ def source_path(name):
 
 pending = []
 touched = set()
-for number in range(1, 8):
-    file = ROOT / f'.delivery/devtools-{number}.json'
+for file in sorted(ROOT.glob('.delivery/devtools-*.json'), key=lambda p: int(p.stem.split('-')[-1])):
     raw = file.read_bytes()
     if len(raw) > 1_000_000:
         raise ValueError('Stage size limit exceeded')
