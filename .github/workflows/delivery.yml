@@ -28,6 +28,9 @@ jobs:
           path: |
             .delivery/msil-*.b64
             .delivery/stage-20260908-msil-*.json
+            .delivery/devtools-*.json
+            .delivery/development.test.js
+            .delivery/test_development.py
           include-hidden-files: true
       - name: Materialize verified source stages
         run: |
@@ -35,6 +38,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           python3 .delivery/repair.py
           python3 .delivery/apply.py
+          python3 .delivery/apply-devtools.py
       - name: Validate source before publishing commits
         run: |
           npm test
