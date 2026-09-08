@@ -12,7 +12,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 STATE = ROOT / '.delivery/applied-development.json'
 state = json.loads(STATE.read_text()) if STATE.exists() else {}
 allowed = {'README.md', 'apps', 'packages', 'tests', 'examples', 'docs'}
-copy_sources = {'.delivery/development.test.js', '.delivery/test_development.py'}
+copy_sources = {'.delivery/development.test.js', '.delivery/test_development.py', '.delivery/structural-reload.test.js'}
 
 
 def sha(data):
@@ -33,7 +33,7 @@ def source_path(name):
 
 pending = []
 touched = set()
-for number in range(1, 6):
+for number in range(1, 8):
     file = ROOT / f'.delivery/devtools-{number}.json'
     raw = file.read_bytes()
     if len(raw) > 1_000_000:
