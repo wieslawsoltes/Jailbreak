@@ -1,0 +1,15 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Jailbreak.Demo.MainView">
+  <StackPanel Margin="28" Spacing="16">
+    <TextBlock Text="XAML + C#, compiled here." FontSize="28" FontWeight="Bold" TextWrapping="Wrap" />
+    <TextBlock Text="Use the Build profiles sample to compile a real two-project solution." TextWrapping="Wrap" />
+    <TextBlock x:Name="CounterLabel" Text="Count: 0" FontSize="20" />
+    <Button Content="Increment counter" Click="Increment" />
+    <TextBox x:Name="Input" Text="Hello from a binding" />
+    <TextBlock Text="{Binding #Input.Text}" />
+    <CheckBox Content="Browser-native input" />
+    <Slider x:Name="Level" Value="40" />
+    <ProgressBar Value="{Binding #Level.Value}" />
+  </StackPanel>
+</UserControl>
