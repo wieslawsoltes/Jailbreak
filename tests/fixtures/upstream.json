@@ -1,0 +1,12 @@
+{
+  "official": {
+    "repository": "AvaloniaUI/Avalonia",
+    "commit": "27c1ece36cbe17de3b8f95ae88223ba68702ae47",
+    "files": [
+      {"local": "examples/UpstreamCheckBox/CheckBoxPage.xaml", "upstream": "samples/ControlCatalog/Pages/CheckBoxPage.xaml", "blob": "4f9c59448bc6188b0675629dfe99fcd571ea9290"},
+      {"local": "examples/UpstreamCheckBox/CheckBoxPage.xaml.cs", "upstream": "samples/ControlCatalog/Pages/CheckBoxPage.xaml.cs", "blob": "b63d7084d6ba16880cbb03ca8990230d6cac1471"},
+      {"local": "examples/UpstreamCheckBox/LICENSE.Avalonia.txt", "upstream": "licence.md", "blob": "41951805ac6a5cdb91373db7725fbaa9c004d912"}
+    ]
+  },
+  "requestedLibrary": {"repository": "wieslawsoltes/Avalonialibrary", "status": "blocked", "verifiedOn": "2026-09-08", "reason": "The supplied repository returned HTTP 404 through the connected GitHub API. This gate has not passed."}
+}
