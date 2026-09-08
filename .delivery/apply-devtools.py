@@ -11,7 +11,7 @@ import subprocess
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 STATE = ROOT / '.delivery/applied-development.json'
 state = json.loads(STATE.read_text()) if STATE.exists() else {}
-allowed = {'README.md', 'apps', 'packages', 'tests', 'examples', 'docs'}
+allowed = {'README.md', 'apps', 'packages', 'tests', 'examples', 'docs', 'scripts'}
 copy_sources = {'.delivery/development.test.js', '.delivery/test_development.py', '.delivery/structural-reload.test.js'}
 
 
