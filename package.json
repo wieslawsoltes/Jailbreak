@@ -12,7 +12,10 @@
     "gate": "node scripts/gate.mjs",
     "check": "node scripts/check.mjs",
     "compile:binary": "node scripts/compile-binary.mjs",
-    "test:clr": "node scripts/verify-msil-clr.mjs"
+    "test:clr": "node scripts/verify-msil-clr.mjs",
+    "test:exceptions-clr": "node scripts/verify-exceptions-clr.mjs"
   },
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22"
+  }
 }
