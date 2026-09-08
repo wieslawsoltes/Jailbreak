@@ -1,0 +1,8 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <SolidColorBrush x:Key="Accent" Color="#6559e8"/>
+  <ControlTemplate x:Key="CompactTemplate">
+    <Border Name="PART_Chrome" Background="#ecfdf5" Padding="12" CornerRadius="6">
+      <TextBlock Name="PART_Label" Text="{TemplateBinding Content}" Foreground="#126345"/>
+    </Border>
+  </ControlTemplate>
+</ResourceDictionary>

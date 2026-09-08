@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Templates.MainView">
+  <UserControl.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries><ResourceInclude Source="Themes/Tokens.axaml"/></ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </UserControl.Resources>
+  <UserControl.Styles><StyleInclude Source="avares://Templates/Themes/Cards.axaml"/></UserControl.Styles>
+  <StackPanel Margin="28" Spacing="16">
+    <TextBlock Text="Real templates. Shared source." FontSize="28" FontWeight="Bold"/>
+    <TextBlock Text="One ControlTemplate, separate namescopes, live template bindings." TextWrapping="Wrap"/>
+    <Button Name="FirstCard" Classes="card" Content="First card: 0" Click="Increment"/>
+    <Button Name="SecondCard" Classes="card" Content="Second card stays independent"/>
+    <WrapPanel Orientation="Horizontal">
+      <Button Content="Replace first template" Click="ReplaceTemplate"/>
+      <Button Content="Restore styled template" Click="RestoreTemplate"/>
+      <Button Content="Change shared accent" Click="ChangeAccent"/>
+    </WrapPanel>
+    <TextBlock Name="AccentLabel" Text="A DynamicResource from the merged dictionary" Foreground="{DynamicResource Accent}"/>
+    <ContentControl Name="EditorHost" Content="Edit the templated parent">
+      <ContentControl.Template><ControlTemplate><TextBox Name="PART_Editor" Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"/></ControlTemplate></ContentControl.Template>
+    </ContentControl>
+    <TextBlock Name="Echo" Text="{Binding #EditorHost.Content}"/>
+    <ContentControl Name="DataCard" Content="ContentTemplate renders this data">
+      <ContentControl.ContentTemplate><DataTemplate><Border Background="#edf4ff" Padding="16" CornerRadius="8"><TextBlock Text="{Binding}"/></Border></DataTemplate></ContentControl.ContentTemplate>
+    </ContentControl>
+  </StackPanel>
+</UserControl>

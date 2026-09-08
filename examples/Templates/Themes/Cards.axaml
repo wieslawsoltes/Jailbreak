@@ -1,0 +1,18 @@
+<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style Selector="Button.card">
+    <Setter Property="Background" Value="#f2f0ff"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="PART_Chrome" Background="{TemplateBinding Background}" Padding="20" CornerRadius="10">
+          <StackPanel Spacing="6">
+            <TextBlock Text="REUSABLE CONTROL TEMPLATE" FontSize="10" Foreground="#7a6db2"/>
+            <ContentPresenter Name="PART_Content" Content="{TemplateBinding Content}" Foreground="#403088"/>
+          </StackPanel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="Button.card:pointerover /template/ Border#PART_Chrome">
+    <Setter Property="Background" Value="#e0dcff"/>
+  </Style>
+</Styles>
