@@ -21,7 +21,43 @@ jobs:
       - run: npm run gate
       - run: npm run build
       - run: npm run check
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install browser test tooling
+        run: |
+          python -m pip install playwright==1.55.0
+          python -m playwright install --with-deps chromium
+      - name: Run real browser profile gates
+        run: python -m unittest discover -s tests/browser -p 'test_*.py' -v
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jailbreak-test-evidence
+          path: test-results
       - uses: actions/upload-artifact@v4
         with:
           name: jailbreak-site
           path: site
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: site
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Deploy verified workbench
+        id: deployment
+        uses: actions/deploy-pages@v4

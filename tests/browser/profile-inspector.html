@@ -1,0 +1,6 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Profile inspector test host</title></head><body><main id="host"></main><script type="module">
+import {createBuildProfileInspector} from '../../packages/build-profile/inspector.js';
+window.applied=[];window.opened=[];
+window.inspector=createBuildProfileInspector({onApply:profile=>applied.push(profile),onOpenFile:path=>opened.push(path)});
+document.querySelector('#host').append(inspector.button);
+</script></body></html>

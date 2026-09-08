@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);BROWSER</DefineConstants>
+    <ProfileOrigin>$(MSBuildThisFileDirectory)</ProfileOrigin>
+  </PropertyGroup>
+</Project>

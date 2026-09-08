@@ -10,9 +10,9 @@ import {parseCSharp} from '../packages/csharp-compiler/index.js';
 import {createRuntime} from '../packages/avalonia-runtime/index.js';
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url))),args=process.argv.slice(2);
 const baseline=JSON.parse(await fs.readFile(path.join(root,'tests/fixtures/upstream.json'),'utf8'));
-const report={schema:1,generatedAt:new Date().toISOString(),baseline,fixtureIntegrity:[],samples:[],browser:'Run tests/browser_smoke.py; its independent evidence is in browser.json.',fullControlCatalog:{status:'not-passing',reason:'Only selected unchanged pages have executable browser gates. Full project/template/platform compatibility is not implemented.'}};
+const report={schema:1,generatedAt:new Date().toISOString(),baseline,fixtureIntegrity:[],samples:[],browser:'Run tests/browser_smoke.py and tests/browser/test_workbench_profiles.py for independent browser evidence.',fullControlCatalog:{status:'not-passing',reason:'Only selected unchanged pages have executable browser gates. Full project/template/platform compatibility is not implemented.'}};
 let failed=false;
-async function readFiles(dir,base='',files={}){for(const e of await fs.readdir(dir,{withFileTypes:true})){if(['bin','obj','.git','node_modules'].includes(e.name))continue;const name=base+e.name;if(e.isDirectory())await readFiles(path.join(dir,e.name),name+'/',files);else if(/\.(cs|a?xaml|csproj|sln|slnx|md|txt)$/i.test(name)){if(Object.keys(files).length>3000)throw new Error('Gate source limit exceeded');files[name]=await fs.readFile(path.join(dir,e.name),'utf8');}}return files;}
+async function readFiles(dir,base='',files={}){for(const e of await fs.readdir(dir,{withFileTypes:true})){if(['bin','obj','.git','node_modules'].includes(e.name))continue;const name=base+e.name;if(e.isDirectory())await readFiles(path.join(dir,e.name),name+'/',files);else if(/\.(cs|a?xaml|csproj|sln|slnx|props|targets|md|txt)$/i.test(name)){if(Object.keys(files).length>3000)throw new Error('Gate source limit exceeded');files[name]=await fs.readFile(path.join(dir,e.name),'utf8');}}return files;}
 for(const fixture of baseline.official.files){const bytes=await fs.readFile(path.join(root,fixture.local));const blob=crypto.createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');const passed=blob===fixture.blob;report.fixtureIntegrity.push({...fixture,actual:blob,passed});if(!passed)failed=true;}
 for(const entry of await fs.readdir(path.join(root,'examples'),{withFileTypes:true})){if(!entry.isDirectory())continue;const files=await readFiles(path.join(root,'examples',entry.name));const compiled=compileProject(files),item={name:entry.name,compiled:compiled.success,hydrated:false,browserBehavior:'separate browser gate',statistics:compiled.stats,diagnostics:compiled.diagnostics};
   // Execute only the version-controlled, trusted positive examples. Never execute imported upstream code here.
@@ -30,5 +30,5 @@ await fs.mkdir(path.join(root,'test-results'),{recursive:true});
 await fs.writeFile(path.join(root,'test-results/gate.json'),JSON.stringify(report,null,2)+'\n');
 console.log(`${report.samples.filter(x=>x.compiled&&x.hydrated).length}/${report.samples.length} trusted examples compile and hydrate; ${report.fixtureIntegrity.filter(x=>x.passed).length}/${report.fixtureIntegrity.length} upstream source hashes match.`);
 if(report.upstreamInventory)console.log(JSON.stringify(report.upstreamInventory.counts));
-console.log('Full ControlCatalog: NOT PASSING. Requested Avalonialibrary: BLOCKED (recorded 404).');
+console.log('Full ControlCatalog: NOT PASSING. Requested wieslawsoltes/Avalonia is pinned in browser/fixtures/control-catalog/manifest.json.');
 if(failed||args.includes('--require-full'))process.exitCode=1;

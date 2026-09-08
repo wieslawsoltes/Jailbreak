@@ -1,0 +1,18 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="BuildProfiles.MainView">
+  <StackPanel Margin="28" Spacing="16">
+    <TextBlock Text="One solution. Different builds." FontSize="28" FontWeight="Bold" TextWrapping="Wrap" />
+    <TextBlock Text="Open Build profile in the toolbar and switch between Debug and Release." TextWrapping="Wrap" />
+    <Border Background="#eeeaff" CornerRadius="10" Padding="20">
+      <StackPanel Spacing="12">
+        <TextBlock x:Name="ProfileName" FontSize="22" Foreground="#5344b5" />
+        <TextBlock x:Name="CountLabel" Text="Count: 0" FontSize="18" Foreground="#292040" />
+        <Button x:Name="IncrementButton" Content="Run compiled handler" Click="Increment" />
+      </StackPanel>
+    </Border>
+    <TextBlock x:Name="LibraryLabel" TextWrapping="Wrap" />
+    <TextBlock Text="Debug adds 1; Release adds 10. The evaluator also excludes DebugOnly.cs in Release and always excludes Native.cs." TextWrapping="Wrap" />
+    <TextBlock Text="Inspect imports, properties, symbols and selected files in the build-profile dialog." TextWrapping="Wrap" />
+  </StackPanel>
+</UserControl>
