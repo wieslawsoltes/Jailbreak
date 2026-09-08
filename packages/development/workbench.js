@@ -1,0 +1,88 @@
+import {inspectSource,editProperty,insertControl,removeControl,moveControl,EditHistory,palette} from './designer.js';
+import {planReload,reloadScript} from './reload.js';
+import {mappedScript} from './source-map.js';
+
+/** IDE client. The preview owns runtime objects; this client only sees serializable records. */
+export function createDevelopmentWorkbench({document:doc=globalThis.document,getFiles,getActive,openFile,applySource,build,persist,send,showGenerated=()=>{}}){
+  const el=(tag,text='')=>{const e=doc.createElement(tag);e.textContent=text;return e;};
+  const button=el('button','Develop');button.type='button';button.id='development-tools';button.title='Debugger, visual designer and hot reload';
+  const panel=el('section');panel.id='development-panel';panel.hidden=true;panel.setAttribute('aria-label','Development tools');
+  const style=el('style');style.textContent=`#development-panel{background:var(--panel,#fff);color:var(--text,#292936);border-top:1px solid var(--line,#d8d8e4);padding:12px;font:12px/1.5 system-ui;max-height:48vh;overflow:auto;flex:none}#development-panel header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}#development-panel h2{font-size:15px;margin:0 auto 0 0}#development-panel h3{font-size:13px;margin:8px 0}#development-panel p{margin:8px 0;color:var(--muted,#777)}#development-panel button,#development-panel select,#development-panel input{font:inherit;color:inherit;background:var(--bg,#f5f5fa);border:1px solid var(--line,#ddd);border-radius:5px;padding:5px 8px;min-width:0}#development-panel button{cursor:pointer}#development-panel button:focus-visible{outline:2px solid #796ce4}#development-panel label{display:flex;align-items:center;gap:5px}#development-panel .dev-columns{display:grid;grid-template-columns:minmax(210px,1fr) minmax(250px,1.4fr) minmax(220px,1fr);gap:14px}#development-panel .dev-row{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin:5px 0}#development-panel .dev-list{display:flex;flex-direction:column;max-height:170px;overflow:auto;gap:3px}#development-panel .dev-list button{text-align:left}#development-panel [aria-selected=true]{outline:1px solid #796ce4}#development-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.45 ui-monospace,monospace;max-height:170px;overflow:auto}#development-panel .dev-property{display:grid;grid-template-columns:110px 1fr auto;gap:5px;margin:4px 0}#development-panel .dev-property input{width:100%}#dev-tree button{white-space:nowrap}#development-panel .dev-note{font-size:11px}#dev-status{padding:6px 0;min-height:28px}#dev-breakpoint-line{width:64px}#dev-condition{width:135px}#dev-hit-count{width:54px}.main-area:has(#development-panel:not([hidden])) .bottom-panel{max-height:130px}.main-area:has(#development-panel:not([hidden])) .work-area{min-height:230px}@media(max-width:950px){#development-panel .dev-columns{grid-template-columns:1fr}#development-panel{max-height:50vh}#dev-tree{max-height:100px}}`;
+  const header=el('header'),heading=el('h2','Development tools'),enabled=el('input');enabled.type='checkbox';enabled.id='dev-enabled';
+  const enabledLabel=el('label','Enable debugger / designer');enabledLabel.prepend(enabled);
+  const hot=el('input');hot.type='checkbox';hot.id='dev-hot';const hotLabel=el('label','Hot reload on build');hotLabel.prepend(hot);
+  const native=el('input');native.type='checkbox';native.id='dev-native';native.checked=true;const nativeLabel=el('label','Native DevTools breaks');nativeLabel.prepend(native);
+  const throwBreak=el('input');throwBreak.type='checkbox';throwBreak.id='dev-throw';const throwLabel=el('label','Break on C# throw');throwLabel.prepend(throwBreak);
+  const restart=el('button','Restart app');restart.id='dev-restart';restart.type='button';
+  const close=el('button','Close');close.type='button';header.append(heading,enabledLabel,hotLabel,nativeLabel,throwLabel,restart,close);
+  const status=el('div','Enable tools, then compile.');status.id='dev-status';status.setAttribute('role','status');
+  const columns=el('div');columns.className='dev-columns';const hierarchy=el('section'),properties=el('section'),debuggerPanel=el('section');
+  const refresh=el('button','Refresh tree'),pick=el('button','Select on canvas');refresh.type=pick.type='button';refresh.id='dev-refresh';pick.id='dev-pick';pick.setAttribute('aria-pressed','false');
+  const tree=el('div');tree.className='dev-list';tree.id='dev-tree';tree.setAttribute('role','tree');const row=el('div');row.className='dev-row';row.append(refresh,pick);
+  const toolbox=el('select');toolbox.id='dev-toolbox';toolbox.setAttribute('aria-label','Control palette');for(const type of palette){const o=el('option',type);o.value=type;toolbox.append(o);}
+  const add=el('button','Insert'),remove=el('button','Delete'),up=el('button','Move up'),down=el('button','Move down');for(const b of [add,remove,up,down])b.type='button';const tools=el('div');tools.className='dev-row';tools.append(toolbox,add,remove,up,down);
+  const undo=el('button','Undo design'),redo=el('button','Redo design');undo.type=redo.type='button';const historyRow=el('div');historyRow.className='dev-row';historyRow.append(undo,redo);
+  hierarchy.append(el('h3','Visual hierarchy & palette'),row,tree,tools,historyRow);
+  const selection=el('div','Select a visual to inspect its source.'),propertyList=el('div');propertyList.id='dev-properties';propertyList.className='dev-list';
+  const propName=el('input');propName.placeholder='Property, e.g. Margin';propName.id='dev-property-name';propName.setAttribute('aria-label','New property name');const propValue=el('input');propValue.placeholder='Literal value';propValue.id='dev-property-value';propValue.setAttribute('aria-label','New property value');const set=el('button','Set property');set.id='dev-set-property';const addProp=el('div');addProp.className='dev-row';addProp.append(propName,propValue,set);
+  const details=el('details'),summary=el('summary','Runtime properties / bindings'),runtimeProperties=el('pre');details.append(summary,runtimeProperties);
+  properties.append(el('h3','Properties & source'),selection,propertyList,addProp,details);
+  const line=el('input');line.id='dev-breakpoint-line';line.type='number';line.min='1';line.value='1';line.setAttribute('aria-label','Breakpoint line');
+  const condition=el('input');condition.id='dev-condition';condition.placeholder='this.count >= 2';condition.setAttribute('aria-label','Breakpoint condition');
+  const hitCount=el('input');hitCount.id='dev-hit-count';hitCount.type='number';hitCount.min='1';hitCount.placeholder='Hits';hitCount.setAttribute('aria-label','Breakpoint hit count');
+  const addBreakpoint=el('button','Add breakpoint');addBreakpoint.id='dev-add-breakpoint';const breakpointRow=el('div');breakpointRow.className='dev-row';breakpointRow.append(line,condition,hitCount,addBreakpoint);
+  const logpoint=el('input');logpoint.type='checkbox';logpoint.id='dev-logpoint';const logLabel=el('label','Logpoint (do not pause)');logLabel.prepend(logpoint);
+  const breakpointList=el('div');breakpointList.id='dev-breakpoints';breakpointList.className='dev-list';
+  const breakNext=el('button','Break next statement'),generated=el('button','Generated JS');breakNext.id='dev-break-next';breakNext.type=generated.type='button';const commandRow=el('div');commandRow.className='dev-row';commandRow.append(breakNext,generated);
+  const watches=el('input');watches.id='dev-watches';watches.placeholder='this.count, result, i';watches.setAttribute('aria-label','Watch paths');const watchButton=el('button','Inspect watches');watchButton.type='button';const watchRow=el('div');watchRow.className='dev-row';watchRow.append(watches,watchButton);
+  const output=el('pre');output.id='dev-debug-output';
+  const note=el('p','Native pause, resume, step and live stack/locals use browser DevTools. This panel shows breakpoint snapshots and safe property-path watches.');note.className='dev-note';
+  debuggerPanel.append(el('h3','C# / XAML / JavaScript debugger'),breakpointRow,logLabel,breakpointList,commandRow,watchRow,note,output);
+  columns.append(hierarchy,properties,debuggerPanel);panel.append(style,header,status,columns);doc.querySelector('.main-area').append(panel);
+  let settings={enabled:false,hotReload:false,nativeBreaks:true,breakOnThrow:false,breakpoints:[],watches:[]},history=new EditHistory(),selected=null,running=null,runningFiles=null,pending=null,revision=0,selecting=false;
+  const tell=text=>status.textContent=text;
+  const guarded=fn=>{try{return fn();}catch(error){tell(error.message);}};
+  function sync(){settings.enabled=enabled.checked;settings.hotReload=hot.checked;settings.nativeBreaks=native.checked;settings.breakOnThrow=throwBreak.checked;settings.watches=watches.value.split(',').map(s=>s.trim()).filter(Boolean);send('configure',{settings});persist();}
+  function renderBreakpoints(){breakpointList.replaceChildren();for(const [index,b]of settings.breakpoints.entries()){
+    const bound=running?.debug?.sites?.some(p=>b.language==='javascript'?p.generatedLine===b.line:p.file===b.file&&p.line===b.line)||running?.debug?.xamlSites?.some(p=>p.file===b.file&&p.line===b.line);
+    const button=el('button',`${bound?'●':'○'} ${b.file}:${b.line}${b.condition?' ['+b.condition+']':''}${b.log?' log':''} ×`);button.type='button';button.title='Click to remove; ○ means unbound';button.onclick=()=>{settings.breakpoints.splice(index,1);renderBreakpoints();sync();};breakpointList.append(button);
+  }}
+  function sourceEdit(make){if(!selected?.source)throw new Error('This visual has no editable source identity');if(selected.template)throw new Error('Template instance: edit the template source directly');const {file,offset}=selected.source,files=getFiles();if(runningFiles?.[file]!==files[file])throw new Error('Source differs from the running preview; build/restart before editing this selection');const transaction=make(files[file],file,offset);history.apply(files,transaction);applySource(transaction.file);selected=null;propertyList.replaceChildren();tell('Source updated. Build applies compatible hot edits; structural changes require Restart app.');build();}
+  function renderSelection(value){selected=value;selection.replaceChildren();const source=value.source;const jump=el('button',value.type+(source?' · '+source.file+':'+source.line:' · generated visual'));jump.type='button';jump.onclick=()=>source&&openFile(source.file,source.offset);selection.append(jump);runtimeProperties.textContent=JSON.stringify(value.properties,null,2);propertyList.replaceChildren();
+    if(!source||value.template){propertyList.append(el('p',value.template?'Template instance: inspect here; edit its template in source.':'No source mapping for this generated visual.'));return;}
+    const files=getFiles();if(runningFiles?.[source.file]!==files[source.file]){propertyList.append(el('p','Source changed; build/restart before designer edits.'));return;}
+    try{const model=inspectSource(files[source.file],source.file,source.offset);for(const [name,p]of Object.entries(model.properties)){
+      if(name==='Name'||name==='x:Name'||name==='x:Class')continue;const row=el('div');row.className='dev-property';const label=el('label',name),input=el('input');input.value=p.language==='csharp'?p.literal:p.literal??p.value;input.disabled=!p.editable;input.setAttribute('aria-label','Design '+name);const apply=el('button','Apply');apply.type='button';apply.disabled=!p.editable;apply.onclick=()=>guarded(()=>sourceEdit((text,file,offset)=>editProperty(text,file,offset,name,input.value)));label.append(input);row.append(el('span',name),input,apply);propertyList.append(row);
+    }}catch(error){propertyList.append(el('p',error.message));}
+  }
+  function accept(next,sources){running=next;runningFiles={...sources};renderBreakpoints();}
+  button.onclick=()=>{panel.hidden=!panel.hidden;if(!panel.hidden)send('inspect');};close.onclick=()=>panel.hidden=true;
+  enabled.onchange=()=>{sync();tell('Development mode changed. Compile to restart with the selected instrumentation.');build(true);};hot.onchange=native.onchange=throwBreak.onchange=sync;watches.onchange=sync;
+  restart.onclick=()=>build(true);refresh.onclick=()=>send('inspect');pick.onclick=()=>{selecting=!selecting;pick.setAttribute('aria-pressed',String(selecting));send('pick',{value:selecting});};
+  add.onclick=()=>guarded(()=>sourceEdit((t,f,o)=>insertControl(t,f,o,toolbox.value)));remove.onclick=()=>guarded(()=>sourceEdit(removeControl));up.onclick=()=>guarded(()=>sourceEdit((t,f,o)=>moveControl(t,f,o,'up')));down.onclick=()=>guarded(()=>sourceEdit((t,f,o)=>moveControl(t,f,o,'down')));
+  set.onclick=()=>guarded(()=>sourceEdit((t,f,o)=>editProperty(t,f,o,propName.value,propValue.value)));
+  undo.onclick=()=>guarded(()=>{const t=history.undo(getFiles());if(t){selected=null;applySource(t.file);build();}});redo.onclick=()=>guarded(()=>{const t=history.redo(getFiles());if(t){selected=null;applySource(t.file);build();}});
+  addBreakpoint.onclick=()=>{const active=getActive(),value=Number(line.value);if(!active||!Number.isInteger(value)||value<1)return tell('Choose a source file and a positive line');settings.breakpoints.push({language:active==='jailbreak-app.js'?'javascript':undefined,file:active,line:value,condition:condition.value,hitCount:Number(hitCount.value)||0,log:logpoint.checked});sync();renderBreakpoints();tell('Breakpoint stored. Open browser DevTools for native pause and stepping.');};
+  breakNext.onclick=()=>send('break-next');generated.onclick=showGenerated;watchButton.onclick=()=>{sync();send('watch');};
+  const api={button,panel,
+    options(){return {...settings,breakpoints:settings.breakpoints.map(p=>({...p})),watches:[...settings.watches]};},
+    compileOptions(){return {debug:settings.enabled};},
+    set(value={}){settings={enabled:!!value.enabled,hotReload:!!value.hotReload,nativeBreaks:value.nativeBreaks!==false,breakOnThrow:!!value.breakOnThrow,breakpoints:Array.isArray(value.breakpoints)?value.breakpoints.slice(0,1000):[],watches:Array.isArray(value.watches)?value.watches.slice(0,50):[]};enabled.checked=settings.enabled;hot.checked=settings.hotReload;native.checked=settings.nativeBreaks;throwBreak.checked=settings.breakOnThrow;watches.value=settings.watches.join(', ');history=new EditHistory();running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();propertyList.replaceChildren();renderBreakpoints();},
+    running(next,sources){pending=null;revision=0;accept(next,sources);tell(settings.enabled?'Development session running.':'Release preview running.');},
+    failed(){tell(running?'Build failed; previous running app was preserved.':'Build failed.');},
+    stop(){running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();},
+    tryReload(next,sources,forceRestart=false){if(forceRestart||!running||!settings.enabled||!settings.hotReload)return false;if(pending){tell('A reload is already pending; restart or retry after its result.');return true;}
+      const plan=planReload(running,next);if(!plan.compatible){tell('Restart required: '+plan.reasons.join('; '));return true;}
+      const script=reloadScript(plan,running,next,revision+1);pending={next,sources:{...sources}};send('reload',{script:mappedScript(script,next.debug,sources)});tell('Applying transactional hot reload…');return true;
+    },
+    receive(message){const {event,payload}=message??{};
+      if(event==='tree'){tree.replaceChildren();const rows=new Map(payload.map(r=>[r.id,r]));for(const node of payload){let depth=0,parent=rows.get(node.parent);while(parent&&depth<20){depth++;parent=rows.get(parent.parent);}const button=el('button','  '.repeat(depth)+node.type+(node.name?' #'+node.name:''));button.type='button';button.dataset.visualId=node.id;button.setAttribute('role','treeitem');button.setAttribute('aria-selected',String(node.selected));button.onclick=()=>send('select',{id:node.id});tree.append(button);}}
+      else if(event==='selected')renderSelection(payload);
+      else if(event==='resize')guarded(()=>{if(payload.id!==selected?.id)throw new Error('Stale resize selection');sourceEdit((text,file,offset)=>{const first=editProperty(text,file,offset,'Width',String(payload.width)),second=editProperty(first.after,file,offset,'Height',String(payload.height));return {...second,before:text};});});
+      else if(event==='reloaded'){revision=payload.revision;if(pending){accept(pending.next,pending.sources);pending=null;}tell(`Hot reload ${revision}: ${payload.properties} properties, ${payload.methods} methods; application state retained.`);if(selected)send('select',{id:selected.id});}
+      else if(['reload-error','tool-error'].includes(event)){pending=null;tell(payload.message);}
+      else if(event.startsWith('debug-')||event==='watches'){output.textContent=JSON.stringify(payload,null,2);if(event==='debug-hit')tell('Breakpoint hit. Native pause/step/resume is controlled by browser DevTools.');}
+    }
+  };
+  return api;
+}
