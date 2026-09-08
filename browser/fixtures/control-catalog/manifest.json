@@ -1,0 +1,12 @@
+{
+  "repository": "wieslawsoltes/Avalonia",
+  "commit": "b709c58c6b1b8aa3b90866c7c001b7bf82b6353b",
+  "upstreamDirectory": "samples/ControlCatalog/Pages",
+  "license": "LICENSE.Avalonia",
+  "fullControlCatalogPassed": false,
+  "hostAdapters": ["ContentPage", "ScrollPage theme"],
+  "fixtures": [
+    {"page":"CheckBoxPage", "files":{"CheckBoxPage.xaml":"4f9c59448bc6188b0675629dfe99fcd571ea9290","CheckBoxPage.xaml.cs":"b63d7084d6ba16880cbb03ca8990230d6cac1471"}, "behavior":["initial states", "three-state cycle", "disabled input"]},
+    {"page":"RadioButtonPage", "files":{"RadioButtonPage.xaml":"efb63ea124e39086c70e974f5649c158d68050d1","RadioButtonPage.xaml.cs":"8199a7caf56a2303499c51064aee5e27eb9aee36"}, "behavior":["sibling exclusion", "independent unnamed groups", "named groups across containers"]}
+  ]
+}
