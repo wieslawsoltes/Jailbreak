@@ -1,13 +1,15 @@
-import {failure} from '../core/index.js';
-import {tokenize} from './lexer.js';
-import {Parser} from './parser.js';
-import {Emitter} from './emitter.js';
-export {tokenize,Parser,Emitter};
+import { compileCSharp as compileBackend } from './backend.js';
+import { preprocessCSharp } from '../../../packages/build-profile/preprocessor.js';
+export { tokenize, Parser, Emitter } from './backend.js';
+export { preprocessCSharp } from '../../../packages/build-profile/preprocessor.js';
 
-export function compileCSharp(files,options={}){
-  if(typeof files==='string')files=[{path:options.file||'source.cs',content:files}];
-  const programs=[],diagnostics=[];
-  for(const f of files){try{programs.push(new Parser(f.content,{file:f.path}).program());}catch(e){diagnostics.push(failure(e,f.path));}}
-  if(diagnostics.length)return {ok:false,code:'',diagnostics,classes:[]};
-  try{return new Emitter(programs,options).emit();}catch(e){return {ok:false,code:'',diagnostics:[failure(e)],classes:[]};}
+export function compileCSharp(input, options = {}) {
+  const files = typeof input === 'string' ? [{ path: options.file ?? 'source.cs', content: input }] : input;
+  const diagnostics = [], prepared = files.map(file => {
+    const result = preprocessCSharp(file.content, { path: file.path, symbols: file.symbols ?? options.symbols ?? [] });
+    diagnostics.push(...result.diagnostics); return { ...file, content: result.text };
+  });
+  if (diagnostics.some(d => d.severity === 'error')) return { ok: false, code: '', classes: [], diagnostics };
+  const result = compileBackend(prepared, options);
+  return { ...result, diagnostics: [...diagnostics, ...result.diagnostics] };
 }
