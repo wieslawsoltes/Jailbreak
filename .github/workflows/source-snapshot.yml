@@ -21,3 +21,4 @@ jobs:
         with:
           name: jailbreak-source-snapshot
           path: /tmp/jailbreak-source
+          retention-days: 30
