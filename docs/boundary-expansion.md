@@ -24,3 +24,15 @@ Content-host child insertion, deletion and replacement, including the applicatio
 Regression paths: `tests/tree-ownership-reload.test.js` and two additional browser tests in `tests/browser/test_development.py`. Local checks: 222 Node tests, 15 development-browser tests, build and syntax checks. Local Chromium uses the self-contained offline document because HTTP navigation is blocked in the execution environment; hosted CI exercises HTTP.
 
 Moves into newly constructed hosts, extracting retained descendants from removed hosts, cross-document/namescope moves, and templated hosts remain explicit restart cases. The application instance itself is not replaced; content-root replacement is distinct from changing its C# type.
+
+## Stage 2: subscription and environment reload
+
+The primary runtime now owns one replaceable subscription slot per XAML attribute. Reload can add, replace and remove supported Binding/StaticResource/DynamicResource expressions and XAML event handlers, while preserving separately installed C# event subscriptions. New bound subtrees activate only after all staged names have attached. OneTime bindings refresh on DataContext replacement. Failed initial binding evaluation cleans up partial observers.
+
+Inline resource dictionaries retain their observable identity during replacement. Dynamic-resource clients update; unchanged StaticResource references retain their original object. Style replacement respects local values, and dynamic resources in style/control-theme setters are now compiled and resolved reactively. Direct ControlTemplate and ContentTemplate property-element edits use held old parts so failed render transactions restore the original template instance; successful commits dispose old parts and namescopes. A bounded layout drain keeps render-time template updates inside the transaction.
+
+Regression paths: `tests/environment-reload.test.js` (13 cases) and two further browser tests. Local checks: 235 Node tests and 17 development-browser tests. Browser evidence covers a combined resource/style/template update, real DOM color, retained input and root, old-part disposal and a working compiled click handler.
+
+Still excluded: OneWayToSource initialization during a changed binding, arbitrary custom resource constructors, include-file environment changes, arbitrary ItemTemplate/ItemsPanel replacement, moving templated hosts, and rollback of external side effects from user callbacks. Normal source compilation remains the boundary for supported binding syntax; this does not add arbitrary markup extensions.
+
+Semantics references: [binding modes](https://docs.avaloniaui.net/docs/data-binding/data-binding-syntax), [logical-tree inheritance](https://docs.avaloniaui.net/docs/data-binding/data-context), [property precedence](https://docs.avaloniaui.net/docs/properties/value-precedence).
