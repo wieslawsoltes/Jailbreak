@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>Jailbreak.ExceptionExamples</AssemblyName>
+    <PackageId>Jailbreak.ExceptionExamples</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Jailbreak contributors</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Optimize>true</Optimize>
+    <DebugType>none</DebugType>
+    <Deterministic>true</Deterministic>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup><Compile Include="Library.cs" /></ItemGroup>
+</Project>
