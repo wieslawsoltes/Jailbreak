@@ -1,0 +1,1 @@
+{"message":"feat(msil): compile typed exception regions and checked arithmetic with shared CSharp errors","sha256":"a4410eb356037e34badd85f01bf5afdb804d1083f47fcc210a2cca00cd03195c","chunks":["eh-01-01.b64","eh-01-02.b64","eh-01-03-left.b64","eh-01-03-right.b64","eh-01-04.b64","eh-01-05.b64","eh-01-06.b64","eh-01-07.b64"]}
