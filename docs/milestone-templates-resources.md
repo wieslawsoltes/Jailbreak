@@ -40,7 +40,7 @@ The primary workbench's offline build and exported HTML include the new runtime 
 
 New tests: `tests/templates-resources.test.js`, `tests/progressbar.test.js`, and `tests/browser/test_templates.py`. They cover positive and negative compilation cases, lifecycle/subscription counts, borrowed visual ownership, native keyboard/click behavior, hover selectors, standalone export, two-way template bindings and the unchanged ProgressBar fixture. Local browser execution uses the self-contained offline IDE because HTTP navigation is restricted in the development container; CI uses the actual served site.
 
-The existing Node, sample/hydration, original fixture and 16-browser-check gates remain in place. The source-delivery workflow materializes batched source into normal commits, runs the full Node and browser gates before pushing those commits, then deploys that tested site. Current CI results, not this document, establish publication status.
+The existing Node, sample/hydration, original fixture and 16-browser-check gates remain in place. The source-delivery workflow materializes batched source into normal commits, then runs the full Node suite, sample gate, build and syntax checks before pushing those commits. It dispatches the canonical toolchain workflow, which runs the combined browser suite before deploying the verified static site. Current CI results, not this document, establish publication status.
 
 **The complete, unmodified ControlCatalog is still not passing.** GPU execution/performance and pixel-perfect Avalonia parity are not established by these DOM tests.
 
