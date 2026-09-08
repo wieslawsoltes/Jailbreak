@@ -1,5 +1,8 @@
+import {construction,editInitializer,literalValue} from './csharp-designer.js';
+import {parseMarkup} from '../xaml-compiler/index.js';
+import {liveValue} from './live-values.js';
+import {panelTypes,contentTypes} from './tree-slots.js';
 import { parseXml } from '../compiler-core/xml.js';
-import { parseCSharp } from '../csharp-compiler/index.js';
 import { SourceFile } from '../compiler-core/index.js';
 import { controlDefinitions, hasProperty, eventNames } from '../avalonia-runtime/schema.js';
 
@@ -9,31 +12,22 @@ const localName=tag=>tag.split(':').at(-1);
 function xml(text,file){const parsed=parseXml(text,file);if(parsed.diagnostics.length)throw new Error(parsed.diagnostics[0].message);return parsed;}
 function flatten(node,parent=null,result=[]){if(node?.kind==='element'){result.push({node,parent});for(const c of node.children)flatten(c,node,result);}return result;}
 function selected(text,file,offset){const {root}=xml(text,file),entry=flatten(root).find(e=>e.node.span.start===offset);if(!entry)throw new Error('Stale designer selection; refresh the visual tree');return {...entry,root};}
-function csNodes(text,file){const parsed=parseCSharp(text,file);if(!parsed.ast||parsed.diagnostics.some(d=>d.severity==='error'))throw new Error('C# source must parse before designer edits');const nodes=[];function visit(v){if(!v||typeof v!=='object')return;if(v.kind==='new')nodes.push(v);for(const x of Object.values(v))if(Array.isArray(x))x.forEach(visit);else if(x&&typeof x==='object')visit(x);}visit(parsed.ast);return nodes;}
 export function inspectSource(text,file,offset){
   if(file.endsWith('.cs')){
-    const node=csNodes(text,file).find(n=>n.start===offset);if(!node)throw new Error('No supported C# construction at this location');
-    return {type:node.type?.name,language:'csharp',properties:Object.fromEntries((node.members??[]).map(m=>[m.name,{value:text.slice(m.value.start,m.value.end),editable:m.value.kind==='literal',literal:m.value.kind==='literal'?m.value.value:undefined}]))};
+    const {node}=construction(text,file,offset);
+    return {type:node.type?.name,language:'csharp',properties:Object.fromEntries((node.members??[]).map(m=>{const literal=literalValue(m.value);return [m.name,{value:text.slice(m.value.start,m.value.end),editable:literal.editable,literal:literal.value}];}))};
   }
   const {node}=selected(text,file,offset);return {type:localName(node.tag),language:'xaml',properties:Object.fromEntries(Object.entries(node.attributes).filter(([k])=>!k.startsWith('xmlns')).map(([k,v])=>[k,{value:v,editable:!v.startsWith('{')||v.startsWith('{}'),binding:v.startsWith('{')&&!v.startsWith('{}')}]))};
 }
 /** Return a full preimage transaction; the editor must reject edits to a changed document. */
-export function editProperty(text,file,offset,property,value){
+export function editProperty(text,file,offset,property,value){return writeProperty(text,file,offset,property,value,false);}
+function writeProperty(text,file,offset,property,value,expression){
   if(!/^[A-Za-z_][\w.:]*$/.test(property)||['__proto__','constructor','prototype'].includes(property)||property.startsWith('xmlns'))throw new Error('Invalid designer property');
-  if(file.endsWith('.cs')){
-    const node=csNodes(text,file).find(n=>n.start===offset),member=node?.members?.find(m=>m.name===property);
-    if(!member||member.value.kind!=='literal')throw new Error('C# design editing requires an existing literal object-initializer property');
-    const old=member.value.value;let replacement;
-    if(typeof old==='string')replacement=JSON.stringify(String(value)).replace(/</g,'\u003c');
-    else if(typeof old==='boolean'){if(!['true','false'].includes(String(value)))throw new Error('Expected true or false');replacement=String(value);}
-    else if(typeof old==='number'){if(!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(String(value))||!Number.isFinite(Number(value)))throw new Error('Expected a finite numeric literal');replacement=String(value);}
-    else throw new Error('This C# initializer value is not design-editable');
-    const next=text.slice(0,member.value.start)+replacement+text.slice(member.value.end);csNodes(next,file);return {file,before:text,after:next,selection:offset};
-  }
+  if(file.endsWith('.cs'))return editInitializer(text,file,offset,property,value);
   const {node}=selected(text,file,offset),type=localName(node.tag);
   if(!Object.hasOwn(controlDefinitions,type)||!hasProperty(type,property)||eventNames.includes(property)||property==='Name')throw new Error('Property is not a supported designer value');
-  const old=node.attributes[property];if(typeof old==='string'&&old.startsWith('{')&&!old.startsWith('{}'))throw new Error('Binding/resource expressions are protected; edit the expression in source');
-  if(typeof value==='string'&&value.startsWith('{')&&!value.startsWith('{}'))throw new Error('Designer property input accepts literals only');
+  const old=node.attributes[property];if(!expression&&typeof old==='string'&&old.startsWith('{')&&!old.startsWith('{}'))throw new Error('Binding/resource expressions are protected; edit the expression in source');
+  if(!expression&&typeof value==='string'&&value.startsWith('{')&&!value.startsWith('{}'))throw new Error('Designer property input accepts literals only');
   const span=node.attributeSpans[property];let next;
   if(span)next=text.slice(0,span.start)+(value==null?'':property+'="'+xmlEscape(value)+'"')+text.slice(span.end);
   else{const start=node.span.start+1+node.tag.length;next=text.slice(0,start)+(value==null?'':' '+property+'="'+xmlEscape(value)+'"')+text.slice(start);}
@@ -103,4 +97,38 @@ export function duplicateControl(text,file,offset){
   const leading=text.slice(lineStart,node.span.start),separator=/^\s*$/.test(leading)?eol+leading:'';
   const next=text.slice(0,node.span.end)+separator+copy+text.slice(node.span.end);
   xml(next,file);return {file,before:text,after:next,selection:node.span.end+separator.length};
+}
+
+/** Explicit expression edit: ordinary literal edits continue to protect bindings. */
+export function editExpression(text,file,offset,property,value){
+  if(file.endsWith('.cs'))throw new Error('Binding editing currently requires XAML');
+  if(value!=null){const parsed=parseMarkup(String(value));if(!parsed||typeof parsed!=='object'||!liveValue(parsed))throw new Error('Use a supported Binding, StaticResource or DynamicResource expression');}
+  return writeProperty(text,file,offset,property,value,true);
+}
+/** Move the existing element bytes; source and destination must share namespace mappings. */
+export function reparentControl(text,file,offset,targetName){
+  if(file.endsWith('.cs'))throw new Error('Moving between hosts currently requires XAML');
+  const {node,parent,root}=selected(text,file,offset),entries=flatten(root);
+  const targets=entries.filter(e=>(e.node.attributes.Name??e.node.attributes['x:Name'])===targetName);
+  if(targets.length!==1)throw new Error('Choose a unique named destination host');
+  const target=targets[0].node;
+  if(!Object.hasOwn(controlDefinitions,localName(node.tag)))throw new Error('Select a visual control, not a resource');
+  if(!parent||target===node||target.span.start>=node.span.start&&target.span.end<=node.span.end)throw new Error('Cannot move a root or create an ownership cycle');
+  if(!panelTypes.has(localName(target.tag))&&!contentTypes.has(localName(target.tag)))throw new Error('Destination is not a supported host');
+  if(parent===target)throw new Error('Control is already in this host');
+  const owner=n=>entries.find(e=>e.node===n)?.parent;
+  const namespaceMap=n=>{const chain=[];for(let p=n;p;p=owner(p))chain.unshift(p);const result={};for(const p of chain)for(const [k,v]of Object.entries(p.attributes))if(k==='xmlns'||k.startsWith('xmlns:'))result[k]=v;return JSON.stringify(Object.entries(result).sort());};
+  if(namespaceMap(node)!==namespaceMap(target))throw new Error('Move would change XML namespace resolution');
+  for(let p=parent;p;p=owner(p))if(['ControlTemplate','DataTemplate','TreeDataTemplate'].includes(localName(p.tag)))throw new Error('Move across template scopes requires source editing');
+  for(let p=target;p;p=owner(p))if(['ControlTemplate','DataTemplate','TreeDataTemplate'].includes(localName(p.tag)))throw new Error('Move across template scopes requires source editing');
+  const wrappers=target.children.filter(c=>c.kind==='element'&&['Children','Child','Content'].includes(localName(c.tag).split('.')[1]));
+  if(wrappers.length>1)throw new Error('Destination has ambiguous content properties');
+  const host=wrappers[0]??target,visual=host.children.filter(c=>c.kind==='element'&&!localName(c.tag).includes('.')||c.kind==='text');
+  if(!panelTypes.has(localName(target.tag))&&(visual.length||'Content'in target.attributes||'Child'in target.attributes))throw new Error('Destination content host is not empty');
+  const child=text.slice(node.span.start,node.span.end),eol=text.includes('\r\n')?'\r\n':'\n';
+  let start,end,replacement;
+  if(text.slice(host.span.end-2,host.span.end)==='/>'){start=host.span.end-2;end=host.span.end;replacement='>'+eol+'  '+child+eol+'</'+host.tag+'>';}
+  else{start=end=text.lastIndexOf('</',host.span.end-1);replacement=eol+'  '+child+eol;}
+  let after=text;for(const [a,b,v]of [[node.span.start,node.span.end,''],[start,end,replacement]].sort((a,b)=>b[0]-a[0]))after=after.slice(0,a)+v+after.slice(b);
+  xml(after,file);return {file,before:text,after,selection:start-(node.span.start<start?node.span.end-node.span.start:0)};
 }

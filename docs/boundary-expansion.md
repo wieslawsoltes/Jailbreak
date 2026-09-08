@@ -36,3 +36,11 @@ Regression paths: `tests/environment-reload.test.js` (13 cases) and two further 
 Still excluded: OneWayToSource initialization during a changed binding, arbitrary custom resource constructors, include-file environment changes, arbitrary ItemTemplate/ItemsPanel replacement, moving templated hosts, and rollback of external side effects from user callbacks. Normal source compilation remains the boundary for supported binding syntax; this does not add arbitrary markup extensions.
 
 Semantics references: [binding modes](https://docs.avaloniaui.net/docs/data-binding/data-binding-syntax), [logical-tree inheritance](https://docs.avaloniaui.net/docs/data-binding/data-context), [property precedence](https://docs.avaloniaui.net/docs/properties/value-precedence).
+
+## Stage 3: source-round-tripping designer
+
+C# object initializer editing now adds and removes typed literal properties, creates an initializer on `new Control()`, handles signed numbers and character/string escapes, and preserves comments/trivia and line endings using compiler token spans. The editor refuses expression-based values, identity mutations, unsupported property types and stale transactions. These constructor changes remain restart-required: source editing support is not constructor state migration.
+
+The primary Develop panel exposes **Set binding/resource**, **Remove property**, and **Move into** a named host. Literal edits still protect bindings; the explicit expression action parses and validates supported markup. XAML moves preserve the existing element bytes, reject cycles, nonempty content slots, namespace-resolution changes and template-scope moves, and are one undoable transaction.
+
+Regression paths: `tests/designer-roundtrip.test.js` (12 cases) plus three browser gates. Local verification: 247 Node tests and 20 development-browser tests. General imperative C# UI reconstruction, custom typed expressions and arbitrary AST refactorings remain outside these operations.
