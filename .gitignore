@@ -3,3 +3,12 @@ dist/
 site/
 test-results/
 .DS_Store
+
+# Generated binary fixture builds
+**/bin/
+**/obj/
+tests/fixtures/msil/*.dll
+tests/fixtures/msil/*.nupkg
+tests/fixtures/msil/clr-oracle.json
+**/__pycache__/
+*.pyc

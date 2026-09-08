@@ -1,0 +1,3 @@
+import {compileIL,compileAssemblies} from '../packages/msil-compiler/verified.js';
+import {convertNugetPackages} from '../packages/nuget/index.js';
+self.onmessage=async({data})=>{try{const result=data.mode==='il'?compileIL(data.text,{path:'editor.il'}):data.mode==='nuget'?await convertNugetPackages(data.files,{targetFramework:data.framework||undefined}):compileAssemblies(data.files);self.postMessage({id:data.id,result});}catch(e){self.postMessage({id:data.id,result:{success:false,code:'',assemblies:[],diagnostics:[{code:e.code??'JB6000',severity:'error',message:e.message,file:'binary',offset:e.offset??0,line:1,column:1}],stats:{methods:0,assemblies:0,milliseconds:0}}});}};

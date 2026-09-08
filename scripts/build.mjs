@@ -21,3 +21,19 @@ await fs.writeFile(path.join(site,'index.module.html'),moduleHtml);
 const offline=moduleHtml.replace('<link rel="stylesheet" href="./style.css">',()=>'<style>'+css+'</style>').replace('<script type="module" src="./app.js"></script>',()=>'<script>globalThis.__JailbreakAssets='+json+';</script><script>'+app.replace(/<\/script/gi,'<\\/script')+'</script>');
 await fs.writeFile(path.join(site,'index.html'),offline);
 console.log('Built offline-capable index.html ('+Math.round(offline.length/1024)+' KiB).');
+
+// Binary Studio uses the same MSIL frontend/runtime as the programmatic APIs.
+await fs.cp(path.join(root,'apps/binary'),path.join(site,'binary'),{recursive:true});
+const binaryWorker=await bundleModules(site,'binary/worker.js',{entryScript:true});
+const binaryRuntime=await bundleModules(root,'packages/msil-runtime/index.js',{expose:{name:'createBinaryRuntime',export:'createBinaryRuntime'}});
+const binaryApp=await bundleModules(site,'binary/app.js',{entryScript:true});
+const binaryFixture=JSON.parse(await fs.readFile(path.join(root,'tests/fixtures/msil/fixture.json'),'utf8'));
+const binaryAssets={worker:binaryWorker,runtime:binaryRuntime,fixture:binaryFixture,samples:{il:await fs.readFile(path.join(root,'examples-il/Arithmetic.il'),'utf8'),loop:await fs.readFile(path.join(root,'examples-il/Loops.il'),'utf8')}};
+const binaryHtml=await fs.readFile(path.join(site,'binary/index.html'),'utf8'),binaryCss=await fs.readFile(path.join(site,'binary/style.css'),'utf8');
+await fs.writeFile(path.join(site,'binary/assets.json'),JSON.stringify(binaryAssets));
+await fs.writeFile(path.join(site,'binary/index.module.html'),binaryHtml);
+await fs.writeFile(path.join(site,'binary/index.html'),binaryHtml.replace('<link rel="stylesheet" href="./style.css">',()=>'<style>'+binaryCss+'</style>').replace('<script type="module" src="./app.js"></script>',()=>'<script>globalThis.__JailbreakBinaryAssets='+JSON.stringify(binaryAssets).replace(/</g,'\\u003c')+';</script><script>'+binaryApp.replace(/<\/script/gi,'<\\/script')+'</script>'));
+await fs.mkdir(path.join(site,'binary/examples'),{recursive:true});
+for(const [name,file]of Object.entries(binaryFixture.files))await fs.writeFile(path.join(site,'binary/examples',name),Buffer.from(file.base64,'base64'));
+await fs.cp(path.join(root,'examples-il'),path.join(site,'binary/examples/il'),{recursive:true});
+console.log('Built Binary Studio, real DLL/nupkg fixtures, and offline binary runner.');

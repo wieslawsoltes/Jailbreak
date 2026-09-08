@@ -10,7 +10,9 @@
     "build": "node scripts/build.mjs",
     "serve": "node scripts/serve.mjs",
     "gate": "node scripts/gate.mjs",
-    "check": "node scripts/check.mjs"
+    "check": "node scripts/check.mjs",
+    "compile:binary": "node scripts/compile-binary.mjs",
+    "test:clr": "node scripts/verify-msil-clr.mjs"
   },
   "engines": { "node": ">=22" }
 }
