@@ -19,5 +19,14 @@
       "packages/workbench/studio.js"
     ],
     "baseline": "774553a512b653d9075dad260c3f00eb2f06fb14"
+  },
+  "a38c98c862f902db0290bddcfc5efe21a2cbe5ac": {
+    "sha256": "b5b09c5a0b1cbe363262ad2b1e8d0772877ad0632b85b1395cb2fd45be46ffac",
+    "status": "integrated",
+    "files": [
+      "docs/milestone-source-intelligence.md",
+      "tests/browser/test_source_tools.py"
+    ],
+    "baseline": "4a7c961b702f5abe8eed59e984167d84aad8de6d"
   }
 }
