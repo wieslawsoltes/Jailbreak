@@ -52,3 +52,12 @@ XAML/C# source and actual vector/mask rendering through the primary runtime.
 `tests/fixtures/upstream.json` now identifies the requested fork correctly and
 keeps `fullControlCatalogPassed` false. The isolated host adapters and single
 page do not establish full project, full framework or global visual parity.
+
+## Integrated desktop tools and Grid editing
+
+The three recovered desktop/source-intelligence stages are ordinary source on `main`
+at `1a71c4d...`, with a successful canonical pipeline. No open pull requests were
+pending at reconciliation. [Grid inspector](milestone-grid-inspector.md) adds actual
+track/cell/span editing, source-preserving transactions, corrected default Grid
+placement and a separate Interact artboard tool. This advances layout editing and
+framework behavior without claiming full measure/arrange or ControlCatalog parity.

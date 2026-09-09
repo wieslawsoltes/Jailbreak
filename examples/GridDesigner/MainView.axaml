@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="GridDesigner.MainView">
+  <Grid Name="Layout" Margin="24" RowDefinitions="64,Auto,*,48" ColumnDefinitions="240,*,180" RowSpacing="16" ColumnSpacing="12">
+    <Border Name="TitleCard" Grid.ColumnSpan="3" Background="#EEE9FF" CornerRadius="8" Padding="16">
+      <TextBlock Text="Build layouts. Keep the application alive." FontSize="23" FontWeight="Bold" Foreground="#493483" />
+    </Border>
+    <TextBox Name="Input" Grid.Row="1" Text="Type here before editing tracks" />
+    <Button Name="Action" Grid.Row="1" Grid.Column="2" Content="Increment" Click="Increment" />
+    <Border Name="Sidebar" Grid.Row="2" Background="#F4F1FB" CornerRadius="8" Padding="16">
+      <StackPanel Spacing="14">
+        <TextBlock Text="GRID INSPECTOR" FontWeight="Bold" />
+        <TextBlock Text="Select a child and choose its cell. Edit tracks with pixels, Auto, or weighted stars." TextWrapping="Wrap" />
+        <TextBlock Text="Insert a track: existing indices and spans adjust in one undoable edit." TextWrapping="Wrap" />
+      </StackPanel>
+    </Border>
+    <Border Name="ContentCard" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Background="#EEF5FF" CornerRadius="8" Padding="24">
+      <StackPanel Spacing="20">
+        <TextBlock Text="Source-backed layout" FontSize="23" FontWeight="Bold" />
+        <TextBlock Text="Hot reload preserves the root, typed input and handler state. Unsupported expressions stay protected." TextWrapping="Wrap" />
+        <TextBlock Name="CounterLabel" Text="Count: 0" FontSize="28" Foreground="#37659A" />
+      </StackPanel>
+    </Border>
+    <TextBlock Grid.Row="3" Grid.ColumnSpan="3" Text="Track edits · Cell placement · Source undo · Live preview" Foreground="#6E7190" VerticalAlignment="Center" />
+  </Grid>
+</UserControl>

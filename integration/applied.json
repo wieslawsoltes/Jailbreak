@@ -23,5 +23,6 @@
   "041-upstream-canvas.patch": "52dc3991f2b7a49575310d6bc158c6d44ead1b7a491f4cc11dcabe5ec4ad7edd",
   "050-constructor-chains.patch": "9b1be226d8828c699cbadece0d7bd13ef1da3f689fce43a94d2a785b485525ac",
   "060-grid-core.patch": "ac062a81ea2d46ece4e4ed35aa4e682727f15bf06e3cad466194af9ad34ad7aa",
-  "061-grid-studio.patch": "b943ee19e87491892339feb11a80401303dd90d5cb58f1059bf31fc9e57151e3"
+  "061-grid-studio.patch": "b943ee19e87491892339feb11a80401303dd90d5cb58f1059bf31fc9e57151e3",
+  "062-grid-gates.patch": "5d4a3caf3421aed575672e4c874b7541c19f5a6fd3248b65be67e76cefb04a06"
 }
