@@ -19,5 +19,6 @@
   "037-design-gates.patch": "30f25b0cf0a14a5bb6df9998a7660b935407a0f65ed7676b8e277d4aa3d5288a",
   "038-vector-runtime.patch": "1e05dc3e8161d553bcee8339191b41cc77e5af708dce57a75634c5500b630f3c",
   "039-vector-runtime.patch": "9034e4fcae96f402f89cadafedc253efd027ca9134fbfa75a0ef0d1c1dde5a66",
-  "040-upstream-canvas.patch": "19c5bd7c7edfc206837e1cc540a4d5f64665bccaeb5a97f97264c561f1fd792a"
+  "040-upstream-canvas.patch": "19c5bd7c7edfc206837e1cc540a4d5f64665bccaeb5a97f97264c561f1fd792a",
+  "041-upstream-canvas.patch": "52dc3991f2b7a49575310d6bc158c6d44ead1b7a491f4cc11dcabe5ec4ad7edd"
 }

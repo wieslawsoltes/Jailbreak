@@ -3,10 +3,40 @@
     "repository": "AvaloniaUI/Avalonia",
     "commit": "27c1ece36cbe17de3b8f95ae88223ba68702ae47",
     "files": [
-      {"local": "examples/UpstreamCheckBox/CheckBoxPage.xaml", "upstream": "samples/ControlCatalog/Pages/CheckBoxPage.xaml", "blob": "4f9c59448bc6188b0675629dfe99fcd571ea9290"},
-      {"local": "examples/UpstreamCheckBox/CheckBoxPage.xaml.cs", "upstream": "samples/ControlCatalog/Pages/CheckBoxPage.xaml.cs", "blob": "b63d7084d6ba16880cbb03ca8990230d6cac1471"},
-      {"local": "examples/UpstreamCheckBox/LICENSE.Avalonia.txt", "upstream": "licence.md", "blob": "41951805ac6a5cdb91373db7725fbaa9c004d912"}
+      {
+        "local": "examples/UpstreamCheckBox/CheckBoxPage.xaml",
+        "upstream": "samples/ControlCatalog/Pages/CheckBoxPage.xaml",
+        "blob": "4f9c59448bc6188b0675629dfe99fcd571ea9290"
+      },
+      {
+        "local": "examples/UpstreamCheckBox/CheckBoxPage.xaml.cs",
+        "upstream": "samples/ControlCatalog/Pages/CheckBoxPage.xaml.cs",
+        "blob": "b63d7084d6ba16880cbb03ca8990230d6cac1471"
+      },
+      {
+        "local": "examples/UpstreamCheckBox/LICENSE.Avalonia.txt",
+        "upstream": "licence.md",
+        "blob": "41951805ac6a5cdb91373db7725fbaa9c004d912"
+      }
     ]
   },
-  "requestedLibrary": {"repository": "wieslawsoltes/Avalonialibrary", "status": "blocked", "verifiedOn": "2026-09-08", "reason": "The supplied repository returned HTTP 404 through the connected GitHub API. This gate has not passed."}
+  "requestedLibrary": {
+    "repository": "wieslawsoltes/Avalonia",
+    "commit": "b709c58c6b1b8aa3b90866c7c001b7bf82b6353b",
+    "status": "selected-pages-only",
+    "fullControlCatalogPassed": false,
+    "reason": "The isolated original page and browser host adapters are not the full original ControlCatalog project.",
+    "files": [
+      {
+        "local": "examples/UpstreamCanvas/CanvasPage.xaml",
+        "upstream": "samples/ControlCatalog/Pages/CanvasPage.xaml",
+        "blob": "a9e342181d9e68e50fe429c92aa0ed0cb62ac22f"
+      },
+      {
+        "local": "examples/UpstreamCanvas/CanvasPage.xaml.cs",
+        "upstream": "samples/ControlCatalog/Pages/CanvasPage.xaml.cs",
+        "blob": "b94aabca940a3cff4159577d4f9fe6c368a04744"
+      }
+    ]
+  }
 }
