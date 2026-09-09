@@ -1,0 +1,171 @@
+diff --git a/docs/mandatory-targets-status.md b/docs/mandatory-targets-status.md
+index beb81e08f472b9b95c521218f870c99c784fe5e8..7aa0ed828420e111c445612c7d10a3c770531d80 100644
+--- a/docs/mandatory-targets-status.md
++++ b/docs/mandatory-targets-status.md
+@@ -54 +54,10 @@ keeps `fullControlCatalogPassed` false. The isolated host adapters and single
+ page do not establish full project, full framework or global visual parity.
++
++## Integrated desktop tools and Grid editing
++
++The three recovered desktop/source-intelligence stages are ordinary source on `main`
++at `1a71c4d...`, with a successful canonical pipeline. No open pull requests were
++pending at reconciliation. [Grid inspector](milestone-grid-inspector.md) adds actual
++track/cell/span editing, source-preserving transactions, corrected default Grid
++placement and a separate Interact artboard tool. This advances layout editing and
++framework behavior without claiming full measure/arrange or ControlCatalog parity.
+diff --git a/docs/milestone-grid-inspector.md b/docs/milestone-grid-inspector.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..637a1b4e1bb2cc44226320e1e58f96eda8e9f7ef
+--- /dev/null
++++ b/docs/milestone-grid-inspector.md
+@@ -0,0 +1,32 @@
++# Source-backed Grid inspector and live track editing
++
++The merged desktop/source-intelligence stages were verified at `1a71c4d73acf31e24759e863de62ec591b4804cf`. No open pull requests remained at this round's reconciliation. The earlier screenshot of a Grid inspector did not establish that its implementation was in that source tree. This milestone adds the missing executable Grid inspector and its regression tests to the existing Studio, without replacing any debugger, designer or compiler implementation.
++
++## Designer workflow
++
++Select **Grid Designer**, choose the **Designer** perspective, and enable **Hot reload**. Select `Layout` or a direct child in the visual hierarchy. The **Grid layout** inspector exposes row/column definitions (pixels, Auto and weighted stars), indexed track insertion/removal, child row/column/spans, spacing and a clickable cell map. Track chips show the index and size. Cells show occupants in tooltips, including overlapping/spanning children. Oversized maps are omitted rather than creating unbounded DOM.
++
++A track insertion moves children starting at/after the insertion and expands spans that cross it. Removal shifts following children and contracts crossing spans. Replacing definitions clamps out-of-range child coordinates/spans. All affected attributes form **one preimage-checked undoable source transaction**; edits are applied in descending element-offset order. Comments, prefixes, unrelated attributes and CRLF survive. A failed edit does not replace source or the running application.
++
++**Select**, **Pan**, and **Interact** are separate artboard tools. Interact disables picking and the panning overlay so the actual application can receive input/clicks at the current zoom. It does not start another application instance. Switch back to Select to edit the same running controls.
++
++## Reused architecture
++
++- `avalonia-runtime/grid-layout.js`: shared shorthand parsing, CSS track emission and effective placement/clamping.
++- `development/grid-editor.js`: source-only inspection and track/cell edit planning.
++- `workbench/grid-tools.js`: an inspector client using the existing developer session and edit/history/build hooks. No live runtime objects cross the iframe boundary.
++- The existing `liveProperties` contract and transactional reload planner apply supported track/gap edits to retained Grid/child instances.
++
++Grid children default to `(0,0)` with span one, not browser auto-placement. Without definitions there is a single star track. Indices and spans clamp at explicit track edges; they do not create implicit tracks. Parent definition changes refresh retained children's CSS placement. Zero-weight stars stay zero instead of becoming `1*`. Invalid CSS expressions are not accepted as Grid sizes.
++
++## Verification
++
++`tests/grid-editor.test.js` covers track parsing, default and edge placement, insertion/removal/span adjustment, expanded/bound definitions, source preservation, undo and live runtime identity/input/handler preservation. `tests/browser/test_grid_tools.py` edits the real compiled sample: it inserts tracks, changes cells/gaps, undoes changes and checks DOM positions, input, counters and root identity. Browser tests also reject invalid track expressions and verify overlapping default children.
++
++The canonical CI serves the generated site over HTTP. The local offline test mode (`JAILBREAK_INLINE_TEST=1`) exercises the same bundled application when this execution environment blocks localhost navigation; it is not a substitute UI. Existing full browser and CLR gates remain required for publication.
++
++## Supported boundary
++
++This is the shorthand, direct-child Grid editing profile. Expanded definition elements with min/max/shared-size constraints, transformed/template instances, bound definitions or bound coordinates require explicit source editing. Auto uses intrinsic CSS sizing; exact Avalonia measure/arrange equivalence, shared-size groups and all constraint interactions are not claimed. General imperative C# layout round-tripping and the complete unchanged ControlCatalog remain mandatory targets.
++
++Primary behavior reference: https://docs.avaloniaui.net/controls/layout/panels/grid
+diff --git a/examples/GridDesigner/GridDesigner.csproj b/examples/GridDesigner/GridDesigner.csproj
+new file mode 100644
+index 0000000000000000000000000000000000000000..d3b2f0306a15d94cb915e26d13c88e579440f89b
+--- /dev/null
++++ b/examples/GridDesigner/GridDesigner.csproj
+@@ -0,0 +1 @@
++<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>
+diff --git a/examples/GridDesigner/MainView.axaml b/examples/GridDesigner/MainView.axaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..9291aff31f3182bf2c10f9715d576647754c8f63
+--- /dev/null
++++ b/examples/GridDesigner/MainView.axaml
+@@ -0,0 +1,24 @@
++<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="GridDesigner.MainView">
++  <Grid Name="Layout" Margin="24" RowDefinitions="64,Auto,*,48" ColumnDefinitions="240,*,180" RowSpacing="16" ColumnSpacing="12">
++    <Border Name="TitleCard" Grid.ColumnSpan="3" Background="#EEE9FF" CornerRadius="8" Padding="16">
++      <TextBlock Text="Build layouts. Keep the application alive." FontSize="23" FontWeight="Bold" Foreground="#493483" />
++    </Border>
++    <TextBox Name="Input" Grid.Row="1" Text="Type here before editing tracks" />
++    <Button Name="Action" Grid.Row="1" Grid.Column="2" Content="Increment" Click="Increment" />
++    <Border Name="Sidebar" Grid.Row="2" Background="#F4F1FB" CornerRadius="8" Padding="16">
++      <StackPanel Spacing="14">
++        <TextBlock Text="GRID INSPECTOR" FontWeight="Bold" />
++        <TextBlock Text="Select a child and choose its cell. Edit tracks with pixels, Auto, or weighted stars." TextWrapping="Wrap" />
++        <TextBlock Text="Insert a track: existing indices and spans adjust in one undoable edit." TextWrapping="Wrap" />
++      </StackPanel>
++    </Border>
++    <Border Name="ContentCard" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Background="#EEF5FF" CornerRadius="8" Padding="24">
++      <StackPanel Spacing="20">
++        <TextBlock Text="Source-backed layout" FontSize="23" FontWeight="Bold" />
++        <TextBlock Text="Hot reload preserves the root, typed input and handler state. Unsupported expressions stay protected." TextWrapping="Wrap" />
++        <TextBlock Name="CounterLabel" Text="Count: 0" FontSize="28" Foreground="#37659A" />
++      </StackPanel>
++    </Border>
++    <TextBlock Grid.Row="3" Grid.ColumnSpan="3" Text="Track edits · Cell placement · Source undo · Live preview" Foreground="#6E7190" VerticalAlignment="Center" />
++  </Grid>
++</UserControl>
+diff --git a/examples/GridDesigner/MainView.axaml.cs b/examples/GridDesigner/MainView.axaml.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..a6bfe72e41f09fc151c5011c253404cb6a5def89
+--- /dev/null
++++ b/examples/GridDesigner/MainView.axaml.cs
+@@ -0,0 +1,12 @@
++using Avalonia.Controls;
++namespace GridDesigner;
++public partial class MainView : UserControl
++{
++    public int count = 0;
++    public MainView() { InitializeComponent(); }
++    private void Increment(object sender, RoutedEventArgs e)
++    {
++        count += 1;
++        CounterLabel.Text = $"Count: {count}";
++    }
++}
+diff --git a/tests/browser/test_grid_tools.py b/tests/browser/test_grid_tools.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..90e7dd285d68ace14f0b00eba9c640ce3d123336
+--- /dev/null
++++ b/tests/browser/test_grid_tools.py
+@@ -0,0 +1,57 @@
++"""Track editing and placement in the real running source application."""
++import unittest
++import test_development as baseline
++from playwright.sync_api import expect
++class GridToolsTests(unittest.TestCase):
++    setUpClass=classmethod(baseline.DevelopmentTests.setUpClass.__func__)
++    tearDownClass=classmethod(baseline.DevelopmentTests.tearDownClass.__func__)
++    tearDown=baseline.DevelopmentTests.tearDown
++    source=baseline.DevelopmentTests.source
++    def setUp(self):
++        baseline.DevelopmentTests.setUp(self)
++        self.page.select_option('#samples','GridDesigner')
++        self.preview=self.page.frame_locator('#preview')
++        expect(self.preview.get_by_role('button',name='Increment',exact=True)).to_be_visible(timeout=30000)
++        self.page.click('#studio-view-design')
++        expect(self.page.locator('#dev-tree')).to_contain_text('#Layout',timeout=30000)
++        self.page.click('#studio-hot-reload')
++    def select(self,name):
++        self.page.locator('#dev-tree button').filter(has_text='#'+name).click()
++        expect(self.page.locator('#grid-designer')).to_be_visible()
++    def test_track_insert_cell_edit_and_undo_preserve_live_state(self):
++        frame=self.page.frames[-1];identity=frame.evaluate('appHandle.root.uid')
++        self.page.click('#design-interact');self.preview.get_by_role('textbox').fill('retain this')
++        self.preview.get_by_role('button',name='Increment',exact=True).click();expect(self.preview.get_by_text('Count: 1',exact=True)).to_be_visible();self.page.click('#design-select')
++        self.select('Layout');self.page.fill('#grid-rows-index','1');self.page.fill('#grid-rows-size','32');self.page.click('#grid-insert-rows')
++        expect(self.page.locator('#dev-status')).to_contain_text('Hot reload 1',timeout=30000)
++        self.assertEqual(frame.evaluate('appHandle.root.Layout.RowDefinitions'),'64,32,Auto,*,48')
++        self.assertEqual(frame.evaluate("Number(appHandle.root.Input.GetValue('Grid.Row'))"),2)
++        self.select('Input');self.page.click('#grid-cell-1-1')
++        expect(self.page.locator('#dev-status')).to_contain_text('Hot reload 2',timeout=30000)
++        expect(self.preview.get_by_role('textbox')).to_have_value('retain this')
++        self.assertEqual(frame.evaluate('appHandle.root.count'),1);self.assertEqual(frame.evaluate('appHandle.root.uid'),identity)
++        self.page.get_by_role('button',name='Undo design',exact=True).click()
++        expect(self.page.locator('#dev-status')).to_contain_text('Hot reload 3',timeout=30000)
++        self.assertEqual(frame.evaluate("Number(appHandle.root.Input.GetValue('Grid.Row'))"),2)
++        self.assertEqual(self.errors,[])
++    def test_track_sizes_spacing_and_rendered_bounds(self):
++        self.select('Layout');self.page.fill('#grid-columns','200,2*,180');self.page.click('#grid-apply-columns')
++        expect(self.page.locator('#dev-status')).to_contain_text('Hot reload 1',timeout=30000)
++        self.select('Input');self.page.fill('#grid-row-gap','20');self.page.fill('#grid-column-gap','10');self.page.click('#grid-apply-gaps')
++        expect(self.page.locator('#dev-status')).to_contain_text('Hot reload 2',timeout=30000)
++        frame=self.page.frames[-1];self.assertEqual(frame.evaluate("getComputedStyle(appHandle.root.Layout.element).columnGap"),'10px')
++        self.assertEqual(frame.evaluate("getComputedStyle(appHandle.root.Input.element).gridColumnStart"),'1')
++        self.assertEqual(frame.evaluate('Math.round(appHandle.root.Input.element.getBoundingClientRect().width)'),200)
++        self.assertEqual(self.errors,[])
++    def test_invalid_track_input_leaves_source_and_preview_intact(self):
++        self.select('Layout');before=self.source('MainView.axaml');self.page.fill('#grid-rows','*,var(--bad)');self.page.click('#grid-apply-rows')
++        expect(self.page.locator('#grid-message')).to_contain_text('Grid tracks require')
++        self.assertEqual(self.source('MainView.axaml'),before)
++        self.assertEqual(self.page.frames[-1].evaluate('appHandle.root.Layout.RowDefinitions'),'64,Auto,*,48')
++        self.assertEqual(self.errors,[])
++    def test_defaults_overlap_and_clamped_spans_do_not_create_implicit_tracks(self):
++        frame=self.page.frames[-1]
++        actual=frame.evaluate("""()=>{const JB=Jailbreak,g=new JB.Grid();g.ColumnDefinitions='100,100';g.RowDefinitions='40,40';const a=new JB.Button(),b=new JB.Button();g.Children.Add(a);g.Children.Add(b);g.mount(document.body);JB.flushLayout();const defaults=[a.element.style.gridRow,b.element.style.gridRow];a.SetValue('Grid.Column',99);a.SetValue('Grid.ColumnSpan',99);JB.flushLayout();const column=a.element.style.gridColumn;g.Dispose();return {defaults,column};}""")
++        self.assertEqual(actual['defaults'],['1 / span 1','1 / span 1']);self.assertEqual(actual['column'],'2 / span 1')
++        self.assertEqual(self.errors,[])
++if __name__=='__main__':unittest.main(verbosity=2)

@@ -1,0 +1,152 @@
+diff --git a/packages/avalonia-runtime/grid-layout.js b/packages/avalonia-runtime/grid-layout.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..dd957762da7615295f97cf161eb1f52242806b1b
+--- /dev/null
++++ b/packages/avalonia-runtime/grid-layout.js
+@@ -0,0 +1,37 @@
++/** Shared shorthand grid semantics. Sizes are logical pixels, Auto or weighted stars. */
++export function parseGridTracks(value, {maxTracks=256}={}) {
++  if (!Number.isInteger(maxTracks) || maxTracks<1 || maxTracks>4096) throw new RangeError('Invalid grid track budget');
++  if (Array.isArray(value)) value=value.map(v=>typeof v==='object' ? v.Height??v.Width??'*' : v).join(',');
++  if (value==null || String(value).trim()==='') return [{unit:'star',value:1,text:'*'}];
++  const parts=String(value).split(',');
++  if (parts.length>maxTracks) throw new RangeError('Grid track budget exceeded');
++  return parts.map(part=>{
++    const text=part.trim();
++    if (/^auto$/i.test(text)) return {unit:'auto',value:0,text:'Auto'};
++    const m=/^((?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)?(\*)?$/.exec(text);
++    if (!m || !m[1]&&!m[2]) throw new Error('Grid tracks require Auto, nonnegative pixels or weighted stars');
++    const n=m[1]===undefined?1:Number(m[1]);
++    if (!Number.isFinite(n) || n<0 || n>1e9) throw new RangeError('Grid track size exceeds bounds');
++    return {unit:m[2]?'star':'pixel',value:n,text:m[2]?(n===1?'*':n+'*'):String(n)};
++  });
++}
++export function gridCss(value) {
++  return parseGridTracks(value).map(t=>t.unit==='auto'?'max-content':t.unit==='star'?`minmax(0,${t.value}fr)`:`${t.value}px`).join(' ');
++}
++export function gridRange(index, span, count) {
++  const integer=(value,fallback)=>Number.isFinite(Number(value))?Math.max(fallback,Math.trunc(Number(value))):fallback;
++  const start=Math.min(Math.max(1,count)-1,integer(index,0));
++  return {start,span:Math.min(integer(span??1,1),Math.max(1,count)-start)};
++}
++export function applyGridPlacement(control) {
++  if (!control.element) return;
++  for (const [axis,definitions] of [['Row','RowDefinitions'],['Column','ColumnDefinitions']]) {
++    let css='';
++    if (control.parent?.type==='Grid') {
++      const count=parseGridTracks(control.parent[definitions]).length;
++      const range=gridRange(control.GetValue('Grid.'+axis),control.GetValue('Grid.'+axis+'Span'),count);
++      css=`${range.start+1} / span ${range.span}`;
++    }
++    control.element.style['grid'+axis]=css;
++  }
++}
+diff --git a/packages/development/grid-editor.js b/packages/development/grid-editor.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b524a5abc68a445664d819eacf2863c23c8c1ec2
+--- /dev/null
++++ b/packages/development/grid-editor.js
+@@ -0,0 +1,70 @@
++import {parseXml} from '../compiler-core/xml.js';
++import {parseGridTracks,gridRange} from '../avalonia-runtime/grid-layout.js';
++import {editProperty} from './designer.js';
++const tag=n=>n.tag?.split(':').at(-1),own=(n,p)=>Object.hasOwn(n.attributes,p);
++const propertyAxis={rows:['RowDefinitions','Grid.Row'],columns:['ColumnDefinitions','Grid.Column']};
++function parse(text,file){const r=parseXml(text,file);if(r.diagnostics.length)throw new Error(r.diagnostics[0].message);return r.root;}
++function entries(root){const out=[];const walk=(node,parent)=>{if(node.kind!=='element')return;out.push({node,parent});for(const c of node.children)walk(c,node);};walk(root,null);return out;}
++function literal(node,key,fallback){const value=node.attributes[key]??fallback;if(typeof value==='string'&&value.startsWith('{'))throw new Error('Grid binding/resource expressions are protected: '+key);return value;}
++function integer(value,min=0,max=1000000){const n=Number(value);if(value===''||!Number.isSafeInteger(n)||n<min||n>max)throw new Error('Grid index/span is outside its allowed range');return n;}
++/** Source-only direct-child context. Runtime template instances are excluded by the caller. */
++export function gridContext(text,file,offset){
++  if(!/\.a?xaml$/i.test(file))throw new Error('Grid editing requires XAML source');
++  const all=entries(parse(text,file)),selected=all.find(e=>e.node.span.start===offset);
++  if(!selected)throw new Error('Stale Grid designer source position');
++  let grid=selected.node,child=null,parent=selected.parent;
++  if(tag(grid)!=='Grid'){
++    child=grid;if(tag(parent)?.endsWith('.Children'))parent=all.find(e=>e.node===parent)?.parent;
++    if(tag(parent)!=='Grid')throw new Error('Select a Grid or one of its direct children');grid=parent;
++  }
++  for(let p=grid;p;p=all.find(e=>e.node===p)?.parent)if(['ControlTemplate','DataTemplate','TreeDataTemplate'].includes(tag(p)))throw new Error('Template Grid edits require explicit source editing');
++  for(const name of ['RowDefinitions','ColumnDefinitions'])if(grid.children.some(c=>tag(c)?.endsWith('.'+name)))throw new Error('Expanded Grid definitions are protected; edit their source explicitly');
++  const wrappers=grid.children.filter(c=>tag(c)?.endsWith('.Children'));
++  if(wrappers.length>1)throw new Error('Ambiguous Grid child ownership');
++  const direct=grid.children.filter(c=>c.kind==='element'&&!tag(c).includes('.'));
++  if(wrappers.length&&direct.length)throw new Error('Mixed implicit and explicit Grid children');
++  const children=wrappers.length?wrappers[0].children.filter(c=>c.kind==='element'&&!tag(c).includes('.')):direct;
++  const rows=parseGridTracks(literal(grid,'RowDefinitions','*'),{maxTracks:128}),columns=parseGridTracks(literal(grid,'ColumnDefinitions','*'),{maxTracks:128});
++  const placements=children.map(node=>({node,row:gridRange(integer(literal(node,'Grid.Row',0)),integer(literal(node,'Grid.RowSpan',1),1),rows.length),column:gridRange(integer(literal(node,'Grid.Column',0)),integer(literal(node,'Grid.ColumnSpan',1),1),columns.length)}));
++  return {grid,child,rows,columns,placements,rowSpacing:literal(grid,'RowSpacing',0),columnSpacing:literal(grid,'ColumnSpacing',0)};
++}
++export function inspectGrid(text,file,offset){
++  const c=gridContext(text,file,offset),p=c.placements.find(p=>p.node===c.child);
++  return {gridOffset:c.grid.span.start,name:c.grid.attributes.Name??c.grid.attributes['x:Name']??'Grid',rows:c.rows.map(t=>t.text),columns:c.columns.map(t=>t.text),rowSpacing:c.rowSpacing,columnSpacing:c.columnSpacing,child:!!c.child,cell:p?{row:p.row.start,column:p.column.start,rowSpan:p.row.span,columnSpan:p.column.span}:null,placements:c.placements.map(p=>({name:p.node.attributes.Name??p.node.attributes['x:Name']??tag(p.node),row:p.row.start,column:p.column.start,rowSpan:p.row.span,columnSpan:p.column.span,selected:p.node===c.child}))};
++}
++/** Track and child-index changes are a single preimage-checked designer transaction. */
++export function editGrid(text,file,offset,request){
++  const c=gridContext(text,file,offset),changes=new Map();
++  const put=(node,key,value)=>{let row=changes.get(node.span.start);if(!row){row={node,properties:{}};changes.set(node.span.start,row);}row.properties[key]=String(value);};
++  if(['tracks','insert','remove'].includes(request.kind)){
++    const pair=propertyAxis[request.axis];if(!pair)throw new Error('Choose rows or columns');const [property,attached]=pair;
++    const previous=c[request.axis];let next=previous.map(t=>t.text),at;
++    if(request.kind==='tracks')next=parseGridTracks(request.value,{maxTracks:128}).map(t=>t.text);
++    else{
++      at=integer(request.index,0,request.kind==='insert'?next.length:next.length-1);
++      if(request.kind==='insert'){if(next.length>=128)throw new Error('Grid track budget exceeded');const t=parseGridTracks(request.value??'*');if(t.length!==1)throw new Error('Insert one track at a time');next.splice(at,0,t[0].text);}
++      else{if(next.length===1)throw new Error('The final Grid track cannot be removed');next.splice(at,1);}
++    }
++    put(c.grid,property,next.join(','));
++    for(const p of c.placements){
++      const old=attached==='Grid.Row'?p.row:p.column;let start=old.start,span=old.span;
++      if(request.kind==='insert'){if(start>=at)start++;else if(start+span>at)span++;}
++      if(request.kind==='remove'){if(start>at)start--;else if(start+span>at)span=Math.max(1,span-1);}
++      const value=gridRange(start,span,next.length);
++      // Clamp explicitly present out-of-range spans too. A default index must become
++      // explicit when an inserted first track moves that formerly default child.
++      if(value.start!==Number(p.node.attributes[attached]??0))put(p.node,attached,value.start);
++      if(value.span!==Number(p.node.attributes[attached+'Span']??1))put(p.node,attached+'Span',value.span);
++    }
++  }else if(request.kind==='cell'){
++    if(!c.child)throw new Error('Select a direct Grid child to edit its cell');
++    const row=integer(request.row,0,c.rows.length-1),column=integer(request.column,0,c.columns.length-1);
++    put(c.child,'Grid.Row',row);put(c.child,'Grid.Column',column);
++    put(c.child,'Grid.RowSpan',integer(request.rowSpan??1,1,c.rows.length-row));put(c.child,'Grid.ColumnSpan',integer(request.columnSpan??1,1,c.columns.length-column));
++  }else if(request.kind==='spacing'){
++    for(const [p,value]of [['RowSpacing',request.rowSpacing],['ColumnSpacing',request.columnSpacing]]){const n=Number(value);if(value===''||!Number.isFinite(n)||n<0||n>10000)throw new Error('Grid spacing requires nonnegative pixels');put(c.grid,p,n);}
++  }else throw new Error('Unknown Grid edit');
++  let after=text;
++  for(const [at,row]of [...changes].sort(([a],[b])=>b-a))for(const [key,value]of Object.entries(row.properties))after=editProperty(after,file,at,key,value).after;
++  parse(after,file);return {file,before:text,after,selection:c.grid.span.start,label:'Edit Grid '+request.kind};
++}
+diff --git a/tests/grid-editor.test.js b/tests/grid-editor.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a0cf59c2ac3e9ca2234518e1973a14bc3c023ff6
+--- /dev/null
++++ b/tests/grid-editor.test.js
+@@ -0,0 +1,27 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {parseGridTracks,gridCss,gridRange} from '../packages/avalonia-runtime/grid-layout.js';
++import {editGrid,inspectGrid} from '../packages/development/grid-editor.js';
++import {EditHistory} from '../packages/development/designer.js';
++import {compileProject} from '../packages/project-system/index.js';
++import {createRuntime} from '../packages/avalonia-runtime/index.js';
++import {planReload,reloadScript} from '../packages/development/reload.js';
++const text='<Grid xmlns="https://github.com/avaloniaui" Name="Layout" RowDefinitions="Auto,*,48" ColumnDefinitions="*,2*"><!--keep--><TextBox Name="Input"/><Button Name="B" Grid.Row="1" Grid.RowSpan="2" Content="Hi"/></Grid>';
++const view=t=>inspectGrid(t,'View.axaml',0);
++test('Grid shorthand preserves zero stars, fractions and default fill track',()=>{assert.equal(gridCss(null),'minmax(0,1fr)');assert.equal(gridCss('0*,Auto,.5*,48'),'minmax(0,0fr) max-content minmax(0,0.5fr) 48px');assert.equal(parseGridTracks('auto,2e2,*')[1].value,200);});
++test('Grid input rejects CSS expressions negative tracks and unbounded tracks',()=>{for(const s of ['-1','1,,2','1fr','1*;color:red','Infinity','NaN','1e99'])assert.throws(()=>parseGridTracks(s));assert.throws(()=>parseGridTracks(Array(129).fill('*').join(','),{maxTracks:128}));});
++test('Grid default placement is origin and spans clamp to the final explicit track',()=>{assert.deepEqual(gridRange(null,null,3),{start:0,span:1});assert.deepEqual(gridRange(8,9,3),{start:2,span:1});assert.deepEqual(gridRange(1,8,3),{start:1,span:2});});
++test('inserting first track remaps even implicit children in one source transaction',()=>{const tx=editGrid(text,'View.axaml',0,{kind:'insert',axis:'rows',index:0,value:32});const m=view(tx.after);assert.deepEqual(m.rows,['32','Auto','*','48']);assert.deepEqual(m.placements.map(p=>p.row),[1,2]);assert.equal(m.placements[1].rowSpan,2);assert.ok(tx.after.includes('<!--keep-->'));});
++test('inserting inside a span grows it while insertion at its end does not',()=>{const a=editGrid(text,'View.axaml',0,{kind:'insert',axis:'rows',index:2}),b=editGrid(text,'View.axaml',0,{kind:'insert',axis:'rows',index:3});assert.equal(view(a.after).placements[1].rowSpan,3);assert.equal(view(b.after).placements[1].rowSpan,2);});
++test('removing a track shifts following controls and shrinks crossing spans',()=>{const a=editGrid(text,'View.axaml',0,{kind:'remove',axis:'rows',index:0});assert.equal(view(a.after).placements[1].row,0);const b=editGrid(text,'View.axaml',0,{kind:'remove',axis:'rows',index:1});assert.equal(view(b.after).placements[1].rowSpan,1);});
++test('track count replacement clamps explicit spans without changing other content',()=>{const tx=editGrid(text,'View.axaml',0,{kind:'tracks',axis:'rows',value:'*'});assert.equal(view(tx.after).placements[1].row,0);assert.equal(view(tx.after).placements[1].rowSpan,1);assert.match(tx.after,/Content="Hi"/);});
++test('cell placement requires a direct child, valid bounds and positive spans',()=>{const offset=text.indexOf('<TextBox');const tx=editGrid(text,'View.axaml',offset,{kind:'cell',row:2,column:1});assert.equal(view(tx.after).placements[0].row,2);for(const r of [{row:9,column:0},{row:0,column:0,rowSpan:0},{row:0,column:1,columnSpan:3}])assert.throws(()=>editGrid(text,'View.axaml',offset,{kind:'cell',...r}));assert.throws(()=>editGrid(text,'View.axaml',0,{kind:'cell',row:0,column:0}));});
++test('bindings and expanded definition objects are protected from destructive simplification',()=>{for(const t of [text.replace('Auto,*,48','{Binding Rows}'),text.replace('Grid.Row="1"','Grid.Row="{Binding Row}"'),text.replace('<!--keep-->','<Grid.RowDefinitions><RowDefinition Height="Auto"/></Grid.RowDefinitions>')])assert.throws(()=>editGrid(t,'View.axaml',0,{kind:'insert',axis:'rows',index:0}),/protect/);});
++test('Grid edits preserve CRLF comments prefixes quotes and source preimages',()=>{const t=text.replace('<TextBox',"\r\n  <TextBox").replace('Content="Hi"',"Content='Hi'");const tx=editGrid(t,'View.axaml',0,{kind:'spacing',rowSpacing:12,columnSpacing:8});assert.match(tx.after,/\r\n/);assert.match(tx.after,/Content='Hi'/);const files={'View.axaml':t},h=new EditHistory();h.apply(files,tx);h.undo(files);assert.equal(files['View.axaml'],t);h.redo(files);assert.equal(files['View.axaml'],tx.after);});
++test('explicit Grid.Children works and the final track cannot be deleted',()=>{const t='<Grid><Grid.Children><Button Name="B"/></Grid.Children></Grid>';assert.equal(inspectGrid(t,'A.xaml',t.indexOf('<Button')).child,true);assert.throws(()=>editGrid(t,'A.xaml',0,{kind:'remove',axis:'rows',index:0}),/final/);});
++test('Grid tracks and index edits hot reload the original input with no duplicate subscriptions',()=>{
++  const before=compileProject({'View.axaml':text},{debug:true}),tx=editGrid(text,'View.axaml',0,{kind:'insert',axis:'rows',index:0,value:'24'}),after=compileProject({'View.axaml':tx.after},{debug:true});assert.equal(before.success,true);assert.equal(after.success,true);
++  const JB=createRuntime();JB.enableDevelopment({debug:before.debug,nativeBreaks:false});new Function('JB',before.code)(JB);JB.root=JB.createFromXaml('View.axaml');const root=JB.root,child=root.Input;child.Text='retained';let calls=0;root.B.Click.add(()=>calls++);
++  const plan=planReload(before,after);assert.equal(plan.compatible,true,JSON.stringify(plan.reasons));new Function('JB',reloadScript(plan,before,after,1).replace('(globalThis.Jailbreak)','(JB)'))(JB);
++  assert.equal(root.Input,child);assert.equal(child.Text,'retained');assert.equal(root.RowDefinitions,'24,Auto,*,48');root.B.raise('Click');assert.equal(calls,1);root.Dispose();
++});
