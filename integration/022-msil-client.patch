@@ -1,0 +1,94 @@
+diff --git a/apps/binary/app.js b/apps/binary/app.js
+index 5fdb652..20b3464 100644
+--- a/apps/binary/app.js
++++ b/apps/binary/app.js
+@@ -16,6 +16,7 @@ async function compile(){if(!assets)return;state.worker?.terminate();clearTimeou
+  log(`Converted ${r.stats.methods} methods in ${r.stats.assemblies} assembly/assemblies.`, 'success');$('summary').textContent=`${r.stats.milliseconds.toFixed(1)} ms · ${r.code.length.toLocaleString()} generated JS bytes`;$('export').disabled=false;status('Conversion succeeded');state.channel='binary-'+(crypto.randomUUID?.()??Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join(''));$('preview').srcdoc=createBinaryApplicationHtml(r,assets.runtime,{channel:state.channel});};
+- worker.postMessage({id,mode:state.mode,text:$('il').value,files:state.files,framework:$('framework').value.trim()});
++ worker.postMessage({id,mode:state.mode,text:$('il').value,files:state.files,framework:$('framework').value.trim(),debug:$('cooperative-debug').checked});
+ }
+ function loadSample(value){invalidate();if(['il','loop','exception'].includes(value)){state.mode='il';state.files=[];$('il').readOnly=false;$('il').value=assets.samples[value];showTab('il');}else{const name=({dll:'Jailbreak.BinaryExamples.dll',nuget:'Jailbreak.BinaryExamples.1.0.0.nupkg',exceptionDll:'Jailbreak.ExceptionExamples.dll',exceptionNuget:'Jailbreak.ExceptionExamples.1.0.0.nupkg'})[value];state.mode=name.endsWith('.nupkg')?'nuget':'dll';state.files=[{path:name,bytes:Uint8Array.from(atob((value.startsWith('exception')?assets.exceptionFixture:assets.fixture).files[name].base64),c=>c.charCodeAt(0))}];$('il').readOnly=true;$('il').value='// Binary input: '+name+'\n// Select Disassembly or JavaScript after compiling.\n// The original bytes are decoded locally.';showTab('disassembly');}compile();}
+-$('open').onclick=()=>$('file').click();$('file').onchange=async e=>{try{const files=[...e.target.files];if(!files.length)return;if(files.length>32||files.reduce((n,f)=>n+f.size,0)>32*1024*1024)throw new Error('Binary input budget: 32 files / 32 MiB');invalidate();if(files.length===1&&files[0].name.endsWith('.il')){state.mode='il';$('il').readOnly=false;$('il').value=await files[0].text();showTab('il');}else{const isNuget=files.every(f=>f.name.endsWith('.nupkg')),isDll=files.every(f=>/\.(dll|exe)$/i.test(f.name));if(!isNuget&&!isDll)throw new Error('Load an IL file, a set of managed DLLs, or a set of NuGet packages');state.mode=isNuget?'nuget':'dll';state.files=await Promise.all(files.map(async f=>({path:f.name,bytes:new Uint8Array(await f.arrayBuffer())})));$('il').readOnly=true;$('il').value='// Loaded binaries:\n'+files.map(f=>'// '+f.name).join('\n');showTab('disassembly');}compile();}catch(e){log(e.message,'error');}};
++$('open').onclick=()=>$('file').click();$('file').onchange=async e=>{try{const files=[...e.target.files];if(!files.length)return;if(files.length>32||files.reduce((n,f)=>n+f.size,0)>32*1024*1024)throw new Error('Binary input budget: 32 files / 32 MiB');invalidate();if(files.length===1&&files[0].name.endsWith('.il')){state.mode='il';$('il').readOnly=false;$('il').value=await files[0].text();showTab('il');}else{const isNuget=files.every(f=>f.name.endsWith('.nupkg')),isDll=files.every(f=>/\.(dll|exe|pdb|cs)$/i.test(f.name));if(!isNuget&&!isDll)throw new Error('Load IL, managed DLLs with adjacent PDB/source files, or NuGet packages');state.mode=isNuget?'nuget':'dll';state.files=await Promise.all(files.map(async f=>({path:f.name,bytes:new Uint8Array(await f.arrayBuffer())})));$('il').readOnly=true;$('il').value='// Loaded binaries:\n'+files.map(f=>'// '+f.name).join('\n');showTab('disassembly');}compile();}catch(e){log(e.message,'error');}};
++$('cooperative-debug').onchange=()=>{invalidate();compile();};
+ $('compile').onclick=compile;$('sample').onchange=()=>loadSample($('sample').value);$('il').oninput=invalidate;$('framework').oninput=invalidate;$('method').onchange=methodChanged;for(const b of document.querySelectorAll('[data-tab]'))b.onclick=()=>showTab(b.dataset.tab);
+diff --git a/apps/binary/index.html b/apps/binary/index.html
+index 09eb4c7..2e3b640 100644
+--- a/apps/binary/index.html
++++ b/apps/binary/index.html
+@@ -2,4 +2,4 @@
+ <header><a href="../">jailbreak <span>↗</span></a><div>BINARY STUDIO <small>MSIL → JavaScript</small></div><a class="source-link" href="https://github.com/wieslawsoltes/Jailbreak">Source ↗</a></header>
+-<div class="toolbar"><label>Example <select id="sample"><option value="il">IL · arithmetic</option><option value="loop">IL · loops</option><option value="dll">Managed DLL</option><option value="nuget">NuGet package</option><option value="exception">Exceptions IL</option><option value="exceptionDll">Exception DLL</option><option value="exceptionNuget">Exception NuGet</option></select></label><button id="open">Open .il / .dll / .nupkg</button><label>Package framework <input id="framework" placeholder="Auto if one lib group" aria-label="Package framework"></label><button id="compile" class="primary">Compile to JavaScript</button><button id="export" disabled>Export runnable HTML</button><input type="file" id="file" accept=".il,.dll,.exe,.nupkg" multiple hidden></div>
+-<main><aside><h2>ASSEMBLIES &amp; METHODS</h2><div id="inventory">Compile a source or binary file.</div><div class="boundary"><strong>Source and binary, one project.</strong><p>The existing C#/XAML IDE can import managed libraries too. Try its Binary Library and Nuget Library samples.</p><a href="../">Open UI workbench ↗</a><p>Subset compiler. Native code, general generics, exception regions and arbitrary .NET APIs remain unsupported.</p></div></aside>
++<div class="toolbar"><label>Example <select id="sample"><option value="il">IL · arithmetic</option><option value="loop">IL · loops</option><option value="dll">Managed DLL</option><option value="nuget">NuGet package</option><option value="exception">Exceptions IL</option><option value="exceptionDll">Exception DLL</option><option value="exceptionNuget">Exception NuGet</option></select></label><button id="open">Open .il / .dll / .nupkg</button><label>Package framework <input id="framework" placeholder="Auto if one lib group" aria-label="Package framework"></label><label><input type="checkbox" id="cooperative-debug"> In-IDE IL debugger</label><button id="compile" class="primary">Compile to JavaScript</button><button id="export" disabled>Export runnable HTML</button><input type="file" id="file" accept=".il,.dll,.exe,.nupkg,.pdb,.cs" multiple hidden></div>
++<main><aside><h2>ASSEMBLIES &amp; METHODS</h2><div id="inventory">Compile a source or binary file.</div><div class="boundary"><strong>Source and binary, one project.</strong><p>The existing C#/XAML IDE can import managed libraries too. Try its Binary Library and Nuget Library samples.</p><a href="../">Open UI workbench ↗</a><p>Subset compiler. Native code, general generics and arbitrary .NET APIs remain unsupported. Verified IL and typed exception regions support cooperative stepping; PDB input requires matching symbols.</p></div></aside>
+ <section class="code"><nav><button data-tab="il" class="selected">IL source</button><button data-tab="disassembly">Disassembly</button><button data-tab="javascript">JavaScript</button><button data-tab="package">Package report</button></nav><textarea id="il" aria-label="IL source editor" spellcheck="false"></textarea><pre id="listing" hidden></pre><div class="source-status" id="summary">Local compilation · no source upload</div></section>
+diff --git a/apps/binary/worker.js b/apps/binary/worker.js
+index cbb5ac0..8299862 100644
+--- a/apps/binary/worker.js
++++ b/apps/binary/worker.js
+@@ -1,3 +1,4 @@
++import {compileBinaryInputs} from '../packages/msil-compiler/debug.js';
+ import {compileIL,compileAssemblies} from '../packages/msil-compiler/verified.js';
+ import {convertNugetPackages} from '../packages/nuget/index.js';
+-self.onmessage=async({data})=>{try{const result=data.mode==='il'?compileIL(data.text,{path:'editor.il'}):data.mode==='nuget'?await convertNugetPackages(data.files,{targetFramework:data.framework||undefined}):compileAssemblies(data.files);self.postMessage({id:data.id,result});}catch(e){self.postMessage({id:data.id,result:{success:false,code:'',assemblies:[],diagnostics:[{code:e.code??'JB6000',severity:'error',message:e.message,file:'binary',offset:e.offset??0,line:1,column:1}],stats:{methods:0,assemblies:0,milliseconds:0}}});}};
++self.onmessage=async({data})=>{try{const options={debug:!!data.debug,cooperativeDebug:!!data.debug};const result=data.mode==='il'?compileIL(data.text,{...options,path:'editor.il'}):data.mode==='nuget'?await convertNugetPackages(data.files,{...options,targetFramework:data.framework||undefined}):await compileBinaryInputs(data.files,options);self.postMessage({id:data.id,result});}catch(e){self.postMessage({id:data.id,result:{success:false,code:'',assemblies:[],diagnostics:[{code:e.code??'JB6000',severity:'error',message:e.message,file:'binary',offset:e.offset??0,line:1,column:1}],stats:{methods:0,assemblies:0,milliseconds:0}}});}};
+diff --git a/apps/ide/app.js b/apps/ide/app.js
+index b6fe15c..33aef10 100644
+--- a/apps/ide/app.js
++++ b/apps/ide/app.js
+@@ -71,3 +71,3 @@ function renderFiles(){
+       const b=document.createElement('button');b.className='file-row'+(active===path&&!generated?' active':'');b.dataset.kind=kind(path);b.dataset.file=path;b.title=path;b.style.paddingLeft=(14+depth*12)+'px';
+-      const i=document.createElement('span');i.className='file-icon';i.textContent=icon(path);const label=document.createElement('span');label.textContent=(!Object.hasOwn(files,path)?'[symbol] ':'')+path;
++      const i=document.createElement('span');i.className='file-icon';i.textContent=icon(path);const label=document.createElement('span');label.textContent=(!Object.hasOwn(files,path)?(lastBuild?.debug?.sites?.some(p=>p.file===path&&p.language==='msil')?'[IL] ':'[symbol] '):'')+path;
+       b.append(i,label);b.onclick=()=>openFile(path);host.append(b);
+diff --git a/packages/msil-runtime/export.js b/packages/msil-runtime/export.js
+index ccc632b..85a0512 100644
+--- a/packages/msil-runtime/export.js
++++ b/packages/msil-runtime/export.js
+@@ -1 +1,2 @@
++import {binaryPreviewDebugger} from '../development/binary-preview.js';
+ import {mappedScript} from '../development/source-map.js';
+@@ -13,4 +14,5 @@ MS.link();window.binaryRuntime=MS;
+ const select=document.getElementById('method'),args=document.getElementById('args'),ctor=document.getElementById('ctor'),out=document.getElementById('result'),instances=new Map();
++const cooperative=${compilation.debug?.cooperative?binaryPreviewDebugger(compilation.debug,development):'null'};
+ for(const m of methods){const o=document.createElement('option');o.value=m.assembly+':'+m.token;o.textContent=m.owner+'::'+m.name;select.append(o);}
+-function invoke(assembly,token,values,constructorArgs=[]){try{const m=methods.find(m=>m.assembly===assembly&&m.token===token);if(!m)throw new Error('Choose a public method');if(!Array.isArray(values)||!Array.isArray(constructorArgs))throw new Error('Arguments must be JSON arrays');let self=null;if(!m.static){const key=assembly+'::'+m.owner+':'+JSON.stringify(constructorArgs);if(!instances.has(key)){const Type=MS.getType(assembly,m.owner);instances.set(key,new Type(...constructorArgs));}self=instances.get(key);}const value=MS.invoke(assembly,token,values,self);const text=JSON.stringify(value,(_,v)=>typeof v==='bigint'?v.toString():v,null,2)??'void';out.textContent=text;send('result',text);}catch(e){out.textContent=e.name+': '+e.message;send('error',out.textContent);}}
++function invoke(assembly,token,values,constructorArgs=[]){try{const m=methods.find(m=>m.assembly===assembly&&m.token===token);if(!m)throw new Error('Choose a public method');if(!Array.isArray(values)||!Array.isArray(constructorArgs))throw new Error('Arguments must be JSON arrays');if(cooperative){cooperative.invoke(m,values,constructorArgs,instances);return;}let self=null;if(!m.static){const key=assembly+'::'+m.owner+':'+JSON.stringify(constructorArgs);if(!instances.has(key)){const Type=MS.getType(assembly,m.owner);instances.set(key,new Type(...constructorArgs));}self=instances.get(key);}const value=MS.invoke(assembly,token,values,self);const text=JSON.stringify(value,(_,v)=>typeof v==='bigint'?v.toString():v,null,2)??'void';out.textContent=text;send('result',text);}catch(e){out.textContent=e.name+': '+e.message;send('error',out.textContent);}}
+ document.getElementById('run').onclick=()=>{try{const m=methods.find(m=>m.assembly+':'+m.token===select.value);if(!m)throw new Error('No callable public method');invoke(m.assembly,m.token,JSON.parse(args.value),JSON.parse(ctor.value));}catch(e){out.textContent=e.message;send('error',e.message);}};
+@@ -19,3 +21,3 @@ send('ready',{assemblies:MS.stats().assemblies,methods:methods.length});`;
+   if(compilation.debug)script=mappedScript(script,compilation.debug,compilation.debug.sources);
+-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none';script-src 'unsafe-inline';style-src 'unsafe-inline';connect-src 'none';base-uri 'none';form-action 'none'"><title>Jailbreak · converted library</title><style>body{margin:0;padding:24px;font:14px system-ui;background:#f7f8fc;color:#222b40}h2{margin:0 0 8px}p{color:#637089;line-height:1.6}label{display:block;margin:12px 0 4px}input,select,button{box-sizing:border-box;width:100%;padding:9px;font:inherit;border:1px solid #ccd2e0;border-radius:6px;background:white;color:#222b40}button{margin:14px 0;background:#6156d9;color:white;cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere;border-radius:8px;padding:18px;background:#e9ecf5;min-height:60px}</style></head><body><h2>Converted library</h2><p>Native JavaScript method functions. No .NET runtime or runtime IL interpreter.</p><label for="method">Method</label><select id="method"></select><label for="args">Method arguments (JSON array)</label><input id="args" value="[40,2]"><label for="ctor">Constructor arguments for instance methods</label><input id="ctor" value="[]"><button id="run">Invoke converted method</button><pre id="result" role="status">Ready</pre><script>${script.replace(/<\/script/gi,'<\\/script')}</script></body></html>`;
++  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none';script-src 'unsafe-inline';style-src 'unsafe-inline';connect-src 'none';base-uri 'none';form-action 'none'"><title>Jailbreak · converted library</title><style>body{margin:0;padding:24px;font:14px system-ui;background:#f7f8fc;color:#222b40}h2{margin:0 0 8px}p{color:#637089;line-height:1.6}label{display:block;margin:12px 0 4px}input,select,button{box-sizing:border-box;width:100%;padding:9px;font:inherit;border:1px solid #ccd2e0;border-radius:6px;background:white;color:#222b40}button{margin:14px 0;background:#6156d9;color:white;cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere;border-radius:8px;padding:18px;background:#e9ecf5;min-height:60px}#binary-debugger{margin:12px 0;border:1px solid #ccd2e0;padding:12px;border-radius:6px}#binary-debugger summary{cursor:pointer;font-weight:600}#binary-debugger input[type=checkbox]{width:auto;margin-right:8px}#binary-debugger textarea{box-sizing:border-box;width:100%;font:11px/18px monospace;white-space:pre;resize:vertical}#binary-debugger pre{max-height:260px;overflow:auto}#binary-debugger button{font-size:12px;margin:4px 0}#binary-debug-state{padding:8px 0;font-weight:600}.binary-debug-actions{display:flex;flex-wrap:wrap;gap:4px}.binary-debug-actions button{width:auto;flex:1}button:disabled{opacity:.45;cursor:default}</style></head><body><h2>Converted library</h2><p>Native JavaScript method functions. No .NET runtime or runtime IL interpreter.</p><label for="method">Method</label><select id="method"></select><label for="args">Method arguments (JSON array)</label><input id="args" value="[40,2]"><label for="ctor">Constructor arguments for instance methods</label><input id="ctor" value="[]"><button id="run">Invoke converted method</button><pre id="result" role="status">Ready</pre><script>${script.replace(/<\/script/gi,'<\\/script')}</script></body></html>`;
+ }
+diff --git a/tests/helpers/exception-cases.js b/tests/helpers/exception-cases.js
+index a9a9d7b..e9bbed1 100644
+--- a/tests/helpers/exception-cases.js
++++ b/tests/helpers/exception-cases.js
+@@ -1,4 +1,4 @@
+ /** Same inputs as the independent C# oracle, evaluated through converted methods. */
+-export function exceptionCases(C){
+-  const cases=[
++export function exceptionInvocations(C){
++  return [
+     ['divide',()=>C.SafeDivide(84,2)],['divide-zero',()=>C.SafeDivide(84,0)],
+@@ -20,3 +20,5 @@ export function exceptionCases(C){
+   ];
+-  return cases.map(([name,fn])=>{
++}
++export function exceptionCases(C){
++  return exceptionInvocations(C).map(([name,fn])=>{
+     C.Reset();let value=null,exception=null;
+@@ -26 +28,12 @@ export function exceptionCases(C){
+ }
++
++/** Execute the same case table with asynchronous debugger continuations. */
++export async function exceptionCasesAsync(C){
++  const results=[];
++  for(const [name,fn]of exceptionInvocations(C)){
++    await C.Reset();let value=null,exception=null;
++    try{value=await fn();if(typeof value==='bigint')value=String(value);}catch(error){exception=error.constructor.name;}
++    results.push({name,value,exception,trace:await C.Trace()});
++  }
++  return results;
++}

@@ -1,0 +1,107 @@
+diff --git a/packages/development/cooperative-debugger.js b/packages/development/cooperative-debugger.js
+index 7b166e3..6d44607 100644
+--- a/packages/development/cooperative-debugger.js
++++ b/packages/development/cooperative-debugger.js
+@@ -30,3 +30,3 @@ export function createCooperativeDebugger({point,breakpoint=()=>false,breakOnThr
+     emit('debug-completed',{taskId:task.id,status:task.status,value:snapshot(value),error:error?{message:error.message,stack:error.stack}:null});
+-    const {resolve,reject}=task;task.epoch++;task.frames=[];task.iterator=null;task.resolve=null;task.reject=null;task.point=null;
++    const {resolve,reject}=task;task.epoch++;task.frames=[];task.contexts.clear();task.iterator=null;task.resolve=null;task.reject=null;task.point=null;
+     if(error)reject(error);else resolve(value);
+@@ -46,4 +46,7 @@ export function createCooperativeDebugger({point,breakpoint=()=>false,breakOnThr
+         }
+-        if(value?.kind!=='checkpoint'&&value?.kind!=='exception')throw new Error('Invalid compiled continuation yield');
+-        const frame=task.frames.at(-1);if(frame){frame.locals=value.locals??frame.locals;frame.setters=value.setters??{};frame.types=value.types??{};frame.point=value.point??point(value.id);}
++        if(value?.kind!=='checkpoint'&&value?.kind!=='exception'&&value?.kind!=='safepoint')throw new Error('Invalid compiled continuation yield');
++        const frame=task.frames.at(-1);if(frame)frame.critical=!!value.critical;
++        if(task.cancelPending&&!task.frames.some(f=>f.critical)){task.cancelPending=false;action='return';continue;}
++        if(value.kind==='safepoint')continue;
++        if(frame){frame.locals=value.locals??frame.locals;frame.setters=value.setters??{};frame.types=value.types??{};frame.point=value.point??point(value.id);}
+         task.point=value.point??point(value.id);
+@@ -65,3 +68,3 @@ export function createCooperativeDebugger({point,breakpoint=()=>false,breakOnThr
+     let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});
+-    const task={id:nextTask++,iterator,frames:[],status:'scheduled',steps:0,cleanup:0,epoch:0,resolve,reject,parent:current?.id??null,step:options.breakOnEntry?{mode:'into',depth:0}:null};
++    const task={id:nextTask++,iterator,frames:[],contexts:new Map(),status:'scheduled',steps:0,cleanup:0,epoch:0,resolve,reject,parent:current?.id??null,step:options.breakOnEntry?{mode:'into',depth:0}:null};
+     tasks.set(task.id,task);emit('debug-started',{taskId:task.id,parentTaskId:task.parent});drive(task);
+@@ -95,3 +98,6 @@ export function createCooperativeDebugger({point,breakpoint=()=>false,breakOnThr
+       if(task.cancelling)return;
+-      task.epoch++;task.cancelling=true;task.status='running';task.step=null;drive(task,undefined,'return');return;
++      task.epoch++;task.cancelling=true;task.step=null;
++      // An active IL finally is allowed to finish (bounded), including nested calls.
++      task.cancelPending=task.frames.some(f=>f.critical);task.status='running';
++      drive(task,undefined,task.cancelPending?'next':'return');return;
+     }
+@@ -130,2 +136,4 @@ export function createCooperativeDebugger({point,breakpoint=()=>false,breakOnThr
+     leave(frame){if(current?.frames.at(-1)!==frame)throw new Error('Debug call stack is inconsistent');current.frames.pop();},
++    context(key,create){if(!current)throw new Error('Runtime context requires an active invocation');if(!current.contexts.has(key))current.contexts.set(key,create());return current.contexts.get(key);},
++    get cancelling(){return !!current?.cancelling;},
+     get active(){return current!==null;},get busy(){return tasks.size!==0;},
+diff --git a/packages/msil-runtime/exception-frame.js b/packages/msil-runtime/exception-frame.js
+index 56b7f79..a81e89c 100644
+--- a/packages/msil-runtime/exception-frame.js
++++ b/packages/msil-runtime/exception-frame.js
+@@ -35,2 +35,3 @@ export function createExceptionFrame(clauses,matches,{fatal=e=>e instanceof Exec
+     leave(from,target){return transfer(from,{kind:'goto',target},false);},
++    cancel(from){pending.length=0;return transfer(from,{kind:'cancel'},false);},
+     endFinally(from){
+diff --git a/packages/msil-runtime/index.js b/packages/msil-runtime/index.js
+index a09c854..e86c2d4 100644
+--- a/packages/msil-runtime/index.js
++++ b/packages/msil-runtime/index.js
+@@ -1 +1,3 @@
++import {createCooperativeDebugger} from '../development/cooperative-debugger.js';
++import {createBinaryContinuations} from './continuations.js';
+ import { createExceptionFrame, ExecutionLimitError } from './exception-frame.js';
+@@ -14,2 +16,3 @@ export function createBinaryRuntime({instructionBudget=1000000,maxDepth=256,maxA
+   const host={log};
++  const continuations=createBinaryContinuations({assemblies,types,D:DN,resolve,dispatch,choose,findType,allocate,coerce,publicResult,instructionBudget,maxDepth});
+   function transaction(fn){if(!active)remaining=instructionBudget;active++;try{return fn();}finally{active--;}}
+@@ -22,4 +25,4 @@ export function createBinaryRuntime({instructionBudget=1000000,maxDepth=256,maxA
+   }
+-  function initType(type){if(type.state==='done'||type.state==='busy')return;if(type.state==='failed')throw type.error;type.state='busy';try{if(type.base)initType(type.base);const cctor=type.context.descriptor.methods.find(m=>m.owner===type.record.name&&m.name==='.cctor');if(cctor)invokeRecord(type.context,cctor,null,[],false,true);type.state='done';}catch(e){type.state='failed';type.error=e;throw e;}}
+-  function invokeRecord(context,m,self,args,virtual=false,initializing=false){
++  function initType(type){if(type.state==='busy'&&type.initializer)throw new DN.InvalidOperationException('Type initialization is suspended in the debugger');if(type.state==='done'||type.state==='busy')return;if(type.state==='failed')throw type.error;type.state='busy';try{if(type.base)initType(type.base);const cctor=type.context.descriptor.methods.find(m=>m.owner===type.record.name&&m.name==='.cctor');if(cctor)invokeRecord(type.context,cctor,null,[],false,true);type.state='done';}catch(e){type.state='failed';type.error=e;throw e;}}
++  function dispatch(context,m,self,args,virtual=false){
+     if(args.length!==m.signature.parameters.length)throw new DN.ArgumentException('Method argument count mismatch');
+@@ -27,2 +30,6 @@ export function createBinaryRuntime({instructionBudget=1000000,maxDepth=256,maxA
+     if(virtual&&m.virtual&&self?.$binaryType){let current=self.$binaryType;while(current){const override=current.context.descriptor.methods.find(x=>x.owner===current.record.name&&x.virtual&&slot(x)===slot(m));if(override){if(current.record.name===m.owner||!(override.flags&0x100)){context=current.context;m=override;break;}}if(current.record.name===m.owner&&current.context===context)break;current=current.base;}}
++    return {context,m};
++  }
++  function invokeRecord(context,m,self,args,virtual=false,initializing=false){
++    ({context,m}=dispatch(context,m,self,args,virtual));
+     if(!initializing&&(m.static||m.name==='.ctor'))initType(findType(context.descriptor.name,m.owner));
+@@ -41,3 +48,3 @@ export function createBinaryRuntime({instructionBudget=1000000,maxDepth=256,maxA
+   function choose(type,name,args,isStatic){const found=type.context.descriptor.methods.filter(m=>m.owner===type.record.name&&m.name===name&&m.static===isStatic&&m.signature.parameters.length===args.length);if(found.length!==1)throw new DN.ArgumentException(`Ambiguous/missing ${name}; use a metadata token for same-arity overloads`);return found[0];}
+-  function allocate(type){initType(type);const object=Object.create(type.wrapper.prototype);Object.defineProperty(object,'$binaryType',{value:type});Object.defineProperty(object,'$fields',{value:new Map()});let parent=type;while(parent){for(const f of parent.context.descriptor.fields)if(f.owner===parent.record.name&&!f.static)object.$fields.set(fieldKey(f),initial(f.type));parent=parent.base;}return object;}
++  function allocate(type,initialize=true){if(initialize)initType(type);const object=Object.create(type.wrapper.prototype);Object.defineProperty(object,'$binaryType',{value:type});Object.defineProperty(object,'$fields',{value:new Map()});let parent=type;while(parent){for(const f of parent.context.descriptor.fields)if(f.owner===parent.record.name&&!f.static)object.$fields.set(fieldKey(f),initial(f.type));parent=parent.base;}return object;}
+   function link(){if(linked)return;
+@@ -58,4 +65,8 @@ export function createBinaryRuntime({instructionBudget=1000000,maxDepth=256,maxA
+     setDebugger(hook){if(hook!=null&&typeof hook!=='function')throw new TypeError('Debugger hook must be a function');debuggerHook=hook;},
+-    register(descriptor,factory){if(descriptor.format!=='msil-js-v1'||assemblies.has(descriptor.name))throw new Error('Invalid/duplicate binary assembly registration');if(linked)throw new Error('Register every assembly before linking');
++    register(descriptor,factory,continuationFactory=null){if(descriptor.format!=='msil-js-v1'||assemblies.has(descriptor.name))throw new Error('Invalid/duplicate binary assembly registration');if(linked)throw new Error('Register every assembly before linking');
+       const C={descriptor,records:new Map([...descriptor.methods,...descriptor.fields,...descriptor.members].map(m=>[m.token,m])),D:DN,
++        callSteps:(co,budget,token,self,args,virtual)=>continuations.call(co,budget,C,token,self,args,virtual),
++        constructSteps:(co,budget,token,args)=>continuations.construct(co,budget,C,token,args),
++        fieldSteps:(co,budget,token,self,value,write)=>continuations.field(co,budget,C,token,self,value,write),
++        tickSteps:continuations.tick,
+         debugHit(point,locals){try{return debuggerHook?.(point,locals)===true;}catch{return false;}},
+@@ -64,4 +75,4 @@ export function createBinaryRuntime({instructionBudget=1000000,maxDepth=256,maxA
+         construct(token,args){const target=resolve(C,token,'method');if(target.adapter){const ExceptionType=resolveExceptionType({assembly:target.record.assembly,name:target.record.owner});if(ExceptionType)return new ExceptionType(...args);throw new DN.NotSupportedException('External constructor allocation unsupported');}const type=findType(target.context.descriptor.name,target.record.owner),object=allocate(type);invokeRecord(target.context,target.record,object,args);return object;},
+-        field(token,self,value,write=false){const target=resolve(C,token,'field'),f=target.record,type=findType(target.context.descriptor.name,f.owner);if(f.static)initType(type);const store=f.static?type.staticFields:requireObject(self).$fields;if(!(store instanceof Map)||!store.has(fieldKey(f)))throw new DN.InvalidOperationException('Object does not contain requested field');if(write)store.set(fieldKey(f),coerce(f.type,value));return store.get(fieldKey(f));},
+-        array(type,length){if(!Number.isInteger(length)||length<0||length>maxArrayLength)throw new DN.ArgumentException('Array allocation budget exceeded');C.tick(length);return DN.newArray(length,type==='i8'?0n:type==='ref'?null:0);},
++        field(token,self,value,write=false,initialized=false){const target=resolve(C,token,'field'),f=target.record,type=findType(target.context.descriptor.name,f.owner);if(f.static&&!initialized)initType(type);const store=f.static?type.staticFields:requireObject(self).$fields;if(!(store instanceof Map)||!store.has(fieldKey(f)))throw new DN.InvalidOperationException('Object does not contain requested field');if(write)store.set(fieldKey(f),coerce(f.type,value));return store.get(fieldKey(f));},
++        array(type,length,budget=null,co=null){if(!Number.isInteger(length)||length<0||length>maxArrayLength)throw new DN.ArgumentException('Array allocation budget exceeded');if(budget)continuations.tick(co,budget,length);else C.tick(length);return DN.newArray(length,type==='i8'?0n:type==='ref'?null:0);},
+         coerce,
+@@ -71,8 +82,11 @@ export function createBinaryRuntime({instructionBudget=1000000,maxDepth=256,maxA
+       };
+-      C.functions=factory(C);assemblies.set(descriptor.name,C);for(const record of descriptor.types){const staticFields=new Map(descriptor.fields.filter(f=>f.owner===record.name&&f.static).map(f=>[fieldKey(f),initial(f.type)]));types.set(`${descriptor.name}::${record.name}`,{record,context:C,staticFields,state:'new',base:null,wrapper:null});}return C;
++      C.functions=factory(C);C.continuations=continuationFactory?.(C);assemblies.set(descriptor.name,C);for(const record of descriptor.types){const staticFields=new Map(descriptor.fields.filter(f=>f.owner===record.name&&f.static).map(f=>[fieldKey(f),initial(f.type)]));types.set(`${descriptor.name}::${record.name}`,{record,context:C,staticFields,state:'new',base:null,wrapper:null});}return C;
+     },
+     link,
++    createDebugger(options={}){const co=createCooperativeDebugger({point:()=>null,...options});runtime.enableCooperative(co);return co;},
++    enableCooperative(co){link();continuations.attach(co);return runtime;},
++    invokeSteps(co,assembly,token,args=[],self=null){link();return continuations.entry(co,assembly,token,args,self);},
+     invoke(assembly,token,args=[],self=null){return transaction(()=>{link();const C=assemblies.get(assembly);if(!C)throw new Error('Missing assembly '+assembly);const m=C.records.get(token);if(!m?.signature)throw new Error('Unknown method token');return publicResult(m,invokeRecord(C,m,self,args.map((v,i)=>coerce(m.signature.parameters[i],v)),!m.static));});},
+     getType(assembly,name){link();return findType(assembly,name).wrapper;},
+-    exportTo(JB){link();for(const type of types.values())if(type.record.name!=='<Module>')JB.defineType(type.record.name,type.wrapper);return runtime;},
++    exportTo(JB){link();for(const type of types.values())if(type.record.name!=='<Module>')JB.defineType(type.record.name,type.wrapper);if(JB.dev?.co)continuations.attach(JB.dev.co);return runtime;},
+     stats(){return {assemblies:assemblies.size,types:types.size,remaining,depth};}

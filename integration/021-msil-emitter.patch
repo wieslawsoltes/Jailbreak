@@ -1,0 +1,94 @@
+diff --git a/packages/msil-compiler/debug-metadata.js b/packages/msil-compiler/debug-metadata.js
+index 995c398..39bdb84 100644
+--- a/packages/msil-compiler/debug-metadata.js
++++ b/packages/msil-compiler/debug-metadata.js
+@@ -1 +1,2 @@
++import {addContinuationSites} from './continuation-sites.js';
+ import {debugSymbols} from '../portable-pdb/symbols.js';
+@@ -3,3 +4,3 @@ import {BinaryError} from '../managed-pe/reader.js';
+ /** WeakMap identity permits only symbols validated against this exact assembly object. */
+-export function collectDebugMetadata(assemblies){
++export function collectDebugMetadata(assemblies,{cooperative=false}={}){
+   const sites=[],sources=Object.create(null),byMethod=new Map();
+@@ -12,3 +13,3 @@ export function collectDebugMetadata(assemblies){
+         if(text!==undefined){const lines=text.split('\n');if(p.line>lines.length||p.column>lines[p.line-1].length+1)throw new BinaryError('PDB source location outside original text',0,'JB6504');for(let i=1;i<p.line;i++)offset+=lines[i-1].length+1;offset+=Math.max(0,p.column-1);}
+-        const point={id:'il_'+sites.length,file:doc.name,line:p.line,column:Math.max(1,p.column),endLine:p.endLine,endColumn:p.endColumn,offset,ilOffset:p.offset,token:method.token,assembly:assembly.name,method:record.owner+'.'+record.name,language:'csharp',origin:'msil',cooperative:false};
++        const point={id:'il_'+sites.length,file:doc.name,line:p.line,column:Math.max(1,p.column),endLine:p.endLine,endColumn:p.endColumn,offset,ilOffset:p.offset,token:method.token,assembly:assembly.name,method:record.owner+'.'+record.name,language:'csharp',origin:'msil',cooperative};
+         const visible=new Map();for(const scope of method.scopes)if(scope.start<=p.offset&&p.offset<scope.end)for(const variable of scope.variables)if(!variable.hidden)visible.set(variable.name,variable.slot);
+@@ -17,3 +18,3 @@ export function collectDebugMetadata(assemblies){
+     }
+-  }return {sites,sources,byMethod};
++  }const debug={sites,sources,byMethod};return cooperative?addContinuationSites(assemblies,debug):debug;
+ }
+diff --git a/packages/msil-compiler/emitter.js b/packages/msil-compiler/emitter.js
+index d58dbe0..cff2ae4 100644
+--- a/packages/msil-compiler/emitter.js
++++ b/packages/msil-compiler/emitter.js
+@@ -6,3 +6,3 @@ function literal(v){return typeof v==='bigint'?v+'n':typeof v==='number'&&!Numbe
+ /** Ahead-of-time emission: one native JavaScript case per basic block, never an opcode interpreter. */
+-export function emitMethod(assembly,method,verified,{sites=[]}={}){
++export function emitMethod(assembly,method,verified,{sites=[],cooperative=false}={}){
+   const {instructions,types,regions}=verified,tokens=new Map([...assembly.methods,...assembly.members,...assembly.fields].map(m=>[m.token,m]));
+@@ -12,3 +12,3 @@ export function emitMethod(assembly,method,verified,{sites=[]}={}){
+   const eh=regions.clauses.length>0;
+-  const lines=['function(self,parameters){',eh?`const eh=C.exceptionFrame(${j(regions.clauses)});`:'',`const arg=${method.static?'parameters.slice()':'[self,...parameters]'}, local=[${method.body.locals.map(t=>stackType(t)==='ref'?'null':stackType(t)==='i8'?'0n':'0').join(',')}], s=[];let pc=${instructions[0].offset},a,b,v,argv;`,eh?'while(true){let action;try{switch(pc){':'while(true){switch(pc){'];
++  const lines=[cooperative?'function*($co,$budget,self,parameters){':'function(self,parameters){',eh?`const eh=C.exceptionFrame(${j(regions.clauses)});`:'',`const arg=${method.static?'parameters.slice()':'[self,...parameters]'}, local=[${method.body.locals.map(t=>stackType(t)==='ref'?'null':stackType(t)==='i8'?'0n':'0').join(',')}], s=[];let pc=${instructions[0].offset},a,b,v,argv;`,cooperative&&eh?'let settled=false;function* body(){':'',eh?'while(true){let action;try{switch(pc){':'while(true){switch(pc){'];
+   const debugPoints=new Map(sites.map(s=>[s.point.ilOffset,s]));
+@@ -16,4 +16,15 @@ export function emitMethod(assembly,method,verified,{sites=[]}={}){
+   for(let n=0;n<instructions.length;n++){
+-    const i=instructions[n],op=baseOpcode(i.name),type=types.get(i.offset);if(leaders.has(i.offset)){if(currentBlock!==null)lines.push(`pc=${i.offset};continue;`);lines.push(`case ${i.offset}: C.tick(${blockCost(n)});`);currentBlock=i.offset;}
+-    const site=debugPoints.get(i.offset);if(site){const locals=site.locals.map(l=>`[${j(l.name)}]:local[${l.slot}]`),args=method.signature.parameters.map((_,a)=>`[${j(method.parameterNames?.[a]||'arg'+a)}]:arg[${a+(method.static?0:1)}]`);lines.push(`/*@jb:${site.point.id}*/if(C.debugHit(${j(site.point)},()=>({this:self,${[...args,...locals].join(',')}}))){debugger;}`);}
++    const i=instructions[n],op=baseOpcode(i.name),type=types.get(i.offset);if(leaders.has(i.offset)){if(currentBlock!==null)lines.push(`pc=${i.offset};continue;`);lines.push(`case ${i.offset}: ${cooperative?'':'C.tick('+blockCost(n)+');'}`);currentBlock=i.offset;}
++    const site=debugPoints.get(i.offset);
++    if(cooperative){
++      const critical=regions.clauses.some(c=>['finally','fault'].includes(c.kind)&&c.handlerOffset<=i.offset&&i.offset<c.handlerOffset+c.handlerLength);
++      lines.push(`pc=${i.offset};`);
++      if(site){
++        const slots=[...method.signature.parameters.map((type,index)=>({name:method.parameterNames?.[index]||'arg'+index,type,ref:'arg['+(index+(method.static?0:1))+']'})),...site.locals.map(l=>({...l,type:method.body.locals[l.slot],ref:'local['+l.slot+']'}))];
++        const locals=slots.map(l=>`[${j(l.name)}]:${l.ref}`),editable=slots.filter(l=>['int8','uint8','int16','uint16','int32','uint32','float32','float64','string'].includes(l.type));
++        const setters=editable.map(l=>`[${j(l.name)}]:value=>{${l.ref}=C.coerce(${j(l.type)},value);}`),types=editable.map(l=>`[${j(l.name)}]:${j(({int8:'sbyte',uint8:'byte',int16:'short',uint16:'ushort',int32:'int',uint32:'int',float32:'float',float64:'double'})[l.type]??l.type)}`);
++        lines.push(`/*@jb:${site.point.id}*/yield {kind:'checkpoint',point:${j(site.point)},critical:${critical},locals:()=>({this:self,${locals.join(',')}${locals.length?',':''}$ilOffset:pc,$evaluationStack:s.slice()}),setters:{${setters.join(',')}},types:{${types.join(',')}}};`);
++      }else lines.push(`yield {kind:'safepoint',critical:${critical}};`);
++      lines.push('C.tickSteps($co,$budget,1);');
++    }else if(site){const locals=site.locals.map(l=>`[${j(l.name)}]:local[${l.slot}]`),args=method.signature.parameters.map((_,a)=>`[${j(method.parameterNames?.[a]||'arg'+a)}]:arg[${a+(method.static?0:1)}]`);lines.push(`/*@jb:${site.point.id}*/if(C.debugHit(${j(site.point)},()=>({this:self,${[...args,...locals].join(',')}}))){debugger;}`);}
+     lines.push(`// IL_${i.offset.toString(16).padStart(4,'0')} ${i.name}`);
+@@ -46,6 +57,6 @@ export function emitMethod(assembly,method,verified,{sites=[]}={}){
+     else if(op==='switch'){lines.push(`v=s.pop();pc=(v>>>0)<${i.operand.length}?[${i.operand.join(',')}][v>>>0]:${i.next};continue;`);currentBlock=null;}
+-    else if(['call','callvirt','newobj'].includes(op)){const m=tokens.get(i.operand),argc=m.signature.parameters.length;lines.push(`argv=s.splice(s.length-${argc},${argc});`);const expression=op==='newobj'?`C.construct(${i.operand},argv)`:`C.call(${i.operand},${m.signature.hasThis?'s.pop()':'null'},argv,${op==='callvirt'})`;if(op==='newobj'||m.signature.returnType!=='void')push(expression);else lines.push(expression+';');}
+-    else if(['ldfld','ldsfld'].includes(op))push(`C.field(${i.operand},${op==='ldfld'?'s.pop()':'null'})`);
+-    else if(['stfld','stsfld'].includes(op))lines.push(`v=s.pop();C.field(${i.operand},${op==='stfld'?'s.pop()':'null'},v,true);`);
+-    else if(op==='newarr'){const primitive={Int32:'i4',UInt32:'i4',Int64:'i8',UInt64:'i8',Byte:'i4',SByte:'i4',Int16:'i4',UInt16:'i4',Boolean:'i4',Char:'i4',Single:'f',Double:'f'};push(`C.array(${j(type.assembly&&['System.Runtime','mscorlib','System.Private.CoreLib','netstandard'].includes(type.assembly)?primitive[type.name.split('.').at(-1)]??'ref':'ref')},s.pop())`);}
++    else if(['call','callvirt','newobj'].includes(op)){const m=tokens.get(i.operand),argc=m.signature.parameters.length;lines.push(`argv=s.splice(s.length-${argc},${argc});`);const expression=cooperative?(op==='newobj'?`(yield* C.constructSteps($co,$budget,${i.operand},argv))`:`(yield* C.callSteps($co,$budget,${i.operand},${m.signature.hasThis?'s.pop()':'null'},argv,${op==='callvirt'}))`):(op==='newobj'?`C.construct(${i.operand},argv)`:`C.call(${i.operand},${m.signature.hasThis?'s.pop()':'null'},argv,${op==='callvirt'})`);if(op==='newobj'||m.signature.returnType!=='void')push(expression);else lines.push(expression+';');}
++    else if(['ldfld','ldsfld'].includes(op))push(cooperative?`(yield* C.fieldSteps($co,$budget,${i.operand},${op==='ldfld'?'s.pop()':'null'}))`:`C.field(${i.operand},${op==='ldfld'?'s.pop()':'null'})`);
++    else if(['stfld','stsfld'].includes(op))lines.push(cooperative?`v=s.pop();yield* C.fieldSteps($co,$budget,${i.operand},${op==='stfld'?'s.pop()':'null'},v,true);`:`v=s.pop();C.field(${i.operand},${op==='stfld'?'s.pop()':'null'},v,true);`);
++    else if(op==='newarr'){const primitive={Int32:'i4',UInt32:'i4',Int64:'i8',UInt64:'i8',Byte:'i4',SByte:'i4',Int16:'i4',UInt16:'i4',Boolean:'i4',Char:'i4',Single:'f',Double:'f'};push(`C.array(${j(type.assembly&&['System.Runtime','mscorlib','System.Private.CoreLib','netstandard'].includes(type.assembly)?primitive[type.name.split('.').at(-1)]??'ref':'ref')},s.pop()${cooperative?',$budget,$co':''})`);}
+     else if(op==='ldlen')push('C.D.length(s.pop())|0');
+@@ -58,3 +69,5 @@ export function emitMethod(assembly,method,verified,{sites=[]}={}){
+   }
+-  lines.push('default:throw new Error("Invalid emitted block");',eh?' }}catch(error){action=eh.raise(error,pc);} if(action.kind==="throw")throw action.error;pc=action.target;s.length=0;if(action.kind==="catch")s.push(action.error);}}':'}}}');return lines.join('\n');
++  lines.push('default:throw new Error("Invalid emitted block");',eh?' }}catch(error){action=eh.raise(error,pc);} if(action.kind==="throw")throw action.error;if(action.kind==="cancel")return;pc=action.target;s.length=0;if(action.kind==="catch")s.push(action.error);}}':'}}}');
++  if(cooperative&&eh)lines.push('try{const value=yield* body();settled=true;return value;}catch(error){settled=true;throw error;}finally{if(!settled){const action=eh.cancel(pc);if(action.kind==="goto"){pc=action.target;s.length=0;yield* body();}}}}');
++  return lines.join('\n');
+   function blockCost(start){let end=start+1;while(end<instructions.length&&!leaders.has(instructions[end].offset))end++;return end-start;}
+diff --git a/packages/msil-compiler/verified.js b/packages/msil-compiler/verified.js
+index c13a12e..b83194f 100644
+--- a/packages/msil-compiler/verified.js
++++ b/packages/msil-compiler/verified.js
+@@ -22,3 +22,4 @@ export function compileAssemblies(inputs,options={}){
+   const names=new Set();for(const a of assemblies){if(names.has(a.name))diagnostics.push(diagnostic(new Error('Duplicate assembly identity '+a.name),a.path));names.add(a.name);}
+-  let debug;try{if(options.debug)debug=collectDebugMetadata(assemblies);}catch(e){diagnostics.push(diagnostic(e,'symbols'));}
++  const cooperative=!!(options.debug&&options.cooperativeDebug);
++  let debug;try{if(options.debug)debug=collectDebugMetadata(assemblies,{cooperative});}catch(e){diagnostics.push(diagnostic(e,'symbols'));}
+   for(const a of assemblies){
+@@ -32,8 +33,8 @@ export function compileAssemblies(inputs,options={}){
+     const methods=[];
+-    for(const m of a.methods){try{const verified=verifyMethod(a,m,options);for(const c of verified.regions.clauses)if(c.kind==='catch'&&!resolveExceptionType(c.catchType)&&!(c.catchType.name==='System.Object'&&['System.Runtime','mscorlib','System.Private.CoreLib','netstandard'].includes(c.catchType.assembly)))throw new Error('Unsupported catch type '+c.catchType.name);for(const token of verified.calls){const ref=[...a.methods,...a.members].find(x=>x.token===token);if(!resolveAdapter(ref)&&!assemblies.some(x=>x.name===ref.assembly&&x.methods.some(y=>methodKey(y)===methodKey(ref))))throw new Error(`No linked method or runtime adapter for [${ref.assembly}]${methodKey(ref)}`);}for(const token of verified.fields){const ref=[...a.fields,...a.members].find(x=>x.token===token);if(!assemblies.some(x=>x.name===ref.assembly&&x.fields.some(f=>f.owner===ref.owner&&f.name===ref.name&&typeName(f.type)===typeName(ref.type))))throw new Error(`Unresolved field [${ref.assembly}]${ref.owner}::${ref.name}`);}methods.push({method:m,code:emitMethod(a,m,verified,{sites:debug?.byMethod.get(a.name+'|'+m.token)??[]}),instructions:verified.instructions,peak:verified.peak,exceptionClauses:verified.regions.clauses});}catch(e){const d=diagnostic(e,a.path,m);if(a.source){const at=m.instructions?.find(i=>i.offset===(Number(e.offset)||0))?.sourceOffset??m.body?.offset??0;Object.assign(d,a.source.location(at));}diagnostics.push(d);}}
++    for(const m of a.methods){try{const verified=verifyMethod(a,m,options);for(const c of verified.regions.clauses)if(c.kind==='catch'&&!resolveExceptionType(c.catchType)&&!(c.catchType.name==='System.Object'&&['System.Runtime','mscorlib','System.Private.CoreLib','netstandard'].includes(c.catchType.assembly)))throw new Error('Unsupported catch type '+c.catchType.name);for(const token of verified.calls){const ref=[...a.methods,...a.members].find(x=>x.token===token);if(!resolveAdapter(ref)&&!assemblies.some(x=>x.name===ref.assembly&&x.methods.some(y=>methodKey(y)===methodKey(ref))))throw new Error(`No linked method or runtime adapter for [${ref.assembly}]${methodKey(ref)}`);}for(const token of verified.fields){const ref=[...a.fields,...a.members].find(x=>x.token===token);if(!assemblies.some(x=>x.name===ref.assembly&&x.fields.some(f=>f.owner===ref.owner&&f.name===ref.name&&typeName(f.type)===typeName(ref.type))))throw new Error(`Unresolved field [${ref.assembly}]${ref.owner}::${ref.name}`);}methods.push({method:m,code:emitMethod(a,m,verified,{sites:debug?.byMethod.get(a.name+'|'+m.token)??[]}),continuation:cooperative?emitMethod(a,m,verified,{sites:debug?.byMethod.get(a.name+'|'+m.token)??[],cooperative:true}):null,instructions:verified.instructions,peak:verified.peak,exceptionClauses:verified.regions.clauses});}catch(e){const d=diagnostic(e,a.path,m);if(a.source){const at=m.instructions?.find(i=>i.offset===(Number(e.offset)||0))?.sourceOffset??m.body?.offset??0;Object.assign(d,a.source.location(at));}diagnostics.push(d);}}
+     const descriptor={format:'msil-js-v1',name:a.name,version:a.version,types:a.types,fields:a.fields,members:a.members,methods:a.methods.map(({body,...m})=>{const {instructions,...rest}=m;return rest;}),references:a.references};
+-    const code=`MS.register(${escapeJs(descriptor)}, C => ({\n${methods.map(m=>`${m.method.token}: ${m.code}`).join(',\n')}\n}));`;
++    const code=`MS.register(${escapeJs(descriptor)}, C => ({\n${methods.map(m=>`${m.method.token}: ${m.code}`).join(',\n')}\n})${cooperative?', C => ({\n'+methods.map(m=>m.method.token+': '+m.continuation).join(',\n')+'\n})':''});`;
+     compiled.push({name:a.name,descriptor,code,methods:methods.map(x=>({token:x.method.token,name:x.method.name,owner:x.method.owner,signature:x.method.signature,static:x.method.static,public:(x.method.flags&7)===6,disassembly:disassemble({...x.method,instructions:x.instructions}),maxStack:x.peak,exceptionClauses:x.exceptionClauses})),references:a.references,resources:a.resources??[],tables:a.tables??{}});
+   }
+-  const success=diagnostics.length===0&&assemblies.length>0;return {success,diagnostics,debug:debug?{sites:debug.sites,sources:debug.sources}:undefined,code:success?compiled.map(c=>c.code).join('\n'):'',assemblies:compiled.map(({code,...rest})=>rest),stats:{milliseconds:performance.now()-start,assemblies:assemblies.length,methods:compiled.reduce((n,a)=>n+a.methods.length,0)}};
++  const success=diagnostics.length===0&&assemblies.length>0;return {success,diagnostics,debug:debug?{sites:debug.sites,sources:debug.sources,cooperative}:undefined,code:success?compiled.map(c=>c.code).join('\n'):'',assemblies:compiled.map(({code,...rest})=>rest),stats:{milliseconds:performance.now()-start,assemblies:assemblies.length,methods:compiled.reduce((n,a)=>n+a.methods.length,0)}};
+ }
