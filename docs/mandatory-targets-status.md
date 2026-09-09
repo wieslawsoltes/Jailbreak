@@ -14,8 +14,14 @@ This is a continuing implementation contract. None of the targets below is compl
 
 Debugging, design, reload and disposal evidence remain required for each new core capability. Release artifacts must not silently include original sources or debugging hooks.
 
-## Recovery baseline
+## Historical recovery baseline
 
-At the start of this implementation round, remote `main` was `a83b295a0f727c9e72309649e7c388f10a4c3604`. It includes symbol recovery and two subsequent source-integration commits. The previous final report did not establish publication of its redesigned workbench or remote-restoration code. Reconcile existing files before new edits; do not replace newer source with an older archive or count staged transport data as deployed code.
+At the start of an earlier recovery round, remote `main` was `a83b295a0f727c9e72309649e7c388f10a4c3604`. It includes symbol recovery and two subsequent source-integration commits. The previous final report did not establish publication of its redesigned workbench or remote-restoration code. Reconcile existing files before new edits; do not replace newer source with an older archive or count staged transport data as deployed code.
 
 Per-milestone documents and actual test reports supply implementation status. The canonical Toolchain verification and Pages workflow is the hosted deployment gate. A local passing test run is not evidence that GitHub Pages has updated.
+
+## Cooperative MSIL milestone
+
+[MSIL continuations](milestone-msil-continuations.md) extend the existing verified AOT emitter and Studio debugger to converted managed methods. Cross-library/source frames, evaluation stacks, scoped PDB locals, static initialization, cancellation and exception cleanup are exercised through SDK-built DLL/NuGet fixtures and browser integration. This advances the MSIL debugging target for the compiler's supported instruction/type/API profile. Arbitrary SDK-generated async state machines, full framework semantics and the complete unmodified ControlCatalog are not declared complete.
+
+Studio now exposes unsupported-symbol methods as read-only **[IL]** disassembly, never as reconstructed original C#. Existing verified original-source documents retain **[symbol]** labels. Source C# async callers can await before/after converted calls; that behavior is distinct from compiling an SDK async state machine from a DLL.
