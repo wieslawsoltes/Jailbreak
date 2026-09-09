@@ -1,0 +1,12 @@
+{
+  "8858197a967f06045cb91b12d41b9a2bc5b3fc71": {
+    "sha256": "17c88cd0f5ac5cec282df007c2e51af80dbc22b457483c644826c940bebc6955",
+    "status": "integrated",
+    "files": [
+      "apps/ide/language-worker.js",
+      "packages/language-service/index.js",
+      "tests/language-service.test.js"
+    ],
+    "baseline": "d12b3f2c4490c1c1584c5660d4a71407af335329"
+  }
+}
