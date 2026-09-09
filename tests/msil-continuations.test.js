@@ -113,7 +113,7 @@ test('per-task binary instruction budgets remain independent across interleaved 
   for(let i=0;i<3;i++){co.command(a.taskId,'into');co.command(b.taskId,'into');}
   co.command(a.taskId,'continue');co.command(b.taskId,'continue');assert.equal(await a.promise,2);assert.equal(await b.promise,3);
 });
-test('silent PDB checkpoints still yield to the event loop and permit loop cancellation',async()=>{
+test('compiled loop checkpoints yield to the event loop and permit cancellation',async()=>{
   const r=compileIL(program('again: br.s again',{returns:'void'}),opts);const {MS,co}=setup(r,{instructionBudget:100000});const C=MS.getType('Demo','Demo.C');
   const task=co.start(C,'Run');assert.ok(co.busy);await tick();co.command(task.taskId,'cancel');await task.promise;assert.equal(co.busy,false);
 });

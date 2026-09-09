@@ -96,9 +96,13 @@ export function createCooperativeDebugger({point,breakpoint=()=>false,breakOnThr
     const task=tasks.get(Number(taskId));if(!task)throw new Error('Debug invocation no longer exists');
     if(action==='cancel'){
       if(task.cancelling)return;
-      task.epoch++;task.cancelling=true;task.step=null;
+      task.cancelling=true;task.step=null;
       // An active IL finally is allowed to finish (bounded), including nested calls.
-      task.cancelPending=task.frames.some(f=>f.critical);task.status='running';
+      task.cancelPending=task.frames.some(f=>f.critical);
+      // Keep the current await epoch: bypassing a pending initializer here would
+      // let cleanup observe partially initialized state. Other tasks stay usable.
+      if(task.cancelPending&&task.status==='awaiting')return;
+      task.epoch++;task.status='running';
       drive(task,undefined,task.cancelPending?'next':'return');return;
     }
     if(!['continue','into','over','out'].includes(action))throw new Error('Unknown debugger action');
