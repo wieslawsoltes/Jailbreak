@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="DesignerWorkspace.MainView">
+  <Grid RowDefinitions="Auto,*" Background="#F4F6FA">
+    <Border Padding="28,22" Background="White" BorderBrush="#E2E6EF" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Spacing="4">
+          <TextBlock Text="FORM / FUNCTION" FontSize="11" Foreground="#6F62CA" FontWeight="Bold" />
+          <TextBlock Text="Design workspace" FontSize="25" FontWeight="Bold" Foreground="#222C42" />
+        </StackPanel>
+        <Border Grid.Column="1" Background="#EDF8F1" CornerRadius="20" Padding="14,7" VerticalAlignment="Center">
+          <TextBlock x:Name="Activity" Text="Ready to create" Foreground="#297245" FontSize="12" />
+        </Border>
+      </Grid>
+    </Border>
+    <Canvas Grid.Row="1" x:Name="Board" Height="490" Margin="24">
+      <!-- These cards and actions are ordinary source-backed Avalonia controls. -->
+      <Border x:Name="Hero" Canvas.Left="16" Canvas.Top="16" Width="380" Height="164" Background="#6252C9" CornerRadius="14" Padding="24">
+        <StackPanel Spacing="10">
+          <TextBlock Text="FROM SOURCE TO SURFACE" FontSize="10" Foreground="#DBD6FF" FontWeight="Bold" />
+          <TextBlock Text="Make room for ideas." FontSize="26" FontWeight="Bold" Foreground="White" />
+          <TextBlock Text="Shape the interface. Keep the source.&#10;Your running application stays right here." FontSize="13" Foreground="#E2DFFF" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+      <Border x:Name="Metrics" Canvas.Left="420" Canvas.Top="32" Width="228" Height="148" Background="White" BorderBrush="#E2E6EF" BorderThickness="1" CornerRadius="14" Padding="22">
+        <StackPanel Spacing="9">
+          <TextBlock Text="ONE CONNECTED WORKSPACE" FontSize="10" Foreground="#748198" FontWeight="Bold" />
+          <TextBlock Text="Code. Design. Debug." FontSize="18" Foreground="#27344B" FontWeight="Bold" />
+          <TextBlock Text="Real controls. Real interactions." FontSize="12" Foreground="#748198" />
+        </StackPanel>
+      </Border>
+      <TextBlock Canvas.Left="16" Canvas.Top="214" Width="600" Height="28" Text="ACTIONS / Shift-click these controls, then align or distribute" FontSize="11" FontWeight="Bold" Foreground="#748198" />
+      <Button x:Name="PreviewAction" Canvas.Left="16" Canvas.Top="252" Width="160" Height="44" Content="Preview" Click="Activate" Background="White" />
+      <Button x:Name="ValidateAction" Canvas.Left="240" Canvas.Top="268" Width="160" Height="44" Content="Validate" Click="Activate" Background="White" />
+      <Button x:Name="PublishAction" Canvas.Left="488" Canvas.Top="284" Width="160" Height="44" Content="Publish" Click="Activate" Background="#6252C9" Foreground="White" />
+      <TextBox x:Name="Note" Canvas.Left="16" Canvas.Top="348" Width="380" Height="44" Text="Type here. Design edits retain this state." />
+      <StackPanel x:Name="CodeHost" Canvas.Left="420" Canvas.Top="348" Width="228" Height="44" />
+      <TextBlock Canvas.Left="16" Canvas.Top="426" Width="650" Height="24" Text="Literal layout edits are one source transaction. No screenshot substitutes." FontSize="11" Foreground="#8793A6" />
+    </Canvas>
+  </Grid>
+</UserControl>

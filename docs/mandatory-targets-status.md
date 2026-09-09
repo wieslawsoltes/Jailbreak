@@ -35,3 +35,12 @@ offline Binary Studio share the Portable PDB path. This closes the missing
 managed-Windows-PDB integration, not all native symbol formats. MSF2/C11, native
 machine-code symbols, legacy native embedded source and native async metadata
 remain outside the explicitly tested profile.
+
+## Designer canvas and imperative source progress
+
+[The artboard and multi-selection milestone](milestone-design-canvas.md) connects
+real geometry operations to existing source transactions and hot reload.
+[Flow-ordered local C# analysis](milestone-imperative-designer.md) targets final
+literal writes through aliases; it does not claim unrestricted imperative
+round-tripping. Remaining control-flow/ownership analysis and complete
+ControlCatalog/async/framework targets retain their original acceptance gates.

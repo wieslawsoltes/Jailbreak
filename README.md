@@ -85,3 +85,10 @@ Remaining gaps include full C# semantics and .NET APIs, full SDK/MSBuild/NuGet/s
 ## License
 
 Independent implementation; see LICENSE. Original Avalonia fixtures retain their separate MIT copyright/license notices. This is not an official Avalonia distribution.
+
+## Source-backed design canvas
+
+The Studio Designer now has logical-pixel artboards, zoom/rulers, multi-selection,
+snapping, alignment/distribution and undoable source edits. See [the canvas
+workflow and boundaries](docs/milestone-design-canvas.md) and [flow-ordered C#
+property editing](docs/milestone-imperative-designer.md).
