@@ -28,7 +28,7 @@ export function createCooperativeDebugger({point,breakpoint=()=>false,breakOnThr
     tasks.delete(task.id);task.status=error?'failed':task.cancelling?'cancelled':'completed';
     if(task.outToParent){const parent=tasks.get(task.parent);if(parent)parent.step={mode:'into',depth:0};}
     emit('debug-completed',{taskId:task.id,status:task.status,value:snapshot(value),error:error?{message:error.message,stack:error.stack}:null});
-    const {resolve,reject}=task;task.epoch++;task.frames=[];task.iterator=null;task.resolve=null;task.reject=null;task.point=null;
+    const {resolve,reject}=task;task.epoch++;task.frames=[];task.contexts.clear();task.iterator=null;task.resolve=null;task.reject=null;task.point=null;
     if(error)reject(error);else resolve(value);
   }
   function drive(task,input,action='next'){
@@ -44,8 +44,11 @@ export function createCooperativeDebugger({point,breakpoint=()=>false,breakOnThr
         if(value?.kind==='await'){
           task.status='awaiting';const epoch=++task.epoch;Promise.resolve(value.value).then(v=>{if(task.epoch===epoch)drive(task,v);},e=>{if(task.epoch===epoch)drive(task,e,'throw');});return;
         }
-        if(value?.kind!=='checkpoint'&&value?.kind!=='exception')throw new Error('Invalid compiled continuation yield');
-        const frame=task.frames.at(-1);if(frame){frame.locals=value.locals??frame.locals;frame.setters=value.setters??{};frame.types=value.types??{};frame.point=value.point??point(value.id);}
+        if(value?.kind!=='checkpoint'&&value?.kind!=='exception'&&value?.kind!=='safepoint')throw new Error('Invalid compiled continuation yield');
+        const frame=task.frames.at(-1);if(frame)frame.critical=!!value.critical;
+        if(task.cancelPending&&!task.frames.some(f=>f.critical)){task.cancelPending=false;action='return';continue;}
+        if(value.kind==='safepoint')continue;
+        if(frame){frame.locals=value.locals??frame.locals;frame.setters=value.setters??{};frame.types=value.types??{};frame.point=value.point??point(value.id);}
         task.point=value.point??point(value.id);
         const stop=task.cancelling?false:value.kind==='exception'?breakOnThrow():breakpoint(task.point,()=>read(frame));
         const step=task.step,depth=task.frames.length;
@@ -63,7 +66,7 @@ export function createCooperativeDebugger({point,breakpoint=()=>false,breakOnThr
     if(disposed&&!current?.cancelling)throw new Error('Debugger session is disposed');
     if(tasks.size>=maxTasks)throw new Error('Too many concurrent debug invocations');
     let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});
-    const task={id:nextTask++,iterator,frames:[],status:'scheduled',steps:0,cleanup:0,epoch:0,resolve,reject,parent:current?.id??null,step:options.breakOnEntry?{mode:'into',depth:0}:null};
+    const task={id:nextTask++,iterator,frames:[],contexts:new Map(),status:'scheduled',steps:0,cleanup:0,epoch:0,resolve,reject,parent:current?.id??null,step:options.breakOnEntry?{mode:'into',depth:0}:null};
     tasks.set(task.id,task);emit('debug-started',{taskId:task.id,parentTaskId:task.parent});drive(task);
     return {taskId:task.id,promise};
   }
@@ -93,7 +96,10 @@ export function createCooperativeDebugger({point,breakpoint=()=>false,breakOnThr
     const task=tasks.get(Number(taskId));if(!task)throw new Error('Debug invocation no longer exists');
     if(action==='cancel'){
       if(task.cancelling)return;
-      task.epoch++;task.cancelling=true;task.status='running';task.step=null;drive(task,undefined,'return');return;
+      task.epoch++;task.cancelling=true;task.step=null;
+      // An active IL finally is allowed to finish (bounded), including nested calls.
+      task.cancelPending=task.frames.some(f=>f.critical);task.status='running';
+      drive(task,undefined,task.cancelPending?'next':'return');return;
     }
     if(!['continue','into','over','out'].includes(action))throw new Error('Unknown debugger action');
     if(task.status!=='paused')throw new Error('Debug invocation is not paused');
@@ -128,6 +134,8 @@ export function createCooperativeDebugger({point,breakpoint=()=>false,breakOnThr
     *throwing(error,location){yield {kind:'exception',point:location};return error;},
     enter(method){if(!current)throw new Error('Continuation needs an active invocation');if(current.frames.length>=maxFrames)throw new Error('Debug frame limit exceeded');const frame={id:nextFrame++,method};current.frames.push(frame);return frame;},
     leave(frame){if(current?.frames.at(-1)!==frame)throw new Error('Debug call stack is inconsistent');current.frames.pop();},
+    context(key,create){if(!current)throw new Error('Runtime context requires an active invocation');if(!current.contexts.has(key))current.contexts.set(key,create());return current.contexts.get(key);},
+    get cancelling(){return !!current?.cancelling;},
     get active(){return current!==null;},get busy(){return tasks.size!==0;},
     state(){return [...tasks.values()].map(t=>({taskId:t.id,status:t.status,point:t.point,frames:t.frames.length}));},
     dispose(){for(const t of [...tasks.values()])if(tasks.has(t.id))command(t.id,'cancel');disposed=true;}

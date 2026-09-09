@@ -33,6 +33,7 @@ export function createExceptionFrame(clauses,matches,{fatal=e=>e instanceof Exec
       return transfer(from,handler?{kind:'catch',id:handler.id,target:handler.handlerOffset,error}:{kind:'throw',error},true);
     },
     leave(from,target){return transfer(from,{kind:'goto',target},false);},
+    cancel(from){pending.length=0;return transfer(from,{kind:'cancel'},false);},
     endFinally(from){
       const frame=pending.at(-1);
       if(!frame||!inside(frame.current,from,true))throw new Error('endfinally without an active unwind');
