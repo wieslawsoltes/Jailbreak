@@ -1,0 +1,281 @@
+diff --git a/apps/ide/app.js b/apps/ide/app.js
+index d225d596d659138cef507c363dfa211c002e8d34..ffbc4401ea958e2b6faabab7af3db1fb3a754179 100644
+--- a/apps/ide/app.js
++++ b/apps/ide/app.js
+@@ -1 +1,2 @@
++import {createWorkbenchShell} from './packages/workbench/shell.js';
+ import {createDevelopmentWorkbench} from './packages/development/workbench.js';
+@@ -6,2 +7,3 @@ const $=id=>document.getElementById(id),editor=$('editor');
+ let samples=[],files={},symbolSources={},active='',name='',opened=[],generated=false,lastBuild=null,runtime='',worker=null,sequence=0,pending=null,timer=null,saveTimer=null,channel='',modified=false,workerUrl=null;
++let workbench=null;
+ const storageKey='jailbreak.workspace.v1';
+@@ -32,3 +34,3 @@ function highlight(text,language){const pattern=language==='xaml'?/(<!--[\s\S]*?
+ }
+-function renderEditor(){const text=generated?lastBuild?.code??'// Compile a workspace to inspect generated JavaScript.':files[active]??symbolSources[active]??'';editor.value=text;editor.setSelectionRange(0,0);editor.scrollTop=0;editor.scrollLeft=0;editor.readOnly=generated||!Object.hasOwn(files,active);$('current-path').textContent=generated?'Generated JavaScript · read only':active;$('language').textContent=generated?'JAVASCRIPT':kind(active).toUpperCase();updateHighlight();cursor();renderTabs();$('source-size').textContent=(text.length/1024).toFixed(1)+' KB';}
++function renderEditor(){workbench?.beforeRender();const text=generated?lastBuild?.code??'// Compile a workspace to inspect generated JavaScript.':files[active]??symbolSources[active]??'';editor.value=text;editor.setSelectionRange(0,0);editor.scrollTop=0;editor.scrollLeft=0;editor.readOnly=generated||!Object.hasOwn(files,active);$('current-path').textContent=generated?'Generated JavaScript · read only':active;$('language').textContent=generated?'JAVASCRIPT':kind(active).toUpperCase();updateHighlight();cursor();renderTabs();$('source-size').textContent=(text.length/1024).toFixed(1)+' KB';workbench?.afterRender();}
+ function updateHighlight(){const text=editor.value;if(text.length>250000){$('highlight').textContent=text+'\n';}else $('highlight').innerHTML=highlight(text,generated?'js':kind(active));$('line-numbers').textContent=Array.from({length:text.split('\n').length},(_,i)=>i+1).join('\n');syncScroll();}
+@@ -36,3 +38,3 @@ function syncScroll(){$('highlight').style.transform=`translate(${-editor.scroll
+ function cursor(){const before=editor.value.slice(0,editor.selectionStart),line=before.split('\n').length,col=before.length-before.lastIndexOf('\n');$('cursor').textContent=`Ln ${line}, Col ${col}`;}
+-function openFile(path){if(!Object.hasOwn(files,path)&&!Object.hasOwn(symbolSources,path))return;active=path;generated=false;if(!opened.includes(path))opened.push(path);renderEditor();renderFiles();saveSoon();}
++function openFile(path){if(!Object.hasOwn(files,path)&&!Object.hasOwn(symbolSources,path))return;active=path;generated=false;if(!opened.includes(path))opened.push(path);renderEditor();renderFiles();editor.focus({preventScroll:true});saveSoon();}
+ function renderTabs(){$('tabs').replaceChildren();for(const path of opened.filter(p=>Object.hasOwn(files,p)||Object.hasOwn(symbolSources,p))){const b=document.createElement('button');b.className=!generated&&active===path?'active':'';b.setAttribute('role','tab');b.setAttribute('aria-selected',String(!generated&&active===path));const i=document.createElement('span');i.className='tab-icon';i.textContent=icon(path);b.append(i,document.createTextNode(path.split('/').at(-1)));b.title=path;b.onclick=()=>openFile(path);$('tabs').append(b);}const b=document.createElement('button');b.textContent='JS  Generated';b.className=generated?'active':'';b.setAttribute('role','tab');b.setAttribute('aria-selected',String(generated));b.onclick=()=>{generated=true;renderEditor();};$('tabs').append(b);}
+@@ -40,3 +42,3 @@ function renderFiles(){const filter=$('file-search').value.toLowerCase();$('file
+ function renderOptions(project='',entry=''){for(const [id,paths,first]of [['project',Object.keys(files).filter(p=>p.endsWith('.csproj')),'Auto-detect project'],['entry',Object.keys(files).filter(p=>/\.a?xaml$/i.test(p)),'Auto-detect']]){$(id).replaceChildren();const o=document.createElement('option');o.value='';o.textContent=first;$(id).append(o);for(const path of paths){const item=document.createElement('option');item.value=path;item.textContent=path;$(id).append(item);}}$('project').value=project;$('entry').value=entry;}
+-function setWorkspace(workspace,{restore=false}={}){if(!workspace.files||typeof workspace.files!=='object')throw new Error('Workspace must contain a files map');const entries=Object.entries(workspace.files);if(entries.length>2000||entries.some(([p,t])=>typeof t!=='string'||t.length>4_000_000))throw new Error('Workspace exceeds safe interactive source limits');if(entries.reduce((n,[p,t])=>n+t.length,0)>16_000_000)throw new Error('Workspace exceeds 16 MB');profiles.set(workspace.profile??{});development.set(workspace.development??{});files={...workspace.files};symbolSources={};name=workspace.title??workspace.name??workspace.id??'Local workspace';active=workspace.active&&files[workspace.active]!==undefined?workspace.active:entries.find(([p])=>/\.a?xaml$/i.test(p))?.[0]??entries[0]?.[0]??'';opened=workspace.opened??[active,...entries.filter(([p])=>p.endsWith('.cs')).slice(0,1).map(([p])=>p)];generated=false;lastBuild=null;modified=false;$('workspace-name').textContent=name;$('preview-title').textContent=name;$('file-search').value='';renderOptions(workspace.project??'',workspace.entry??'');renderEditor();renderFiles();save();if(restore)toast('Restored your local workspace.');compile();}
++function setWorkspace(workspace,{restore=false}={}){if(!workspace.files||typeof workspace.files!=='object')throw new Error('Workspace must contain a files map');const entries=Object.entries(workspace.files);if(entries.length>2000||entries.some(([p,t])=>typeof t!=='string'||t.length>4_000_000))throw new Error('Workspace exceeds safe interactive source limits');if(entries.reduce((n,[p,t])=>n+t.length,0)>16_000_000)throw new Error('Workspace exceeds 16 MB');workbench?.reset();profiles.set(workspace.profile??{});development.set(workspace.development??{});files={...workspace.files};symbolSources={};name=workspace.title??workspace.name??workspace.id??'Local workspace';active=workspace.active&&files[workspace.active]!==undefined?workspace.active:entries.find(([p])=>/\.a?xaml$/i.test(p))?.[0]??entries[0]?.[0]??'';opened=workspace.opened??[active,...entries.filter(([p])=>p.endsWith('.cs')).slice(0,1).map(([p])=>p)];generated=false;lastBuild=null;modified=false;$('workspace-name').textContent=name;$('preview-title').textContent=name;$('file-search').value='';renderOptions(workspace.project??'',workspace.entry??'');renderEditor();renderFiles();save();if(restore)toast('Restored your local workspace.');compile();}
+ function showDiagnostics(items=[]){$('problems').replaceChildren();$('problem-count').textContent=items.length;if(!items.length){const empty=document.createElement('div');empty.className='diagnostic-empty';empty.textContent='✓ No problems in the supported compatibility profile.';$('problems').append(empty);return;}for(const d of items){const b=document.createElement('button');b.className='diagnostic-row';const i=document.createElement('span');i.className=d.severity==='warning'?'diag-warning':'diag-error';i.textContent=d.severity==='warning'?'△':'×';const code=document.createElement('span');code.textContent=d.code;const text=document.createElement('span');text.className='message';text.textContent=d.message;const where=document.createElement('span');where.className='location';where.textContent=`${d.file?.split('/').at(-1)??''}:${d.line??1}`;b.append(i,code,text,where);b.onclick=()=>{if(!files[d.file])return;openFile(d.file);const offset=d.offset??editor.value.split('\n').slice(0,(d.line??1)-1).join('\n').length;editor.focus();editor.setSelectionRange(offset,offset+(d.length??1));editor.scrollTop=Math.max(0,((d.line??1)-4)*23);syncScroll();cursor();};$('problems').append(b);}}
+@@ -64,2 +66,5 @@ let dragDepth=0;document.addEventListener('dragenter',e=>{if(e.dataTransfer?.typ
+ async function start(){try{if(localStorage.getItem('jailbreak.theme')==='light')document.body.classList.add('light');}catch{}try{[samples,runtime]=globalThis.__JailbreakAssets?[globalThis.__JailbreakAssets.samples,globalThis.__JailbreakAssets.runtime]:await Promise.all([fetch('./samples.json').then(r=>{if(!r.ok)throw new Error('Sample workspaces could not be loaded');return r.json();}),fetch('./runtime.js').then(r=>{if(!r.ok)throw new Error('Runtime bundle is missing; run npm run build');return r.text();})]);$('samples').replaceChildren();for(const sample of samples){const option=document.createElement('option');option.value=sample.id;option.textContent=sample.title;$('samples').append(option);}makeWorker();let restored=null;try{restored=JSON.parse(localStorage.getItem(storageKey));}catch{}if(restored?.files){setWorkspace(restored,{restore:true});selectLocal();}else {const sample=samples.find(s=>s.id==='ControlCatalog')??samples[0];$('samples').value=sample.id;setWorkspace(sample);}log('Compiler worker initialized. Application code is never evaluated in the IDE origin.');}catch(e){toast(e.message);$('status').textContent=e.message;log(e.stack??e.message);}}
++workbench=createWorkbenchShell({documents:()=>({...files,...symbolSources,...(lastBuild?.success?{'jailbreak-app.js':lastBuild.code}:{})}),active:()=>generated?'jailbreak-app.js':active,
++ open:(path,start=0,end=start)=>{if(path==='jailbreak-app.js'){generated=true;renderEditor();}else openFile(path);editor.focus();editor.setSelectionRange(start,end);editor.scrollTop=Math.max(0,(editor.value.slice(0,start).split('\n').length-4)*parseFloat(getComputedStyle(editor).lineHeight));syncScroll();cursor();},
++ generated:()=>{generated=true;renderEditor();},notify:toast});
+ start();
+diff --git a/apps/ide/style.css b/apps/ide/style.css
+index a720d5de587fc53cfd822a8ee5b5ffff745f3347..b1a945729653683b37dc1ece748f4eb4638c05f3 100644
+--- a/apps/ide/style.css
++++ b/apps/ide/style.css
+@@ -5 +5,127 @@ body.light{color-scheme:light;--bg:#f5f7fa;--panel:#eef1f6;--panel2:#e4e9f2;--bo
+ @media(max-width:800px){body{overflow:auto}.topbar{height:52px;padding:0 14px}.workbench,.brand-divider{display:none}.top-actions{gap:10px}.commandbar{height:56px;padding:0 10px}.workspace-control select{max-width:170px;font-size:12px}.activity{width:39px}.activity button,.activity a{width:37px}.sidebar{display:none}.commands{gap:0}.commands .separator{margin:0 3px}.commands #save-workspace{display:none}.commands .primary{padding:7px 10px}.workspace{height:calc(100dvh - 133px);min-height:620px}.work-area{flex-direction:column}.editor-pane{width:100%;flex:1;min-height:200px;border-right:0;border-bottom:1px solid var(--border)}.preview-pane{min-height:300px;flex:1.2}.bottom-panel{height:125px}.bottom-tabs .build-summary{font-size:9px}.live-label{display:none}.statusbar{position:fixed;bottom:0;left:0;right:0}.status-right{display:none}.preview-expanded .preview-pane{flex:1}.preview-actions select{width:100px}.editor-tabs{height:34px}.editor-tabs button{padding:7px 12px}.editor-path{height:24px}.sidebar.mobile-open{display:block;position:absolute;left:39px;top:108px;bottom:25px;z-index:5;width:230px;box-shadow:10px 0 30px #0003}.preview-toolbar{height:34px}.statusbar #status{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
++/* Jailbreak Studio: compact, keyboard-accessible workbench over existing tools. */
++body.wb-studio{--wb-explorer:230px;--wb-inspector:330px;--wb-bottom:160px;--wb-split:50%;--line:#556079;font-family:"Segoe UI",system-ui,sans-serif}
++.wb-studio .topbar{height:38px;padding:0 12px;gap:10px;background:var(--panel)}
++.wb-studio .brand{font-size:14px;gap:8px;letter-spacing:-.3px;flex-shrink:0}
++.wb-studio .brand-mark{width:22px;height:22px;border-radius:4px;font-size:21px;line-height:18px}
++.wb-studio .brand-mark span{font-size:10px;right:1px;top:2px}
++.wb-studio .brand-divider,.wb-studio .brand .workbench,.wb-studio .local-badge{display:none}
++.wb-menubar{display:flex;align-items:center;gap:1px;font-size:11px}
++.wb-menubar button{padding:4px 7px}
++#wb-command{display:flex;align-items:center;justify-content:space-between;gap:18px;min-width:180px;width:29%;max-width:390px;margin-left:auto;color:var(--muted);border:1px solid var(--border);background:var(--editor);height:26px;padding:0 9px;border-radius:4px;font-size:11px}
++#wb-command kbd{font-size:9px;white-space:nowrap}
++.wb-studio .top-actions{gap:10px;font-size:10px}
++.wb-studio .commandbar{height:40px;padding:0 10px;justify-content:flex-start;background:var(--bg)}
++.wb-studio .workspace-control{min-width:0;gap:5px;margin-right:auto;flex-shrink:1}
++.wb-studio .workspace-control select{font-size:12px;max-width:230px}
++.wb-studio .project-symbol{font-size:19px}
++.wb-studio .commands{gap:3px;min-width:0;font-size:11px}
++.wb-studio .commands button{padding:4px 7px;font-size:11px}
++.wb-studio .commands .separator{margin:0 5px}
++.wb-studio .commands .primary{padding:5px 12px;border-radius:4px}
++#wb-view-mode{font-size:10px;padding:3px 18px 3px 6px;max-width:130px}
++.wb-studio .workspace{height:calc(100dvh - 102px);min-height:0;overflow:hidden}
++.wb-studio .activity{width:40px;padding:8px 0;gap:8px;background:var(--panel)}
++.wb-studio .activity button,.wb-studio .activity a{width:39px;font-size:20px;padding:4px}
++.wb-studio .sidebar{width:var(--wb-explorer);border-right:0;font-size:11px;min-width:0;scrollbar-width:thin}
++.wb-studio .sidebar .section-label{height:34px;padding:8px 13px;font-size:10px;letter-spacing:.7px}
++.wb-studio .file-row{padding:4px 10px 4px 16px;min-height:27px;font-size:11px}
++.wb-studio .sidebar-note{font-size:10px;padding:12px 15px;margin-top:16px}
++.wb-studio .sidebar-note p{font-size:13px;margin:5px 0}
++.wb-studio .sidebar-note .note-icon{display:none}
++.wb-studio .project-options{margin-top:18px;padding-top:12px}
++.wb-studio .main-area{overflow:hidden;min-width:0}
++.wb-studio .work-area{min-height:0;overflow:hidden;flex:1}
++.wb-studio .editor-pane{width:var(--wb-split);min-width:180px;border-right:0}
++.wb-studio .preview-pane{min-width:200px}
++.wb-studio .editor-tabs,.wb-studio .preview-toolbar{height:34px}
++.wb-studio .editor-tabs button{padding:7px 12px;font-size:11px}
++.wb-studio .editor-tabs button.active{padding-top:5px}
++.wb-studio .editor-path,.wb-studio .preview-address{height:27px;font-size:10px}
++.wb-studio .editor-path #wb-open-document{margin-left:0;padding:0 4px;color:var(--muted)}
++.wb-studio .editor-path #language{margin-left:auto}
++.wb-studio .editor-wrap pre,.wb-studio .editor-wrap textarea{font-size:12px;line-height:21px}
++.wb-studio .editor-footer{height:22px;font-size:10px}
++.wb-studio .preview-toolbar{padding:0 9px;gap:8px}
++.wb-studio .preview-stage{min-width:0;overscroll-behavior:contain;background:#e9edf3}
++.wb-studio .preview-toolbar .preview-state{display:inline;font-size:9px}
++.wb-studio .preview-actions select{max-width:100px}
++.wb-studio .bottom-panel{height:min(var(--wb-bottom),38vh);min-height:75px;border-top:0}
++.wb-studio .bottom-tabs{height:32px;padding-left:8px}
++.wb-studio .bottom-tabs>button{font-size:10px}
++.wb-studio .diagnostic-empty{padding:12px 15px}
++.wb-studio .statusbar{height:24px;font-size:10px;background:#22344f;min-width:0}
++.wb-studio #status{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
++.wb-studio .status-mark{padding:2px 13px}.wb-studio .status-right{white-space:nowrap;font-size:9px}
++.wb-splitter{flex-shrink:0;background:var(--border);outline:none;position:relative;z-index:4;touch-action:none}
++.wb-splitter.vertical{width:3px;cursor:col-resize}.wb-splitter.horizontal{height:3px;cursor:row-resize}
++.wb-splitter:hover,.wb-splitter:focus-visible{background:var(--accent);box-shadow:0 0 0 1px var(--accent)}
++.wb-resizing{cursor:col-resize;user-select:none}.wb-resizing iframe{pointer-events:none}
++.wb-tools-dock{width:var(--wb-inspector);flex-shrink:0;min-width:0;overflow:hidden;background:var(--panel)}
++.wb-tools-dock #development-panel{max-height:none;height:100%;padding:10px;overflow:auto;border:0;scrollbar-width:thin;font-size:11px}
++.wb-tools-dock #development-panel .dev-columns{display:flex;flex-direction:column;gap:5px}
++.wb-tools-dock #development-panel header{gap:5px;align-items:center;padding:0 0 8px;border-bottom:1px solid var(--border)}
++.wb-tools-dock #development-panel header h2{width:100%;font-size:12px;margin:0 0 5px}
++.wb-tools-dock #development-panel header label{width:calc(50% - 5px);font-size:10px;align-items:flex-start;line-height:1.35}
++.wb-tools-dock #development-panel input[type=checkbox]{flex-shrink:0;margin-top:2px;accent-color:var(--blue)}
++.wb-tools-dock #development-panel .dev-columns>section{padding-top:7px;border-top:1px solid var(--border);min-width:0}
++.wb-tools-dock #development-panel h3{font-size:11px;margin:2px 0 8px;letter-spacing:.3px}
++.wb-tools-dock #development-panel button,.wb-tools-dock #development-panel input,.wb-tools-dock #development-panel select{font-size:10px;padding:4px 6px}
++.wb-tools-dock #development-panel .dev-list{max-height:180px}
++.wb-tools-dock #development-panel .dev-row{gap:4px}
++.wb-tools-dock #dev-properties{max-height:180px}
++.wb-tools-dock #development-panel .dev-property{grid-template-columns:80px minmax(0,1fr) auto}
++.wb-tools-dock #development-panel .dev-row>input:not([type=checkbox]){max-width:130px;flex-shrink:1}
++.wb-tools-dock #development-panel .dev-row>select{max-width:100%}
++.wb-tools-dock #dev-status{font-size:10px;line-height:1.5;overflow-wrap:anywhere;color:var(--accent)}
++.wb-tools-dock #dev-frames{width:100%}
++#wb-palette{padding:0;width:min(640px,calc(100vw - 24px));max-width:calc(100vw - 24px);max-height:min(620px,calc(100dvh - 50px));margin:60px auto auto;border:1px solid var(--line);border-radius:10px;color:var(--text);background:var(--panel);box-shadow:0 18px 70px #0009;overflow:hidden}
++#wb-palette::backdrop{background:#080b1355;backdrop-filter:blur(2px)}
++.wb-dialog-top{display:flex;align-items:center;justify-content:space-between;height:39px;padding:0 12px;background:var(--panel2)}
++#wb-palette-title{font-size:12px;font-weight:600;margin:0}
++#wb-close-palette{font-size:10px;border:1px solid var(--border);padding:2px 6px;color:var(--muted)}
++#wb-palette-query{width:calc(100% - 24px);height:38px;margin:12px;padding:7px 11px;border-radius:5px;border:1px solid var(--accent);outline:none;background:var(--editor);color:var(--text);font-size:13px}
++#wb-palette-results{max-height:min(425px,calc(100dvh - 235px));overflow:auto;padding:0 6px 7px;scrollbar-width:thin}
++#wb-palette-results button{display:grid;grid-template-columns:minmax(0,1fr) auto;width:100%;text-align:left;border:0;border-radius:4px;padding:8px 10px;gap:2px 10px;min-height:35px;white-space:normal}
++#wb-palette-results [aria-selected=true]{background:var(--hover);outline:1px solid var(--accent);outline-offset:-1px}
++.wb-result-label{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;grid-column:1}
++.wb-result-detail{font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;grid-column:1}
++#wb-palette-results kbd{grid-column:2;grid-row:1;align-self:center;font-size:9px}
++.wb-palette-hint{padding:8px 15px;border-top:1px solid var(--border);font-size:10px;color:var(--muted)}
++.wb-empty{font-size:12px;padding:20px;color:var(--muted)}
++#wb-findbar{display:flex;flex-wrap:wrap;gap:5px;align-items:center;padding:7px 10px;background:var(--panel2);border-bottom:1px solid var(--border);font-size:10px}
++#wb-findbar input:not([type=checkbox]){width:145px;max-width:100%;min-width:0;background:var(--editor);border:1px solid var(--border);color:var(--text);padding:5px 7px;border-radius:4px}
++#wb-findbar label{display:flex;align-items:center;gap:3px;white-space:nowrap}
++#wb-findbar button{padding:3px 6px}#wb-find-count{font-size:9px;color:var(--muted)}#wb-find-close{margin-left:auto}
++.wb-studio[data-view=source] .preview-pane,.wb-studio[data-view=source] [data-splitter=split]{display:none}
++.wb-studio[data-view=source] .editor-pane{width:100%;flex:1}
++.wb-studio[data-view=preview] .editor-pane,.wb-studio[data-view=preview] [data-splitter=split],.wb-studio.preview-expanded [data-splitter=split]{display:none}
++@media(min-width:1500px){.wb-studio .editor-wrap pre,.wb-studio .editor-wrap textarea{font-size:13px;line-height:22px}}
++@media(max-width:1200px){.wb-studio .top-actions a{display:none}.wb-studio .commands>button:not(.primary) span{display:none}.wb-studio .commands>a{display:none}.wb-studio .branch-pill{display:none}.wb-studio .workspace-control select{max-width:175px}.wb-studio .preview-toolbar .preview-state{display:none}.wb-studio .status-right span:last-child{display:none}}
++@media(max-width:1000px){.wb-studio.wb-docked .wb-tools-dock{position:fixed;right:0;top:78px;bottom:24px;width:min(360px,calc(100vw - 44px));z-index:7;box-shadow:-10px 0 40px #0005;border-left:1px solid var(--border)}.wb-studio [data-splitter=inspector]{display:none}.wb-menubar button:nth-child(n+4){display:none}.wb-studio .sidebar{width:min(var(--wb-explorer),185px)}#wb-command{min-width:150px}}
++@media(max-width:800px){
++ .wb-studio{height:100dvh;overflow:hidden}
++ .wb-studio .topbar{height:36px;padding:0 8px;gap:6px}
++ .wb-studio .top-actions{gap:0}.wb-studio .brand{font-size:12px}.wb-studio .brand-mark{width:20px;height:20px}
++ .wb-menubar{display:none}#wb-command{min-width:110px;width:auto;flex:1;max-width:300px;font-size:10px;gap:5px}#wb-command kbd{display:none}
++ .wb-studio .commandbar{height:39px;padding:0 6px;gap:4px;overflow:hidden}
++ .wb-studio .workspace-control{margin-right:auto}.wb-studio .workspace-control select{max-width:145px;font-size:11px}
++ .wb-studio .commands>button:not(.primary):not(#development-tools),.wb-studio .commands .separator,.wb-studio .commands>a{display:none}
++ .wb-studio .commands .primary{padding:5px 7px;font-size:10px}.wb-studio .commands .primary span{display:none}
++ .wb-studio #wb-view-mode{max-width:96px;font-size:10px}.wb-studio .commands #development-tools{font-size:10px;padding:5px}
++ .wb-studio .workspace{height:calc(100dvh - 99px);min-height:0}
++ .wb-studio .activity{width:33px}.wb-studio .activity button,.wb-studio .activity a{width:32px;font-size:19px}
++ .wb-studio .sidebar{display:none}.wb-studio .sidebar.mobile-open{display:block;left:33px;top:75px;bottom:24px;width:230px;z-index:8}
++ .wb-studio .wb-splitter.vertical{display:none}.wb-studio .work-area{flex-direction:column;overflow:auto;min-height:0}
++ .wb-studio .editor-pane{width:100%;flex:1;min-width:0;min-height:175px;border-bottom:1px solid var(--border)}
++ .wb-studio .preview-pane{flex:1.1;min-height:230px;min-width:0}
++ .wb-studio .editor-tabs,.wb-studio .preview-toolbar{height:31px}.wb-studio .editor-path,.wb-studio .preview-address{height:23px}
++ .wb-studio .editor-wrap pre,.wb-studio .editor-wrap textarea{font-size:11px;line-height:20px}
++ .wb-studio .bottom-panel{height:100px;min-height:65px}.wb-studio .build-summary{display:none}
++ .wb-studio .preview-actions select{width:100px}.wb-studio .preview-toolbar .preview-state{display:inline}
++ .wb-studio .statusbar{position:static;height:24px}.wb-studio .status-right{display:none}
++ .wb-studio[data-view=source] .editor-pane,.wb-studio[data-view=preview] .preview-pane{min-height:0;height:100%}
++ .wb-studio.wb-docked .wb-tools-dock{top:75px}
++ #wb-palette{margin-top:16px}#wb-palette-results{max-height:calc(100dvh - 190px)}
++}
++@media(max-width:380px){.wb-studio .workspace-control select{max-width:100px}.wb-studio .project-symbol{display:none}.wb-studio #wb-view-mode{max-width:85px}.wb-studio .brand strong{display:none}}
+diff --git a/tests/browser/test_workbench.py b/tests/browser/test_workbench.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..07017375dd91c86597f698cd082184e0fbe2b108
+--- /dev/null
++++ b/tests/browser/test_workbench.py
+@@ -0,0 +1,91 @@
++"""Functional editor commands and responsive docked tools over the actual compiler IDE."""
++import unittest
++import test_development as baseline
++from playwright.sync_api import expect
++
++class WorkbenchTests(unittest.TestCase):
++    setUpClass=classmethod(baseline.DevelopmentTests.setUpClass.__func__)
++    tearDownClass=classmethod(baseline.DevelopmentTests.tearDownClass.__func__)
++    setUp=baseline.DevelopmentTests.setUp
++    tearDown=baseline.DevelopmentTests.tearDown
++    source=baseline.DevelopmentTests.source
++
++    def palette(self,shortcut,text):
++        self.page.keyboard.press(shortcut)
++        expect(self.page.locator('#wb-palette')).to_be_visible()
++        self.page.fill('#wb-palette-query',text)
++
++    def test_file_and_parsed_symbol_navigation(self):
++        self.palette('Control+p','MainView.axaml.cs')
++        self.page.locator('#wb-palette-results [role=option]').first.click()
++        expect(self.page.locator('#editor')).to_have_value(__import__('re').compile('public partial class MainView'))
++        self.palette('Control+Shift+o','Increment')
++        self.page.locator('#wb-palette-results [role=option]').first.click()
++        expect(self.page.locator('#wb-palette')).not_to_be_visible()
++        at=self.page.locator('#editor').evaluate('(e)=>e.selectionStart')
++        text=self.page.locator('#editor').input_value()
++        self.assertIn('Increment',text[at:at+100])
++        self.assertGreater(at,0)
++        self.assertEqual(self.errors,[])
++
++    def test_workspace_search_selects_original_source_span(self):
++        self.palette('Control+Shift+f','count += 1')
++        self.page.locator('#wb-palette-results [role=option]').first.click()
++        self.assertEqual(self.page.locator('#editor').evaluate('(e)=>e.value.slice(e.selectionStart,e.selectionEnd)'),'count += 1')
++
++    def test_find_replace_changes_actual_compiled_handler(self):
++        self.source('MainView.axaml.cs')
++        self.page.keyboard.press('Control+h')
++        self.page.fill('#wb-find','count += 1');self.page.fill('#wb-replace','count += 7')
++        self.page.click('#wb-replace-all');self.page.click('#wb-find-close');self.page.click('#run')
++        expect(self.page.locator('#preview-state')).to_contain_text('Running',timeout=30000)
++        self.page.frame_locator('#preview').get_by_role('button',name='Increment',exact=True).click()
++        expect(self.page.frame_locator('#preview').get_by_text('Count: 7',exact=True)).to_be_visible()
++        self.assertEqual(self.errors,[])
++
++    def test_generated_javascript_is_searchable_but_not_replaced(self):
++        self.palette('Control+Shift+p','View Generated JavaScript')
++        self.page.locator('#wb-palette-results [role=option]').first.click()
++        self.assertTrue(self.page.locator('#editor').evaluate('e=>e.readOnly'))
++        before=self.page.locator('#editor').input_value()
++        self.page.keyboard.press('Control+h');self.page.fill('#wb-find','function');self.page.fill('#wb-replace','bad')
++        expect(self.page.locator('#wb-replace-all')).to_be_disabled()
++        self.page.click('#wb-find-close');self.page.locator('#editor').focus();self.page.keyboard.press('Tab')
++        self.assertEqual(self.page.locator('#editor').input_value(),before)
++
++    def test_caret_restore_go_to_line_and_comment_transaction(self):
++        text=self.source('MainView.axaml.cs')
++        self.page.keyboard.press('Control+g');self.page.fill('#wb-palette-query','16:9');self.page.keyboard.press('Enter')
++        start=self.page.locator('#editor').evaluate('e=>e.selectionStart')
++        self.assertEqual(start,len('\n'.join(text.split('\n')[:15]))+1+8)
++        self.source('MainView.axaml');self.source('MainView.axaml.cs')
++        self.assertEqual(self.page.locator('#editor').evaluate('e=>e.selectionStart'),start)
++        self.page.keyboard.press('Control+/');self.assertIn('// count += 1;',self.page.locator('#editor').input_value())
++        self.page.keyboard.press('Control+/');self.assertEqual(self.page.locator('#editor').input_value(),text)
++
++    def test_keyboard_splitters_dock_and_reset_layout(self):
++        self.assertTrue(self.page.locator('.wb-tools-dock #development-panel').is_visible())
++        resize=self.page.get_by_role('separator',name='Resize explorer',exact=True)
++        before=int(resize.get_attribute('aria-valuenow'));resize.focus();resize.press('Shift+ArrowRight')
++        self.assertEqual(int(resize.get_attribute('aria-valuenow')),before+10)
++        self.palette('Control+Shift+p','View Reset tool-window layout');self.page.keyboard.press('Enter')
++        self.assertEqual(int(resize.get_attribute('aria-valuenow')),230)
++        self.assertEqual(self.page.evaluate('document.documentElement.scrollWidth'),1600)
++
++    def test_profile_command_executes_existing_profile_inspector(self):
++        self.palette('Control+Shift+p','Build Project profiles');self.page.keyboard.press('Enter')
++        expect(self.page.locator('#build-profile-dialog')).to_be_visible()
++
++    def test_mobile_palette_and_preview_have_no_document_overflow(self):
++        self.page.set_viewport_size({'width':390,'height':844})
++        self.page.locator('#development-panel header button').filter(has_text='Close').click()
++        self.page.select_option('#wb-view-mode','preview')
++        self.assertEqual(self.page.evaluate('document.documentElement.scrollWidth'),390)
++        self.palette('Control+Shift+p','View Code only')
++        self.assertLessEqual(self.page.locator('#wb-palette').bounding_box()['width'],390)
++        self.page.keyboard.press('Enter')
++        expect(self.page.locator('.preview-pane')).not_to_be_visible()
++        expect(self.page.locator('#editor')).to_be_visible()
++        self.assertEqual(self.errors,[])
++
++if __name__=='__main__':unittest.main(verbosity=2)
+diff --git a/tests/workbench.test.js b/tests/workbench.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b66ecc187d558e46c14dd05e5ac360eddc6bca0d
+--- /dev/null
++++ b/tests/workbench.test.js
+@@ -0,0 +1,14 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {findText,replaceText,lineOffset,sourcePosition,rankItems,documentSymbols,searchWorkspace,DocumentPositions} from '../packages/workbench/navigation.js';
++import {layoutValues} from '../packages/workbench/layout.js';
++test('literal editor search never interprets regex metacharacters',()=>{assert.deepEqual(findText('a[1] a1 a[1]','a[1]').matches,[{start:0,end:4},{start:8,end:12}]);assert.equal(findText('A a','a',{caseSensitive:true}).matches[0].start,2);});
++test('case insensitive Unicode search retains original UTF-16 offsets',()=>{const text='İ 😀 Kelvin K kelvin';for(const m of findText(text,'kelvin').matches)assert.equal(text.slice(m.start,m.end).toLowerCase(),'kelvin');assert.equal(findText(text,'K').matches[0].start,5);});
++test('whole-word boundaries understand Unicode letters and supplementary codepoints',()=>{assert.equal(findText('x abcX abc abcą 𐐀abc abc_','abc',{wholeWord:true}).matches.length,1);});
++test('replace all treats replacement as literal data and refuses partial replacement',()=>{assert.equal(replaceText('x x','x','$&').after,'$& $&');assert.throws(()=>replaceText('x x','x','y',{maxResults:1}),/Too many/);});
++test('line and column positions use original CRLF and UTF-16 offsets',()=>{const t='A\r\n😀line\nlast';assert.equal(lineOffset(t,2,3),5);assert.equal(lineOffset(t,1,99),1);assert.deepEqual(sourcePosition(t,5),{line:2,column:3});assert.equal(lineOffset(t,99),t.length);assert.throws(()=>lineOffset(t,0));});
++test('workspace search skips binary payloads, reports exact selections and bounded totals',()=>{const f={'b.cs':'line\nfind here\nfind','a.cs':'find','lib.binary.json':'find'};const r=searchWorkspace(f,'find',{maxResults:2});assert.equal(r.rows.length,2);assert.equal(r.truncated,true);for(const m of r.rows)assert.equal(f[m.file].slice(m.start,m.end),'find');assert.equal(r.rows[1].line,2);});
++test('parsed symbol navigation reports CSharp declarations and named XAML only',()=>{const cs='namespace App; public class View { int count=1; public int Run(){return count;} }';assert.ok(documentSymbols(cs,'View.cs').some(s=>s.label==='Run'&&cs.slice(s.start).includes('Run()')));assert.deepEqual(documentSymbols('<StackPanel><Button x:Name="Action"/></StackPanel>','View.axaml').map(s=>s.label),['StackPanel','Action']);assert.deepEqual(documentSymbols('function unknown(){}','app.js'),[]);});
++test('fuzzy file ranking is deterministic and excludes nonmatches',()=>{const items=[{label:'main.cs'},{label:'MainView.axaml'},{label:'Other.cs'}];assert.equal(rankItems(items,'mvax')[0].label,'MainView.axaml');assert.equal(rankItems(items,'unavailable').length,0);});
++test('caret memory is LRU-bounded and clamps after document changes',()=>{const p=new DocumentPositions(2);p.save('a',{start:30,end:40,top:2,left:0});p.save('b',{start:1,end:2});p.save('c',{start:7,end:8});assert.equal(p.positions.size,2);assert.equal(p.get('a',5).start,0);assert.equal(p.get('c',5).end,5);p.clear();assert.equal(p.positions.size,0);});
++test('saved pane sizes cannot inject CSS or exceed bounded limits',()=>{assert.deepEqual(layoutValues({explorer:'20px;display:none',inspector:-2,bottom:Infinity,split:200}),{explorer:230,inspector:280,bottom:160,split:75});});

@@ -1,0 +1,246 @@
+diff --git a/docs/milestone-workbench-shell.md b/docs/milestone-workbench-shell.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..bb98b9a32e0212def29ef20dde8c4bd287de6911
+--- /dev/null
++++ b/docs/milestone-workbench-shell.md
+@@ -0,0 +1,27 @@
++# Docked IDE and functional editor navigation
++
++The primary browser IDE now uses a compact desktop workbench with an explorer, source/preview split, diagnostics and a right-hand developer-tool dock. This is a functional redesign of the existing compiler/designer/debugger client, not a standalone mockup or a claim of Rider/Visual Studio parity.
++
++## Commands and editing
++
++**Ctrl+Shift+P** opens the keyboard-accessible command palette. File/Edit/View/Build/Run menus filter the same command registry. Commands invoke the existing import/export, compiler, build-profile, preview, theme and debugger actions. Unavailable commands report their state instead of simulating execution.
++
++**Ctrl+P** opens source or verified read-only symbol documents; **Ctrl+Shift+O** navigates parsed C# declarations and named XAML elements; **Ctrl+Shift+F** searches workspace text and selects exact original UTF-16 ranges. Binary payload records are excluded from text search. **Ctrl+G** accepts line or line:column, including CRLF input. Per-document caret, selection and scroll positions are retained in a bounded session cache.
++
++**Ctrl+F/H** opens literal find/replace with case and Unicode whole-word options. Replacement is literal, not regex interpolation. Search/result budgets prevent incomplete replace-all edits. Changes update the actual editor source and compiler inputs. **Ctrl+/** toggles C# line comments; XML wrapping refuses existing comment delimiters. Generated JS and verified binary-source tabs remain read-only, including keyboard indentation and replacement controls.
++
++## Layout
++
++Explorer, editor/preview split, diagnostics height and developer dock have pointer and keyboard resize handles. Shift-arrow changes ten pixels; Home/End use allowed limits; double-click or the Reset layout command restores defaults. Bounded preferences persist when browser storage is available. Code-only, preview-only and combined views share the same editor and application frame.
++
++Dark/light themes, compact tabs, breadcrumbs, focus styling and command hints are consistent across the shell. Narrow displays use bounded overlay tools and a full-width preview without document-level horizontal overflow. The developer panel is moved, not cloned, so existing designer, construction stepping, watches and reload controls retain their session state and event handlers.
++
++## Libraries and gates
++
++`packages/workbench/navigation.js` implements literal search, source positions, parsed symbol navigation, fuzzy ranking and document-position storage. `layout.js` manages accessible splitters. `shell.js` binds these to the existing IDE using callbacks; it never evaluates application source in the IDE origin. Source execution stays in the script-only sandboxed preview.
++
++`tests/workbench.test.js` checks Unicode ranges, replacement limits, source parsing and bounded state. `tests/browser/test_workbench.py` exercises actual file/symbol/search navigation, compiled results after replacement, read-only protection, caret restoration, command execution, splitters and mobile layout. Existing developer-tool and XAML-construction browser gates remain required after docking.
++
++## Remaining mandatory scope
++
++Semantic completion, refactoring, rich multi-caret editing, project-wide incremental analysis and the full professional-IDE end state are not implemented by these navigation tools. Full language/framework and unmodified ControlCatalog compatibility remain separate targets. The complete debugger, source round-tripping and symbol-format requirements in `core-development-tools.md` are unchanged.
+diff --git a/packages/workbench/layout.js b/packages/workbench/layout.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..cd5582a9ea05694cdb99f1ea358912454c8c15cd
+--- /dev/null
++++ b/packages/workbench/layout.js
+@@ -0,0 +1,31 @@
++const defaults={explorer:230,inspector:330,bottom:160,split:50};
++export function layoutValues(value={}){
++  const clamp=(key,min,max)=>Number.isFinite(value[key])?Math.min(max,Math.max(min,value[key])):defaults[key];
++  return {explorer:clamp('explorer',150,450),inspector:clamp('inspector',280,500),bottom:clamp('bottom',90,450),split:clamp('split',25,75)};
++}
++export function installSplitters(doc,{read=()=>({}),write=()=>{}}={}){
++  let values=layoutValues(read());const handles=[];
++  function apply(){for(const [name,value]of Object.entries(values))doc.body.style.setProperty('--wb-'+name,value+(name==='split'?'%':'px'));for(const h of handles)h.el.setAttribute('aria-valuenow',String(Math.round(values[h.key])));}
++  function splitter(parent,before,key,{vertical=true,invert=false,min,max,percent=false}){
++    const el=doc.createElement('div');el.className='wb-splitter '+(vertical?'vertical':'horizontal');el.dataset.splitter=key;el.tabIndex=0;
++    el.setAttribute('role','separator');el.setAttribute('aria-label','Resize '+key);el.setAttribute('aria-orientation',vertical?'vertical':'horizontal');el.setAttribute('aria-valuemin',String(min));el.setAttribute('aria-valuemax',String(max));
++    parent.insertBefore(el,before);handles.push({el,key});let drag=null;
++    const update=n=>{values[key]=Math.min(max,Math.max(min,n));apply();};
++    el.addEventListener('pointerdown',event=>{if(event.button!==0)return;event.preventDefault();drag={id:event.pointerId,start:vertical?event.clientX:event.clientY,value:values[key],size:parent.getBoundingClientRect().width};el.setPointerCapture(event.pointerId);doc.body.classList.add('wb-resizing');});
++    el.addEventListener('pointermove',event=>{if(!drag)return;const delta=((vertical?event.clientX:event.clientY)-drag.start)*(invert?-1:1);update(drag.value+(percent?100*delta/Math.max(1,drag.size):delta));});
++    const finish=event=>{if(!drag)return;drag=null;doc.body.classList.remove('wb-resizing');if(el.hasPointerCapture(event.pointerId))el.releasePointerCapture(event.pointerId);write({...values});};
++    el.addEventListener('pointerup',finish);el.addEventListener('pointercancel',finish);el.addEventListener('lostpointercapture',()=>{drag=null;doc.body.classList.remove('wb-resizing');});
++    el.addEventListener('keydown',event=>{const delta=(vertical?{ArrowLeft:-1,ArrowRight:1}:{ArrowUp:-1,ArrowDown:1})[event.key];if(delta||event.key==='Home'||event.key==='End'){event.preventDefault();update(event.key==='Home'?min:event.key==='End'?max:values[key]+delta*(event.shiftKey?10:1)*(invert?-1:1));write({...values});}});
++    el.addEventListener('dblclick',()=>{update(defaults[key]);write({...values});});return el;
++  }
++  const workspace=doc.querySelector('.workspace'),main=doc.querySelector('.main-area'),work=doc.querySelector('.work-area');
++  splitter(workspace,main,'explorer',{min:150,max:450});
++  splitter(work,doc.querySelector('.preview-pane'),'split',{min:25,max:75,percent:true});
++  splitter(main,doc.querySelector('.bottom-panel'),'bottom',{min:90,max:450,vertical:false,invert:true});
++  const dock=doc.createElement('aside');dock.className='wb-tools-dock';dock.setAttribute('aria-label','Developer tool window');workspace.append(dock);
++  const inspector=splitter(workspace,dock,'inspector',{min:280,max:500,invert:true});
++  const development=doc.getElementById('development-panel');dock.append(development);
++  function syncDock(){dock.hidden=development.hidden;inspector.hidden=development.hidden;doc.body.classList.toggle('wb-docked',!development.hidden);}
++  const observer=new MutationObserver(syncDock);observer.observe(development,{attributes:true,attributeFilter:['hidden']});syncDock();apply();
++  return {reset(){values=layoutValues();apply();write({...values});},values:()=>({...values}),dispose(){observer.disconnect();for(const {el}of handles)el.remove();}};
++}
+diff --git a/packages/workbench/navigation.js b/packages/workbench/navigation.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..31950db7c664e6749e7d773ce6ff7d6213201a80
+--- /dev/null
++++ b/packages/workbench/navigation.js
+@@ -0,0 +1,69 @@
++import {parseCSharp} from '../csharp-compiler/parser.js';
++import {parseXml} from '../compiler-core/xml.js';
++/** Bounded literal searches with original UTF-16 offsets, including non-ASCII case folding. */
++export function findText(text,query,{caseSensitive=false,wholeWord=false,maxResults=10000}={}){
++  if(typeof text!=='string'||typeof query!=='string')throw new TypeError('Search requires text');
++  if(!query)return {matches:[],truncated:false};
++  if(query.length>2000||!Number.isInteger(maxResults)||maxResults<1||maxResults>100000)throw new RangeError('Search budget exceeded');
++  const pattern=query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
++  const regex=new RegExp(pattern,caseSensitive?'gu':'giu'),matches=[];
++  const word=c=>!!c&&/[\p{L}\p{N}_]/u.test(c);
++  const before=i=>{if(!i)return '';const low=text.charCodeAt(i-1);return low>=0xdc00&&low<=0xdfff?text.slice(Math.max(0,i-2),i):text[i-1];};
++  let m;
++  while((m=regex.exec(text))){
++    const end=m.index+m[0].length;
++    if(wholeWord&&(word(before(m.index))||word(String.fromCodePoint(text.codePointAt(end)??32))))continue;
++    if(matches.length===maxResults)return {matches,truncated:true};matches.push({start:m.index,end});
++  }
++  return {matches,truncated:false};
++}
++export function replaceText(text,query,replacement,options={}){
++  const {matches,truncated}=findText(text,query,options);if(truncated)throw new RangeError('Too many replacements; refine the search');
++  const parts=[];let offset=0;for(const m of matches){parts.push(text.slice(offset,m.start),String(replacement));offset=m.end;}parts.push(text.slice(offset));const after=parts.join('');
++  return {before:text,after,count:matches.length};
++}
++export function lineOffset(text,line,column=1){
++  if(!Number.isInteger(line)||line<1||!Number.isInteger(column)||column<1)throw new RangeError('Use a positive line and column');
++  let at=0;for(let n=1;n<line;n++){const end=text.indexOf('\n',at);if(end<0)return text.length;at=end+1;}
++  let end=text.indexOf('\n',at);if(end<0)end=text.length;if(text[end-1]==='\r')end--;return Math.min(end,at+column-1);
++}
++export function sourcePosition(text,start){
++  const prefix=text.slice(0,start),line=prefix.split('\n').length,last=prefix.lastIndexOf('\n');return {line,column:start-last};
++}
++export function fuzzyScore(value,query){
++  const hay=value.toLowerCase(),needle=query.trim().toLowerCase();if(!needle)return 0;
++  let at=0,last=-2,score=0;
++  for(const char of needle){const i=hay.indexOf(char,at);if(i<0)return -Infinity;score+=i===last+1?8:1;if(i===0||'/._ -'.includes(hay[i-1]))score+=12;score-=Math.min(6,i-at);last=i;at=i+1;}
++  return score-0.01*value.length+(hay.endsWith(needle)?15:0);
++}
++export function rankItems(items,query,max=100){return items.map((item,i)=>({item,i,score:fuzzyScore(item.label+' '+(item.detail??''),query)})).filter(x=>Number.isFinite(x.score)).sort((a,b)=>b.score-a.score||a.i-b.i).slice(0,max).map(x=>x.item);}
++export function documentSymbols(text,file){
++  if(text.length>500000)return [];
++  const result=[],add=(label,detail,start)=>result.push({label,detail,file,start,...sourcePosition(text,start)});
++  if(/\.cs$/i.test(file)){
++    const parsed=parseCSharp(text,file);if(!parsed.ast)return result;
++    for(const type of parsed.ast.declarations){add(type.fullName,type.kind,type.start);for(const member of type.members??[])if(member.name)add(member.name,type.fullName+' · '+member.kind,member.start);}
++  }else if(/\.a?xaml$/i.test(file)){
++    const parsed=parseXml(text,file);if(!parsed.root)return result;
++    function walk(n){if(n.kind!=='element')return;const name=n.attributes['x:Name']??n.attributes.Name;if(name||n===parsed.root)add(name??n.tag,n.tag,n.span.start);for(const c of n.children??[])walk(c);}walk(parsed.root);
++  }
++  return result;
++}
++export function searchWorkspace(files,query,options={}){
++  const rows=[];let examined=0,truncated=false;const limit=options.maxResults??200;
++  if(!query)return {rows,truncated};
++  for(const [file,text]of Object.entries(files).sort(([a],[b])=>a.localeCompare(b))){
++    if(/\.binary\.json$/i.test(file)||typeof text!=='string'||text.startsWith('data:'))continue;
++    if((examined+=text.length)>16000000){truncated=true;break;}
++    const found=findText(text,query,{...options,maxResults:limit});
++    let scanned=0,line=1,lastNewline=-1;for(const m of found.matches){if(rows.length>=limit){truncated=true;break;}for(;scanned<m.start;scanned++)if(text[scanned]==='\n'){line++;lastNewline=scanned;}const position={line,column:m.start-lastNewline};let lineStart=text.lastIndexOf('\n',m.start-1)+1,lineEnd=text.indexOf('\n',m.end);if(lineEnd<0)lineEnd=text.length;rows.push({file,...m,...position,label:file+':'+position.line,detail:text.slice(lineStart,Math.min(lineEnd,lineStart+240))});}
++    truncated ||= found.truncated;if(truncated)break;
++  }
++  return {rows,truncated};
++}
++export class DocumentPositions{
++  constructor(limit=200){this.limit=limit;this.positions=new Map();}
++  save(key,position){if(!key)return;this.positions.delete(key);this.positions.set(key,{...position});while(this.positions.size>this.limit)this.positions.delete(this.positions.keys().next().value);}
++  get(key,length){const p=this.positions.get(key)??{start:0,end:0,top:0,left:0};return {...p,start:Math.max(0,Math.min(length,p.start)),end:Math.max(0,Math.min(length,p.end))};}
++  clear(){this.positions.clear();}
++}
+diff --git a/packages/workbench/shell.js b/packages/workbench/shell.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..bfda636ec517e566421b176b63d11589893b146a
+--- /dev/null
++++ b/packages/workbench/shell.js
+@@ -0,0 +1,95 @@
++import {DocumentPositions,rankItems,documentSymbols,searchWorkspace,findText,replaceText,lineOffset} from './navigation.js';
++import {installSplitters} from './layout.js';
++/** Optional workbench shell over the real editor/compiler. No application code is evaluated here. */
++export function createWorkbenchShell({document:doc=globalThis.document,documents,active,open,generated,notify=()=>{}}){
++  const $=id=>doc.getElementById(id),editor=$('editor'),positions=new DocumentPositions();let current='',internal=false;
++  const el=(tag,text,attributes={})=>{const e=doc.createElement(tag);if(text!==undefined)e.textContent=text;for(const [k,v]of Object.entries(attributes))e.setAttribute(k,v);return e;};
++  const button=(text,id,action)=>{const e=el('button',text,{type:'button',id});e.onclick=()=>safely(action);return e;};
++  const safely=action=>{try{return action();}catch(e){notify(e.message);}};
++  function savePosition(){if(!internal&&current)positions.save(current,{start:editor.selectionStart,end:editor.selectionEnd,top:editor.scrollTop,left:editor.scrollLeft});}
++  for(const event of ['select','keyup','click','scroll'])editor.addEventListener(event,savePosition);
++  const layout=installSplitters(doc,{read:()=>{try{return JSON.parse(localStorage.getItem('jailbreak.layout.v2'))??{};}catch{return {};}},write:value=>{try{localStorage.setItem('jailbreak.layout.v2',JSON.stringify(value));}catch{}}});
++  doc.body.classList.add('wb-studio');
++  const commandButton=button('Search everywhere…','wb-command',()=>show('commands'));commandButton.append(el('kbd','Ctrl ⇧ P'));commandButton.setAttribute('aria-haspopup','dialog');
++  const menu=el('nav',undefined,{'aria-label':'Main menu',class:'wb-menubar'});
++  for(const [group,label]of [['File','File'],['Edit','Edit'],['View','View'],['Build','Build'],['Debug','Run'],['Help','Help']])menu.append(button(label,'wb-menu-'+group.toLowerCase(),()=>show('commands',group+' ')));
++  doc.querySelector('.topbar').insertBefore(menu,doc.querySelector('.top-actions'));menu.after(commandButton);
++  doc.querySelector('.brand .workbench').textContent='Studio';doc.querySelector('.brand strong').textContent='Jailbreak';
++  const view=el('select',undefined,{id:'wb-view-mode','aria-label':'Editor view mode'});for(const [value,label]of [['split','Code + Preview'],['source','Code only'],['preview','Preview only']])view.append(el('option',label,{value}));view.onchange=()=>{doc.body.dataset.view=view.value;};$('run').parentElement.insertBefore(view,$('run'));
++  const searchButton=button('⌕','wb-search',()=>show('search'));searchButton.title='Search workspace · Ctrl+Shift+F';searchButton.setAttribute('aria-label','Search workspace');doc.querySelector('.activity').insertBefore(searchButton,doc.querySelector('.activity').children[1]);
++  const quick=button('↗','wb-open-document',()=>show('files'));quick.title='Open document · Ctrl+P';quick.setAttribute('aria-label','Quick open document');doc.querySelector('.editor-path').append(quick);
++  const commands=[
++    ['File: Open folder','open-folder','Ctrl+O'],['File: Open files','open-files',''],['File: New source file','new-file',''],['File: Download workspace','save-workspace',''],['File: Export compiled application','export',''],
++    ['Build: Compile and run','run','Ctrl+Enter'],['Build: Project profiles','build-profile',''],['Debug: Open developer tools','development-tools',''],['Debug: Stop application','stop',''],
++    ['Debug: Continue','dev-debug-continue','F8'],['Debug: Step over','dev-debug-over','F10'],['Debug: Step into','dev-debug-into','F11'],['Debug: Step out','dev-debug-out','Shift+F11'],
++    ['View: Toggle light / dark theme','theme',''],['View: Expand preview','expand-preview','']
++  ].map(([label,id,shortcut])=>({label,shortcut,run:()=>{const target=$(id);if(!target)throw new Error('Command is not available in this workspace');if(target.disabled)throw new Error('Command is unavailable in the current application state');target.click();}}));
++  commands.push(...[
++    {label:'File: Quick open document',shortcut:'Ctrl+P',run:()=>show('files')},
++    {label:'Edit: Find in document',shortcut:'Ctrl+F',run:()=>openFind()},
++    {label:'Edit: Replace in document',shortcut:'Ctrl+H',run:()=>openFind(true)},
++    {label:'Edit: Go to line and column',shortcut:'Ctrl+G',run:()=>show('line')},
++    {label:'Edit: Toggle line comment',shortcut:'Ctrl+/',run:()=>toggleComment()},
++    {label:'View: Go to source symbol',shortcut:'Ctrl+Shift+O',run:()=>show('symbols')},
++    {label:'View: Search all workspace text',shortcut:'Ctrl+Shift+F',run:()=>show('search')},
++    {label:'View: Reset tool-window layout',run:()=>layout.reset()},
++    {label:'View: Code only',run:()=>{view.value='source';view.onchange();}},
++    {label:'View: Code and preview',run:()=>{view.value='split';view.onchange();}},
++    {label:'View: Preview only',run:()=>{view.value='preview';view.onchange();}},
++    {label:'View: Generated JavaScript',run:generated},
++    {label:'Help: Mandatory compatibility targets',run:()=>window.open('./docs/mandatory-targets-status.md','_blank','noopener')},
++    {label:'Help: Debugger and designer documentation',run:()=>window.open('./docs/core-development-tools.md','_blank','noopener')}
++  ]);
++  const dialog=el('dialog',undefined,{id:'wb-palette','aria-labelledby':'wb-palette-title'}),title=el('h2','Search everywhere',{id:'wb-palette-title'}),query=el('input',undefined,{id:'wb-palette-query',autocomplete:'off',spellcheck:'false',role:'combobox','aria-expanded':'true','aria-controls':'wb-palette-results','aria-autocomplete':'list','aria-label':'Search command, file, symbol or text'}),results=el('div',undefined,{id:'wb-palette-results',role:'listbox'}),hint=el('div','↑ ↓ Navigate · Enter Open · Esc Close',{class:'wb-palette-hint'});
++  const dialogTop=el('div',undefined,{class:'wb-dialog-top'});dialogTop.append(title,button('Esc','wb-close-palette',()=>dialog.close()));dialog.append(dialogTop,query,results,hint);doc.body.append(dialog);
++  let mode='commands',items=[],index=0,previousFocus=null;
++  function close(){if(dialog.open)dialog.close();}
++  dialog.addEventListener('close',()=>{previousFocus?.focus?.();});dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)close();}});
++  function navigate(file,start=0,end=start){open(file,start,end);}
++  function refresh(){
++    const text=query.value;let info='';
++    if(mode==='commands')items=rankItems(commands,text);
++    if(mode==='files')items=rankItems(Object.keys(documents()).map(file=>({label:file.split('/').at(-1),detail:file,run:()=>navigate(file)})),text);
++    if(mode==='symbols'){const file=active(),source=documents()[file]??editor.value;items=rankItems(documentSymbols(source,file).map(symbol=>({...symbol,detail:symbol.detail+' · '+symbol.line,run:()=>navigate(file,symbol.start)})),text);if(!items.length)info='No parsed C# or named XAML symbols. Unsupported syntax is not invented.';}
++    if(mode==='search'){const found=searchWorkspace(documents(),text);items=found.rows.map(row=>({...row,run:()=>navigate(row.file,row.start,row.end)}));info=found.truncated?'Result budget reached. Refine your search.':text?items.length+' matching locations':'Enter literal text to search across source files.';}
++    if(mode==='line'){const m=/^\s*(\d+)(?::(\d+))?\s*$/.exec(text);items=m?[{label:'Go to line '+m[1]+', column '+(m[2]??1),detail:active(),run:()=>{const at=lineOffset(editor.value,+m[1],+(m[2]??1));selectRange(at,at);}}]:[];info='Enter line or line:column (1-based).';}
++    results.replaceChildren();index=0;
++    items.forEach((item,i)=>{const b=button('', 'wb-result-'+i,()=>execute(i));b.setAttribute('role','option');b.append(el('span',item.label,{class:'wb-result-label'}));if(item.detail)b.append(el('span',item.detail,{class:'wb-result-detail'}));if(item.shortcut)b.append(el('kbd',item.shortcut));results.append(b);});
++    if(!items.length)results.append(el('p',info||'No matching commands or documents.',{class:'wb-empty'}));hint.textContent=info||'↑ ↓ Navigate · Enter Open · Esc Close';selectIndex(0);
++  }
++  function selectIndex(n){index=Math.max(0,Math.min(items.length-1,n));for(const [i,b]of [...results.querySelectorAll('[role=option]')].entries())b.setAttribute('aria-selected',String(i===index));if(items.length){query.setAttribute('aria-activedescendant','wb-result-'+index);results.children[index].scrollIntoView({block:'nearest'});}else query.removeAttribute('aria-activedescendant');}
++  function execute(i){const item=items[i];if(!item)return;close();safely(item.run);}
++  function show(next,initial=''){mode=next;previousFocus=doc.activeElement;title.textContent={commands:'Commands',files:'Open document',symbols:'Go to symbol',search:'Search workspace',line:'Go to line'}[mode];query.value=initial;query.placeholder={commands:'Type a command…',files:'Type a file name…',symbols:'Type a symbol name…',search:'Search literal source text…',line:'Line:column'}[mode];if(!dialog.open)dialog.showModal();refresh();query.focus();query.select();}
++  query.addEventListener('input',()=>safely(refresh));query.addEventListener('keydown',event=>{if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();selectIndex(index+(event.key==='ArrowDown'?1:-1));}if(event.key==='Enter'){event.preventDefault();execute(index);}});
++  // Find/replace is a source transaction on the real editor. Read-only binary
++  // symbol documents and generated JavaScript are searchable but never writable.
++  const findBar=el('section',undefined,{id:'wb-findbar','aria-label':'Find and replace',hidden:''}),find=el('input',undefined,{id:'wb-find',placeholder:'Find literal text','aria-label':'Find text'}),replace=el('input',undefined,{id:'wb-replace',placeholder:'Replace with','aria-label':'Replacement text'}),count=el('span','',{id:'wb-find-count','aria-live':'polite'});
++  const cs=el('input',undefined,{type:'checkbox',id:'wb-find-case'}),ww=el('input',undefined,{type:'checkbox',id:'wb-find-word'}),csLabel=el('label','Match case'),wwLabel=el('label','Whole word');csLabel.prepend(cs);wwLabel.prepend(ww);
++  const replaceOne=button('Replace','wb-replace-one',()=>replaceCurrent()),replaceAll=button('Replace all','wb-replace-all',()=>replaceAllMatches());
++  findBar.append(find,count,button('↑','wb-find-prev',()=>moveFind(-1)),button('↓','wb-find-next',()=>moveFind(1)),csLabel,wwLabel,replace,replaceOne,replaceAll,button('×','wb-find-close',()=>{findBar.hidden=true;editor.focus();}));doc.querySelector('.editor-pane').insertBefore(findBar,$('editor-wrap'));
++  const options=()=>({caseSensitive:cs.checked,wholeWord:ww.checked});
++  function selectRange(start,end){editor.focus();editor.setSelectionRange(start,end);editor.scrollTop=Math.max(0,(editor.value.slice(0,start).split('\n').length-4)*parseFloat(getComputedStyle(editor).lineHeight));editor.dispatchEvent(new Event('scroll'));editor.dispatchEvent(new Event('select'));}
++  function matches(){return findText(editor.value,find.value,options());}
++  function updateFind(){const m=matches();count.textContent=m.matches.length+(m.truncated?'+':'')+' matches';replaceOne.disabled=replaceAll.disabled=editor.readOnly;return m.matches;}
++  function openFind(withReplace=false){findBar.hidden=false;replace.hidden=replaceOne.hidden=replaceAll.hidden=!withReplace;if(editor.selectionEnd>editor.selectionStart&&editor.selectionEnd-editor.selectionStart<2000)find.value=editor.value.slice(editor.selectionStart,editor.selectionEnd);updateFind();find.focus();find.select();}
++  function moveFind(direction){const found=updateFind();if(!found.length)return;const m=direction>0?(found.find(m=>m.start>=editor.selectionEnd&&(m.start!==editor.selectionStart||m.end!==editor.selectionEnd))??found[0]):([...found].reverse().find(m=>m.end<=editor.selectionStart)??found.at(-1));selectRange(m.start,m.end);}
++  function replaceCurrent(){if(editor.readOnly)throw new Error('Read-only document');const found=matches().matches.find(m=>m.start===editor.selectionStart&&m.end===editor.selectionEnd);if(!found)return moveFind(1);editor.setRangeText(replace.value,found.start,found.end,'end');editor.dispatchEvent(new Event('input'));updateFind();}
++  function replaceAllMatches(){if(editor.readOnly)throw new Error('Read-only document');const result=replaceText(editor.value,find.value,replace.value,options());if(!result.count)return;editor.setRangeText(result.after,0,editor.value.length,'start');editor.dispatchEvent(new Event('input'));updateFind();notify(result.count+' literal replacements');}
++  for(const c of [find,cs,ww])c.addEventListener('input',()=>safely(updateFind));find.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();moveFind(e.shiftKey?-1:1);}if(e.key==='Escape'){findBar.hidden=true;editor.focus();}});
++  function toggleComment(){if(editor.readOnly)throw new Error('Read-only document');const text=editor.value,start=text.lastIndexOf('\n',editor.selectionStart-1)+1;let end=text.indexOf('\n',Math.max(editor.selectionStart,editor.selectionEnd-1));if(end<0)end=text.length;const selected=text.slice(start,end);let value;if(/\.a?xaml$/i.test(active())){if(selected.includes('--'))throw new Error('Existing XML comments require explicit source editing');value='<!--'+selected+'-->';}else{const lines=selected.split('\n'),uncomment=lines.every(l=>!l.trim()||/^\s*\/\//.test(l));value=lines.map(l=>uncomment?l.replace(/^(\s*)\/\/? ?/,'$1'):l.replace(/^(\s*)/,'$1// ')).join('\n');}editor.setRangeText(value,start,end,'select');editor.dispatchEvent(new Event('input'));}
++  function keys(e){
++    if(e.defaultPrevented||e.isComposing)return;
++    if((e.ctrlKey||e.metaKey)&&!e.altKey){const key=e.key.toLowerCase();let action;
++      if(key==='p')action=()=>show(e.shiftKey?'commands':'files');else if(key==='o'&&e.shiftKey)action=()=>show('symbols');else if(key==='f')action=()=>e.shiftKey?show('search'):openFind();else if(key==='h')action=()=>openFind(true);else if(key==='g')action=()=>show('line');else if(key==='/')action=toggleComment;
++      if(action){e.preventDefault();safely(action);return;}
++    }
++    const command={F8:'dev-debug-continue',F10:'dev-debug-over',F11:e.shiftKey?'dev-debug-out':'dev-debug-into'}[e.key];if(command){e.preventDefault();if($(command)&&!$(command).disabled)$(command).click();}
++  }
++  const protectReadOnly=e=>{if(editor.readOnly&&e.key==='Tab'){e.preventDefault();e.stopImmediatePropagation();}};doc.addEventListener('keydown',keys,true);editor.addEventListener('keydown',protectReadOnly,true);
++  return {show,layout,
++    beforeRender(){savePosition();internal=true;},
++    afterRender(){current=active();const p=positions.get(current,editor.value.length);editor.setSelectionRange(p.start,p.end);editor.scrollTop=p.top;editor.scrollLeft=p.left;internal=false;editor.dispatchEvent(new Event('scroll'));editor.dispatchEvent(new Event('select'));if(!findBar.hidden)updateFind();},
++    reset(){positions.clear();current='';},
++    dispose(){layout.dispose();doc.removeEventListener('keydown',keys,true);editor.removeEventListener('keydown',protectReadOnly,true);for(const event of ['select','keyup','click','scroll'])editor.removeEventListener(event,savePosition);dialog.remove();findBar.remove();}
++  };
++}
