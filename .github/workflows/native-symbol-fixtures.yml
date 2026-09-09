@@ -5,13 +5,20 @@ on:
     branches: [main]
     paths: ['tests/fixtures/native-pdb-src/**', '.github/workflows/native-symbol-fixtures.yml']
 permissions:
-  contents: read
+  contents: write
+  actions: write
+concurrency:
+  group: native-symbol-fixture
+  cancel-in-progress: false
 jobs:
   fixture:
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
       - name: Compile owned source with the Windows Framework compiler
         shell: pwsh
         run: |
@@ -40,3 +47,29 @@ jobs:
         with:
           name: native-symbol-fixture
           path: ${{ runner.temp }}/native-symbols
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Retain fixture and validate available native-reader gates
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Copy-Item "$env:RUNNER_TEMP\native-symbols\native-pdb.json" tests/fixtures/msil/native-pdb.json
+          if (Test-Path tests/native-pdb.test.js) {
+            node --test tests/native-pdb.test.js
+            if ($LASTEXITCODE) { throw 'Native reader differs from independent CLR fixture' }
+          }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- tests/fixtures/msil/native-pdb.json
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 1) {
+            git commit -m 'test(symbols): retain real Windows MSF7 DLL PDB source and CLR oracle'
+            if ($LASTEXITCODE) { throw 'Fixture commit failed' }
+            git push origin HEAD:main
+            if ($LASTEXITCODE) { throw 'Concurrent source changed; fixture was not force-pushed' }
+          }
+      - name: Verify retained source with the canonical pipeline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run toolchain.yml --ref main
