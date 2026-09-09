@@ -20,5 +20,6 @@
   {"patch":"038-vector-runtime.patch","sha256":"1e05dc3e8161d553bcee8339191b41cc77e5af708dce57a75634c5500b630f3c","message":"feat(avalonia): implement Canvas edges vector geometry and alpha masks"},
   {"patch":"039-vector-runtime.patch","sha256":"9034e4fcae96f402f89cadafedc253efd027ca9134fbfa75a0ef0d1c1dde5a66","message":"feat(avalonia): implement Canvas edges vector geometry and alpha masks"},
   {"patch":"040-upstream-canvas.patch","sha256":"19c5bd7c7edfc206837e1cc540a4d5f64665bccaeb5a97f97264c561f1fd792a","message":"test(catalog): verify unchanged upstream Canvas source and rendered pixels"},
-  {"patch":"041-upstream-canvas.patch","sha256":"52dc3991f2b7a49575310d6bc158c6d44ead1b7a491f4cc11dcabe5ec4ad7edd","message":"test(catalog): verify unchanged upstream Canvas source and rendered pixels"}
+  {"patch":"041-upstream-canvas.patch","sha256":"52dc3991f2b7a49575310d6bc158c6d44ead1b7a491f4cc11dcabe5ec4ad7edd","message":"test(catalog): verify unchanged upstream Canvas source and rendered pixels"},
+  {"patch":"050-constructor-chains.patch","sha256":"9b1be226d8828c699cbadece0d7bd13ef1da3f689fce43a94d2a785b485525ac","message":"feat(csharp): support verified constructor delegation and cooperative stepping"}
 ]

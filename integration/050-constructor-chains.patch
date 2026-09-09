@@ -1,0 +1,262 @@
+diff --git a/docs/milestone-constructor-chains.md b/docs/milestone-constructor-chains.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..f70f2338226421accd93534a732789df1cca36c1
+--- /dev/null
++++ b/docs/milestone-constructor-chains.md
+@@ -0,0 +1,36 @@
++# Constructor chains and debugger integration
++
++C# `this(...)` delegation and multiple constructors with distinct argument-count
++ranges now lower to a shared compile-time constructor graph. Forwarding arguments
++are evaluated once, in source order. The terminal constructor passes its own
++arguments to the base constructor; each source body runs inside-out on the same
++instance, with one set of instance field/event/auto-property initializers per type.
++No constructor body is replayed and no temporary UI object is constructed.
++
++`constructor-chains.js` checks target arities, overlapping overload ranges, cycles,
++static constructors and references to an unallocated instance. Unsupported or
++ambiguous chains emit diagnostics and no executable output. Constructors retain
++source file/statement identities across partial classes. The existing IDE scheduler
++can pause in a delegated body or its `InitializeComponent`, edit parameters, resume,
++or cancel and dispose partial visuals without executing the remaining bodies.
++Constructor changes remain structural changes requiring restart, not hot reload.
++
++## Supported profile and explicit gaps
++
++Arity-disjoint overloads, optional parameters, `params`, nested source/base chains,
++parameter side effects in forwarding arguments, early `return;`, and explicit base
++method calls are tested in release, native-debug and cooperative modes. The source
++backend's existing base-before-derived field-initializer ordering remains in use;
++full CLR derived-field-before-base-body semantics and virtual calls observing those
++initializers are NOT established by this milestone. This is a tracked compiler gap,
++not evidence of complete language/framework compatibility. Type-based overload
++resolution, generic constructors, static constructors and primary constructors
++remain separate targets. Native base constructors remain synchronous step-over
++regions. Default-argument expression validation retains the current compiler profile.
++
++`tests/constructor-chains.test.js` executes the generated JavaScript in all three
++modes, including actual local edits and cancellation. These tests supplement, not
++replace, the original ControlCatalog, source/runtime, symbol and browser gates.
++
++Reference: C# specification §§15.11.2–15.11.4:
++https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/classes#1511-instance-constructors
+ diff --git a/packages/csharp-compiler/backend.js b/packages/csharp-compiler/backend.js
+index e63965ea83a99a9ef27c69b9645541853a1d2c9b..5c83b1c0ba3b21f85bc1cf54ce559d41f2c23b26 100644
+--- a/packages/csharp-compiler/backend.js
++++ b/packages/csharp-compiler/backend.js
+@@ -1 +1,2 @@
++import {constructorGraph,checkInitializer} from './constructor-chains.js';
+ import { exceptionTypeNames } from '../dotnet-runtime/exceptions.js';
+@@ -100,2 +101,3 @@ export function compileCSharp(input, options={}) {
+         const args=e.args.map(a=>expr(a,ctx));
++        if(e.callee.kind==='member'&&e.callee.object.kind==='identifier'&&e.callee.object.name==='base'){const name=escapeJs(e.callee.name),base=typeRef(current.bases[0]);return ctx.cooperative?`(yield* $co.applyReference({object:this,name:${name},method:${base}.prototype[${name}]},(function*(){return [${args.join(',')}];}).call(this)))`:`super[${name}](${args.join(',')})`;}
+         if(e.callee.kind==='member'){
+@@ -234,9 +236,30 @@ export function compileCSharp(input, options={}) {
+     const constructors=decl.members.filter(m=>m.kind==='constructor');
+-    const ctorBody=[];for(const m of constructors){currentSource=m.source??decl.source;debugMethod=m.name;const ctx=context();for(const p of m.parameters)ctx.locals.set(p.name,p.type);const min=m.parameters.filter(p=>!p.value&&!p.rest).length,max=m.parameters.some(p=>p.rest)?Infinity:m.parameters.length;
+-      if(m.initializer&&constructors.length>1)report('JB2213','Multiple constructors with explicit base initializers are not implemented',m);
+-      ctorBody.push({m,ctx,min,max});}
+-    if(constructors.length<=1){const c=ctorBody[0];if(c){currentSource=c.m.source??decl.source;debugMethod='.ctor';}const params=c?c.m.parameters.map(p=>(p.rest?'...':'')+p.name+(p.value?' = '+expr(p.value,c.ctx):'')).join(','):'';
+-      const superArgs=c?.m.initializer?.args.map(a=>expr(a,c.ctx)).join(',')??'';
++    const ctorBody=constructorGraph(constructors,report).map(c=>{
++      const m=c.m;currentSource=m.source??decl.source;debugMethod='.ctor';
++      checkInitializer(m,new Set([...inherited,...membersOf(decl).filter(x=>!x.mods?.includes('static')&&!x.mods?.includes('const')).map(x=>x.name)]),report);
++      const ctx=context();for(const p of m.parameters)ctx.locals.set(p.name,p.type);return {...c,ctx};
++    });
++    const chainMode=constructors.some(m=>m.initializer?.target==='this')||constructors.length>1;
++    const planName='$ctorPlans$'+js,coPlanName='$ctorSteps$'+js,keysName='$ctorBodies$'+js;
++    const parameterText=(m,ctx)=>m.parameters.map(p=>(p.rest?'...':'')+p.name+(p.value?' = '+expr(p.value,ctx):'')).join(',');
++    const parameterValues=m=>m.parameters.map(p=>(p.rest?'...':'')+p.name).join(',');
++    const selectCtor=args=>ctorBody.map(c=>`${args}.length>=${c.min}&&${args}.length<=${c.max===Infinity?'Infinity':c.max}?${c.index}:`).join('')+'-1';
++    function emitPlan(c,cooperative=false){
++      currentSource=c.m.source??decl.source;debugMethod='.ctor';const ctx={...clone(c.ctx),cooperative},name=cooperative?coPlanName:planName;
++      const args=c.m.initializer?.args.map(a=>expr(a,ctx)).join(',')??'';
++      const terminal=c.target===null;
++      return `${cooperative?'function*($co,$args)':'function($args)'}{let [${parameterText(c.m,ctx)}]=$args;`+
++        (terminal?`const $base=[${args}];return {baseArgs:$base,frames:[[${c.index},[${parameterValues(c.m)}]]]};`:
++          `const $plan=${cooperative?'yield* ':''}${name}[${c.target}](${cooperative?'$co,':''}[${args}]);$plan.frames.push([${c.index},[${parameterValues(c.m)}]]);return $plan;`)+'}';
++    }
++    let constructorPlans='';
++    if(chainMode){
++      constructorPlans=`const ${keysName}=[${ctorBody.map(()=>`Symbol('constructor-body')`).join(',')}];\nconst ${planName}=[${ctorBody.map(c=>emitPlan(c)).join(',')}];\n`;
++      for(const c of ctorBody){currentSource=c.m.source??decl.source;debugMethod='.ctor';body.push(`[${keysName}[${c.index}]](${parameterText(c.m,c.ctx)}) ${stmt(c.m.body,c.ctx)}`);}
++      body.push(`constructor(...$args){const $which=${selectCtor('$args')};if($which<0)throw new JB.ArgumentException('No constructor matches argument count');const $plan=${planName}[$which]($args);super(...$plan.baseArgs);for(const [$which,$values]of $plan.frames)${js}.prototype[${keysName}[$which]].apply(this,$values);}`);
++    }else{
++      const c=ctorBody[0];if(c){currentSource=c.m.source??decl.source;debugMethod='.ctor';}
++      const params=c?parameterText(c.m,c.ctx):'',superArgs=c?.m.initializer?.args.map(a=>expr(a,c.ctx)).join(',')??'';
+       body.push(`constructor(${params}) { super(${superArgs}); ${c?stmt(c.m.body,c.ctx):(options.xamlNames?.[decl.fullName]?'this.InitializeComponent();':'')} }`);
+-    } else {body.push(`constructor(...__args) { super();\n${ctorBody.map((c,i)=>(i?'else ':'')+`if (__args.length >= ${c.min} && __args.length <= ${c.max===Infinity?'Infinity':c.max}) { const [${c.m.parameters.map(p=>(p.rest?'...':'')+p.name+(p.value?' = '+expr(p.value,c.ctx):'')).join(',')}] = __args; ${stmt(c.m.body,c.ctx)} }`).join('\n')} else { throw new JB.ArgumentException('No constructor matches argument count'); } }`);}
++    }
+     const groups=new Map();for(const m of decl.members.filter(m=>m.kind==='method')){const key=(m.mods.includes('static')?'static:':'')+m.name;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(m);}
+@@ -276,2 +299,7 @@ export function compileCSharp(input, options={}) {
+       }
++      if(chainMode){
++        constructorPlans+=`const ${coPlanName}=[${ctorBody.map(c=>emitPlan(c,true)).join(',')}];\n`;
++        const factories=ctorBody.map(c=>{currentSource=c.m.source??decl.source;debugMethod='.ctor';const ctx={...clone(c.ctx),cooperative:true};return `function*($co,$values){let [${parameterText(c.m,ctx)}]=$values;${stmt(c.m.body,ctx)}}`;});
++        constructorFactory=`\nJB.dev?.co.registerConstructor(${js},function*($co,$args,$newTarget){const $which=${selectCtor('$args')};if($which<0)throw new JB.ArgumentException('No constructor matches argument count');const $frame=$co.enter(${escapeJs(decl.fullName+'.ctor')});let $self,$complete=false;try{const $plan=yield* ${coPlanName}[$which]($co,$args);$self=yield* $co.construct(${base},$plan.baseArgs,$newTarget);yield* (function*(){${initializers.join('')}}).call($self);const $bodies=[${factories.join(',')}];for(const [$index,$values]of $plan.frames)yield* $bodies[$index].call($self,$co,$values);$complete=true;return $self;}finally{try{if(!$complete)$self?.Dispose?.();}finally{$co.leave($frame);}}});`;
++      }else{
+       const alternatives=ctorBody.length?ctorBody:[{m:null,ctx:context(),min:0,max:0}];
+@@ -280,6 +308,5 @@ export function compileCSharp(input, options={}) {
+         const ctx={...clone(c.ctx),cooperative:true},params=(c.m?.parameters??[]).map(p=>(p.rest?'...':'')+p.name+(p.value?' = '+expr(p.value,ctx):'')).join(',');
+-        if(c.m?.initializer?.target==='this')report('JB2261','Delegating constructor requires constructor-chain lowering',c.m);
+         const baseArgs=c.m?.initializer?.args.map(a=>expr(a,ctx)).join(',')??'';
+         const ctor=c.m?stmt(c.m.body,ctx):(options.xamlNames?.[decl.fullName]?`{yield* JB.loadXamlSteps(this,${escapeJs(decl.fullName)});}`:'{}');
+-        return `if($args.length>=${c.min}&&$args.length<=${c.max===Infinity?'Infinity':c.max}){const [${params}]=$args;const $frame=$co.enter(${escapeJs(decl.fullName+'.ctor')});let $self,$complete=false;try{$self=yield* $co.construct(${base},[${baseArgs}],$newTarget);yield* (function*(){${initializers.join('')} ${ctor}}).call($self);$complete=true;return $self;}finally{try{if(!$complete)$self?.Dispose?.();}finally{$co.leave($frame);}}}`;
++        return `if($args.length>=${c.min}&&$args.length<=${c.max===Infinity?'Infinity':c.max}){let [${params}]=$args;const $frame=$co.enter(${escapeJs(decl.fullName+'.ctor')});let $self,$complete=false;try{$self=yield* $co.construct(${base},[${baseArgs}],$newTarget);yield* (function*(){${initializers.join('')} ${ctor}}).call($self);$complete=true;return $self;}finally{try{if(!$complete)$self?.Dispose?.();}finally{$co.leave($frame);}}}`;
+       });
+@@ -287,3 +314,4 @@ export function compileCSharp(input, options={}) {
+     }
+-    chunks.push(`class ${js} extends ${base} {\n${body.join('\n')}\n}\nJB.defineType(${escapeJs(decl.fullName)}, ${js});${continuations.length?'\nJB.dev?.co.register('+js+',['+continuations.join(',')+']);':''}${constructorFactory}`);
++    }
++    chunks.push(`${constructorPlans}class ${js} extends ${base} {\n${body.join('\n')}\n}\nJB.defineType(${escapeJs(decl.fullName)}, ${js});${continuations.length?'\nJB.dev?.co.register('+js+',['+continuations.join(',')+']);':''}${constructorFactory}`);
+   }
+diff --git a/packages/csharp-compiler/constructor-chains.js b/packages/csharp-compiler/constructor-chains.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b88e26ed4cd9d45b01f62e40473115cb09b36089
+--- /dev/null
++++ b/packages/csharp-compiler/constructor-chains.js
+@@ -0,0 +1,40 @@
++/** Compile-time constructor graph for the current arity-resolved C# profile.
++ * The plan evaluates forwarding arguments once, then runs bodies inside-out.
++ * No runtime constructor replay or temporary application object is involved.
++ */
++export function constructorGraph(constructors, report) {
++  const entries = constructors.map((m, index) => ({m, index,
++    min:m.parameters.filter(p=>!p.value&&!p.rest).length,
++    max:m.parameters.some(p=>p.rest)?Infinity:m.parameters.length, target:null}));
++  for (const e of entries) {
++    if (e.m.mods.includes('static')) report('JB2262','Static constructors require static-initializer lowering',e.m);
++    for (const other of entries) if (other.index<e.index && Math.max(e.min,other.min)<=Math.min(e.max,other.max))
++      report('JB2263','Constructor overloads with overlapping argument counts require type-based resolution',e.m);
++    if (e.m.initializer?.target==='this') {
++      const n=e.m.initializer.args.length, matches=entries.filter(c=>n>=c.min&&n<=c.max);
++      if (matches.length!==1) report('JB2264','Delegating constructor has no unique matching target',e.m);
++      else e.target=matches[0].index;
++    }
++  }
++  for (const entry of entries) {
++    const seen=new Set();let current=entry;
++    while(current) {
++      if(seen.has(current.index)){report('JB2265','Constructor delegation cycle',entry.m);break;}
++      seen.add(current.index);
++      if(seen.size>128){report('JB2266','Constructor chain exceeds the supported depth',entry.m);break;}
++      current=current.target===null?null:entries[current.target];
++    }
++  }
++  return entries;
++}
++/** Prevent references to an unallocated instance in constructor initializer arguments. */
++export function checkInitializer(m, instanceNames, report) {
++  const parameters=new Set(m.parameters.map(p=>p.name));
++  function visit(node) {
++    if(!node||typeof node!=='object')return;
++    if(node.kind==='identifier' && (['this','base'].includes(node.name) || instanceNames.has(node.name)&&!parameters.has(node.name)))
++      report('JB2267','Constructor initializer cannot access the instance being constructed',node);
++    for(const value of Object.values(node))if(Array.isArray(value))value.forEach(visit);else if(value&&typeof value==='object')visit(value);
++  }
++  for(const arg of m.initializer?.args??[])visit(arg);
++}
+diff --git a/packages/csharp-compiler/parser.js b/packages/csharp-compiler/parser.js
+index ed24cc6a9d184461f160ad37ea4efa7f1f029eb4..367361e0109fda91c26e87fe69538d0bf998516d 100644
+--- a/packages/csharp-compiler/parser.js
++++ b/packages/csharp-compiler/parser.js
+@@ -68,3 +68,3 @@ export class CSharpParser {
+       this.next();const parameters=this.parameters();let initializer=null;
+-      if(this.take(':')){const target=this.next().value;if(target!=='base')this.fail('Delegating this(...) constructors are not implemented',this.tokens[this.i-1],'JB2114');initializer={target,args:this.arguments()};}
++      if(this.take(':')){const target=this.next().value;if(!['base','this'].includes(target))this.fail('Expected base(...) or this(...) constructor initializer',this.tokens[this.i-1],'JB2114');initializer={target,args:this.arguments()};}
+       return [this.node('constructor',start,{name:className,mods,attributes,parameters,initializer,body:this.block()})];
+diff --git a/tests/constructor-chains.test.js b/tests/constructor-chains.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..91bbedeacd0b97d335a22d322d4cb1f2d97bdbd3
+--- /dev/null
++++ b/tests/constructor-chains.test.js
+@@ -0,0 +1,89 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {compileProject} from '../packages/project-system/index.js';
++import {createRuntime} from '../packages/avalonia-runtime/index.js';
++const opts=[{}, {debug:true}, {debug:true,cooperativeDebug:true}];
++function setup(source,options,extra={}) {
++  const r=compileProject({'Chain.cs':source,...extra},options);assert.equal(r.success,true,JSON.stringify(r.diagnostics));
++  const JB=createRuntime(),events=[];
++  if(options.debug)JB.enableDevelopment({debug:r.debug,nativeBreaks:false,report:(event,data)=>events.push({event,data})});
++  new Function('JB',r.code)(JB);return {JB,r,events};
++}
++async function construct(JB,options,name,args=[]) {const T=JB.types.get(name);return options.cooperativeDebug?JB.dev.co.run(JB.dev.co.construct(T,args)).promise:Reflect.construct(T,args);}
++const source=`public class Base { public int baseValue; public Base(int value){baseValue=value;} }
++public class Chain:Base {
++ public static int initialized=0; public int field=Initialize(); public string trace="";
++ public Chain():this(4){trace+="outer";}
++ public Chain(int value):this(value+1,2){trace+="middle/";}
++ public Chain(int value,int scale):base(value*scale){trace="inner/";}
++ private static int Initialize(){initialized++;return 17;}
++}`;
++for(const options of opts)test('delegation evaluates one allocation/initializer and bodies inside-out '+JSON.stringify(options),async()=>{
++ const {JB}=setup(source,options),object=await construct(JB,options,'Chain');
++ assert.equal(object.baseValue,10);assert.equal(object.trace,'inner/middle/outer');assert.equal(object.field,17);assert.equal(JB.types.get('Chain').initialized,1);assert.ok(object instanceof JB.types.get('Base'));assert.ok(object instanceof JB.types.get('Chain'));
++});
++test('forwarding expressions are evaluated once, left to right, and mutated parameter state reaches body',async()=>{
++ const s=`public class C {public static int calls=0;public int a;public int b;public int tail;
++ public C(int n):this(n++,Next()){tail=n;}
++ public C(int x,int y){a=x;b=y;}
++ public static int Next(){calls++;return calls;}}`;
++ for(const o of opts){const {JB}=setup(s,o),c=await construct(JB,o,'C',[7]);assert.deepEqual([c.a,c.b,c.tail,JB.types.get('C').calls],[7,1,8,1]);}
++});
++test('constructor optional defaults and params arguments survive forwarding',async()=>{
++ const s=`public class C {public int value;public int count; public C():this(2,4,5){} public C(int x,params int[] rest){value=x;count=rest.Length;}}`;
++ for(const o of opts){const {JB}=setup(s,o),c=await construct(JB,o,'C');assert.deepEqual([c.value,c.count],[2,2]);}
++ const optional='public class C {public int value;public C():this(7){}public C(int x,int y=3){value=x+y;}}';
++ for(const o of opts){const {JB}=setup(optional,o);assert.equal((await construct(JB,o,'C')).value,10);}
++});
++test('separate explicit base initializers select by disjoint argument count',async()=>{
++ const s='public class B {public int value;public B(int n){value=n;}} public class C:B {public C():base(1){}public C(int n):base(n+2){}}';
++ for(const o of opts){const {JB}=setup(s,o);assert.equal((await construct(JB,o,'C')).value,1);assert.equal((await construct(JB,o,'C',[3])).value,5);}
++});
++test('delegating body early return does not skip the outer body',async()=>{
++ const s='public class C {public int value;public C():this(2){value+=5;}public C(int n){value=n;return;}}';
++ for(const o of opts){const {JB}=setup(s,o);assert.equal((await construct(JB,o,'C')).value,7);}
++});
++test('base class with its own delegation constructs the final prototype exactly once',async()=>{
++ const s='public class B {public int value;public B():this(3){value++;}public B(int n){value=n;}}public class C:B {public int extra=7;public C():this(2){}public C(int n){extra+=n;}}';
++ for(const o of opts){const {JB}=setup(s,o),c=await construct(JB,o,'C');assert.deepEqual([c.value,c.extra],[4,9]);assert.equal(c.constructor,JB.types.get('C'));}
++});
++test('cycles, unknown and overlapping targets fail before emitting executable JavaScript',()=>{
++ for(const source of [
++ 'public class C {public C():this(){} }',
++ 'public class C {public C():this(1){} public C(int x):this(){} }',
++ 'public class C {public C():this(1,2){} }',
++ 'public class C {public C(int x){} public C(string s){} }',
++ 'public class C {public C(){} public C(int x=1){} }']){
++   for(const o of opts){const r=compileProject({'C.cs':source},o);assert.equal(r.success,false,source);assert.equal(r.code,'');assert.ok(r.diagnostics.some(d=>/^JB226[3-6]$/.test(d.code)));}
++ }
++});
++test('initializer cannot access unallocated this, base, instance fields or inherited UI state',()=>{
++ for(const expression of ['this.value','value','Width','this.Read()','Read()','base.Read()']) {
++  const source=`public class C:UserControl {public int value;public int Read(){return 1;}public C():this(${expression}){}public C(int x){}}`;
++  const r=compileProject({'C.cs':source});assert.equal(r.success,false,expression);assert.ok(r.diagnostics.some(d=>d.code==='JB2267'));assert.equal(r.code,'');
++ }
++});
++test('partial constructors retain their original file and paused parameters can be edited',async()=>{
++ const files={'A.cs':'public partial class C {public int value;public C():this(5){value+=1;}}',
++ 'B.cs':'public partial class C {public C(int n){\nvalue=n;\n}}'};
++ const {JB,r,events}=setup('',opts[2],files),point=r.debug.sites.find(p=>p.file==='B.cs'&&p.line===2&&p.cooperative);
++ assert.ok(point);JB.dev.configure({breakpoints:[{file:point.file,line:point.line}]});
++ const task=JB.dev.co.run(JB.dev.co.construct(JB.types.get('C'),[])),stop=events.findLast(e=>e.event==='debug-paused').data;
++ assert.equal(stop.frames[0].locals.n,5);JB.dev.co.setLocal(task.taskId,stop.frames[0].id,'n',20);JB.dev.co.command(task.taskId,'continue');assert.equal((await task.promise).value,21);
++});
++test('delegation can pause inside XAML and cancellation disposes the same partially built control',async()=>{
++ const s='public partial class View:UserControl {public static int tails=0;public View():this(1){tails++;}public View(int n){InitializeComponent();tails++;}}',
++ x='<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="View">\n<StackPanel><Button Name="B"/></StackPanel>\n</UserControl>';
++ const {JB}=setup(s,opts[2],{'View.axaml':x}),created=[],register=JB.dev.register;
++ JB.dev.register=(c,p)=>{created.push(c);return register(c,p);};JB.dev.configure({breakpoints:[{file:'View.axaml',line:2}]});
++ const task=JB.dev.co.run(JB.createFromXamlSteps('View'));assert.ok(JB.dev.co.busy);assert.equal(JB.types.get('View').tails,0);
++ JB.dev.co.command(task.taskId,'cancel');await task.promise;assert.equal(JB.types.get('View').tails,0);assert.ok(created.every(c=>c._disposed));assert.equal(JB.dev.co.busy,false);
++});
++test('delegation participates in constructor shape checks and strips continuation code in release',async()=>{
++ const {planReload}=await import('../packages/development/reload.js');const before=compileProject({'C.cs':source},{debug:true}),after=compileProject({'C.cs':source.replace('this(4)','this(7)')},{debug:true});
++ assert.equal(planReload(before,after).compatible,false);assert.doesNotMatch(compileProject({'C.cs':source}).code,/registerConstructor|checkpoint|@jb:/);
++});
++test('delegated constructors preserve explicit base method dispatch in both execution paths',async()=>{
++ const s='public class B {public virtual int Read(){return 3;}}public class C:B {public int value;public override int Read(){return 9;}public C():this(1){value+=base.Read();}public C(int x){value=x;}}';
++ for(const o of opts){const {JB}=setup(s,o);assert.equal((await construct(JB,o,'C')).value,4);}
++});
