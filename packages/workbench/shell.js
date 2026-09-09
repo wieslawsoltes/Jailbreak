@@ -87,6 +87,7 @@ export function createWorkbenchShell({document:doc=globalThis.document,documents
   }
   const protectReadOnly=e=>{if(editor.readOnly&&e.key==='Tab'){e.preventDefault();e.stopImmediatePropagation();}};doc.addEventListener('keydown',keys,true);editor.addEventListener('keydown',protectReadOnly,true);
   return {show,layout,
+    registerCommands(entries){if(!Array.isArray(entries)||entries.some(e=>typeof e.label!=='string'||typeof e.run!=='function'))throw new TypeError('Invalid workbench command');commands.push(...entries);return ()=>{for(const entry of entries){const at=commands.indexOf(entry);if(at>=0)commands.splice(at,1);}};},
     beforeRender(){savePosition();internal=true;},
     afterRender(){current=active();const p=positions.get(current,editor.value.length);editor.setSelectionRange(p.start,p.end);editor.scrollTop=p.top;editor.scrollLeft=p.left;internal=false;editor.dispatchEvent(new Event('scroll'));editor.dispatchEvent(new Event('select'));if(!findBar.hidden)updateFind();},
     reset(){positions.clear();current='';},

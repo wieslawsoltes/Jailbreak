@@ -4,6 +4,8 @@ import {mappedScript,updateGeneratedLocations} from './source-map.js';
 
 /** IDE client. The preview owns runtime objects; this client only sees serializable records. */
 export function createDevelopmentWorkbench({document:doc=globalThis.document,getFiles,getActive,openFile,applySource,build,persist,send,showGenerated=()=>{}}){
+  const listeners=new Set();
+  const publish=(event,payload={})=>{for(const listener of listeners)try{listener({event,payload});}catch(error){console.warn('Development tool observer:',error);}};
   const el=(tag,text='')=>{const e=doc.createElement(tag);e.textContent=text;return e;};
   const button=el('button','Develop');button.type='button';button.id='development-tools';button.title='Debugger, visual designer and hot reload';
   const panel=el('section');panel.id='development-panel';panel.hidden=true;panel.setAttribute('aria-label','Development tools');
@@ -17,7 +19,7 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
   const restart=el('button','Restart app');restart.id='dev-restart';restart.type='button';
   const close=el('button','Close');close.type='button';header.append(heading,enabledLabel,hotLabel,nativeLabel,cooperativeLabel,throwLabel,restart,close);
   const status=el('div','Enable tools, then compile.');status.id='dev-status';status.setAttribute('role','status');
-  const columns=el('div');columns.className='dev-columns';const hierarchy=el('section'),properties=el('section'),debuggerPanel=el('section');
+  const columns=el('div');columns.className='dev-columns';const hierarchy=el('section'),properties=el('section'),debuggerPanel=el('section');hierarchy.id='dev-hierarchy-panel';properties.id='dev-property-panel';debuggerPanel.id='dev-debugger-panel';
   const refresh=el('button','Refresh tree'),pick=el('button','Select on canvas');refresh.type=pick.type='button';refresh.id='dev-refresh';pick.id='dev-pick';pick.setAttribute('aria-pressed','false');
   const tree=el('div');tree.className='dev-list';tree.id='dev-tree';tree.setAttribute('role','tree');const row=el('div');row.className='dev-row';row.append(refresh,pick);
   const toolbox=el('select');toolbox.id='dev-toolbox';toolbox.setAttribute('aria-label','Control palette');for(const type of palette){const o=el('option',type);o.value=type;toolbox.append(o);}
@@ -45,13 +47,13 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
   const controls=el('div');controls.className='dev-row';const debugButtons=[];
   for(const [command,label]of [['continue','Continue'],['into','Step into'],['over','Step over'],['out','Step out'],['cancel','Cancel invocation']]){const b=el('button',label);b.type='button';b.id='dev-debug-'+command;b.disabled=true;b.onclick=()=>send('debug-control',{taskId:pausedTask,command});debugButtons.push(b);controls.append(b);}
   const localName=el('input');localName.id='dev-local-name';localName.placeholder='Local variable';localName.setAttribute('aria-label','Local variable');const localValue=el('input');localValue.id='dev-local-value';localValue.placeholder='JSON scalar';localValue.setAttribute('aria-label','Local JSON value');const setLocal=el('button','Set local');setLocal.id='dev-set-local';setLocal.type='button';const localRow=el('div');localRow.className='dev-row';localRow.append(localName,localValue,setLocal);
-  const note=el('p','In-IDE stepping suspends compiled C# method continuations. Constructors, accessors, native APIs and callbacks are step-over regions. Native DevTools remains available for engine-wide JavaScript debugging.');note.className='dev-note';
+  const note=el('p','In-IDE stepping suspends compiled C# method continuations. Source constructors and XAML visual construction can also suspend. Accessors, native APIs and callbacks remain step-over regions. Native DevTools remains available for engine-wide JavaScript debugging.');note.className='dev-note';
   debuggerPanel.append(el('h3','C# / XAML / JavaScript debugger'),breakpointRow,logLabel,breakpointList,commandRow,watchRow,pauseState,frameList,controls,localRow,note,output);
   columns.append(hierarchy,properties,debuggerPanel);panel.append(style,header,status,columns);doc.querySelector('.main-area').append(panel);
   let settings={enabled:false,hotReload:false,cooperativeDebug:false,nativeBreaks:true,breakOnThrow:false,breakpoints:[],watches:[]},history=new EditHistory(),selected=null,running=null,runningFiles=null,pending=null,revision=0,selecting=false;
   const tell=text=>status.textContent=text;
   const guarded=fn=>{try{return fn();}catch(error){tell(error.message);}};
-  function sync(){settings.enabled=enabled.checked;settings.cooperativeDebug=cooperative.checked;settings.hotReload=hot.checked;settings.nativeBreaks=native.checked;settings.breakOnThrow=throwBreak.checked;settings.watches=watches.value.split(',').map(s=>s.trim()).filter(Boolean);send('configure',{settings});persist();}
+  function sync(){settings.enabled=enabled.checked;settings.cooperativeDebug=cooperative.checked;settings.hotReload=hot.checked;settings.nativeBreaks=native.checked;settings.breakOnThrow=throwBreak.checked;settings.watches=watches.value.split(',').map(s=>s.trim()).filter(Boolean);send('configure',{settings});persist();publish('settings',api.options());}
   function showPause(value){pausedTasks.set(value.taskId,value);pausedTask=value.taskId;pausedFrame=value.frames[0]?.id;pauseState.textContent='Paused '+value.reason+' · '+value.point?.file+':'+value.point?.line;frameList.replaceChildren();for(const frame of value.frames){const o=el('option',frame.method+' · '+(frame.point?.line??'?'));o.value=frame.id;frameList.append(o);}debugButtons.forEach(b=>b.disabled=false);output.textContent=JSON.stringify(value,null,2);}
   frameList.onchange=()=>{pausedFrame=Number(frameList.value);send('debug-frame',{taskId:pausedTask,frameId:pausedFrame,paths:settings.watches});};
   setLocal.onclick=()=>guarded(()=>send('debug-local',{taskId:pausedTask,frameId:pausedFrame,name:localName.value,value:JSON.parse(localValue.value)}));
@@ -82,17 +84,39 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
   addBreakpoint.onclick=()=>{const active=getActive(),value=Number(line.value);if(!active||!Number.isInteger(value)||value<1)return tell('Choose a source file and a positive line');settings.breakpoints.push({language:active==='jailbreak-app.js'?'javascript':undefined,file:active,line:value,condition:condition.value,hitCount:Number(hitCount.value)||0,log:logpoint.checked});sync();renderBreakpoints();tell('Breakpoint stored. Open browser DevTools for native pause and stepping.');};
   breakNext.onclick=()=>send('break-next');generated.onclick=showGenerated;watchButton.onclick=()=>{sync();if(pausedTask!=null)send('debug-frame',{taskId:pausedTask,frameId:pausedFrame,paths:settings.watches});else send('watch');};
   const api={button,panel,
+    subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},
+    show(){panel.hidden=false;send('inspect');},
+    state(){return {settings:api.options(),paused:pausedTasks.get(pausedTask)??null,frameId:pausedFrame,selected:selected?.source??null};},
+    mode(mode){
+      if(!['release','design','cooperative','native'].includes(mode))throw new Error('Unknown development mode');
+      enabled.checked=mode!=='release';cooperative.checked=mode==='cooperative';native.checked=mode==='native';sync();build(true);
+    },
+    hotReload(value){hot.checked=!!value;sync();},
+    pick(value){selecting=!!value;pick.setAttribute('aria-pressed',String(selecting));send('pick',{value:selecting});},
+    command(command){if(pausedTask==null)throw new Error('No paused invocation');send('debug-control',{taskId:pausedTask,command});},
+    inspectFrame(id){if(pausedTask==null)throw new Error('No paused invocation');pausedFrame=Number(id);frameList.value=String(id);send('debug-frame',{taskId:pausedTask,frameId:pausedFrame,paths:settings.watches});},
+    setLocal(name,value){if(pausedTask==null)throw new Error('No paused invocation');send('debug-local',{taskId:pausedTask,frameId:pausedFrame,name,value});},
+    watch(paths){if(!Array.isArray(paths)||paths.length>50||paths.some(p=>typeof p!=='string'||p.length>512))throw new Error('Watch paths exceed limits');watches.value=paths.join(', ');sync();if(pausedTask!=null)api.inspectFrame(pausedFrame);else send('watch');},
+    toggleBreakpoint(file,line){
+      if(typeof file!=='string'||!file||!Number.isSafeInteger(line)||line<1)throw new Error('Invalid source breakpoint');
+      const found=settings.breakpoints.some(b=>b.file===file&&b.line===line);
+      if(found)settings.breakpoints=settings.breakpoints.filter(b=>b.file!==file||b.line!==line);
+      else if(settings.breakpoints.length<1000)settings.breakpoints.push({file,line,language:file==='jailbreak-app.js'?'javascript':undefined});
+      else throw new Error('Breakpoint limit reached');renderBreakpoints();sync();
+    },
+    clearBreakpoints(){settings.breakpoints=[];renderBreakpoints();sync();},
+    breakpointBound(file,line){return !!(running?.debug?.sites?.some(p=>(!settings.cooperativeDebug||p.cooperative||settings.nativeBreaks)&&(file==='jailbreak-app.js'?p.generatedLine===line:p.file===file&&p.line===line))||running?.debug?.xamlSites?.some(p=>p.file===file&&p.line===line));},
     options(){return {...settings,breakpoints:settings.breakpoints.map(p=>({...p})),watches:[...settings.watches]};},
     compileOptions(){return {debug:settings.enabled,cooperativeDebug:settings.enabled&&settings.cooperativeDebug};},
-    set(value={}){settings={enabled:!!value.enabled,cooperativeDebug:!!value.cooperativeDebug,hotReload:!!value.hotReload,nativeBreaks:value.nativeBreaks!==false,breakOnThrow:!!value.breakOnThrow,breakpoints:Array.isArray(value.breakpoints)?value.breakpoints.slice(0,1000):[],watches:Array.isArray(value.watches)?value.watches.slice(0,50):[]};enabled.checked=settings.enabled;cooperative.checked=settings.cooperativeDebug;hot.checked=settings.hotReload;native.checked=settings.nativeBreaks;throwBreak.checked=settings.breakOnThrow;watches.value=settings.watches.join(', ');history=new EditHistory();running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();propertyList.replaceChildren();renderBreakpoints();},
-    running(next,sources){pausedTasks.clear();pausedTask=pausedFrame=null;pauseState.textContent='No suspended invocation';debugButtons.forEach(b=>b.disabled=true);pending=null;revision=0;accept(next,sources);tell(settings.enabled?'Development session running.':'Release preview running.');},
+    set(value={}){settings={enabled:!!value.enabled,cooperativeDebug:!!value.cooperativeDebug,hotReload:!!value.hotReload,nativeBreaks:value.nativeBreaks!==false,breakOnThrow:!!value.breakOnThrow,breakpoints:Array.isArray(value.breakpoints)?value.breakpoints.slice(0,1000):[],watches:Array.isArray(value.watches)?value.watches.slice(0,50):[]};enabled.checked=settings.enabled;cooperative.checked=settings.cooperativeDebug;hot.checked=settings.hotReload;native.checked=settings.nativeBreaks;throwBreak.checked=settings.breakOnThrow;watches.value=settings.watches.join(', ');history=new EditHistory();running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();propertyList.replaceChildren();pausedTasks.clear();pausedTask=pausedFrame=null;debugButtons.forEach(b=>b.disabled=true);renderBreakpoints();publish('workspace-reset');},
+    running(next,sources){pausedTasks.clear();pausedTask=pausedFrame=null;pauseState.textContent='No suspended invocation';debugButtons.forEach(b=>b.disabled=true);pending=null;revision=0;accept(next,sources);tell(settings.enabled?'Development session running.':'Release preview running.');publish('session-starting');},
     failed(){tell(running?'Build failed; previous running app was preserved.':'Build failed.');},
-    stop(){running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();},
+    stop(){running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();pausedTasks.clear();pausedTask=pausedFrame=null;frameList.replaceChildren();debugButtons.forEach(b=>b.disabled=true);pauseState.textContent='No suspended invocation';publish('session-stopped');},
     tryReload(next,sources,forceRestart=false){if(forceRestart||!running||!settings.enabled||!settings.hotReload)return false;if(pending){tell('A reload is already pending; restart or retry after its result.');return true;}
       updateGeneratedLocations(next.code,next.debug);const plan=planReload(running,next);if(!plan.compatible){tell('Restart required: '+plan.reasons.join('; '));return true;}
       const script=reloadScript(plan,running,next,revision+1);pending={next,sources:{...sources}};send('reload',{script:mappedScript(script,next.debug,sources)});tell('Applying transactional hot reload…');return true;
     },
-    receive(message){const {event,payload}=message??{};
+    receive(message){const {event,payload}=message??{};if(typeof event!=='string')return;
       if(event==='debug-paused'){showPause(payload);tell('Compiled execution suspended. Continue or step from this panel.');}
       else if(event==='debug-completed'||event==='debug-resumed'){pausedTasks.delete(payload.taskId);if(pausedTask===payload.taskId){pausedTask=pausedFrame=null;debugButtons.forEach(b=>b.disabled=true);pauseState.textContent=payload.status??'Running';const next=pausedTasks.values().next().value;if(next)showPause(next);}if(payload.error)output.textContent=JSON.stringify(payload.error,null,2);}
       else if(event==='debug-frame')output.textContent=JSON.stringify(payload,null,2);
@@ -103,6 +127,7 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
       else if(event==='reload-warning'){output.textContent=payload.message;}
       else if(['reload-error','tool-error'].includes(event)){pending=null;tell(payload.message);}
       else if(event.startsWith('debug-')||event==='watches'){output.textContent=JSON.stringify(payload,null,2);if(event==='debug-hit')tell('Breakpoint hit. Native pause/step/resume is controlled by browser DevTools.');}
+      publish(event,payload);
     }
   };
   return api;

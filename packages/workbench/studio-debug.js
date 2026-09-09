@@ -42,7 +42,7 @@ export function createDebugWindows({document: doc, development, active, open, no
         const b = action(doc, '', name, 'chevron', () => {
           const expanded = b.getAttribute('aria-expanded') === 'true';b.setAttribute('aria-expanded', String(!expanded));
           const marker = row.dataset.valuePath;
-          if (expanded) for (const next of [...body.rows]) {if (next.dataset.ancestor?.split('|').includes(marker)) next.remove();}
+          if (expanded) for (const next of [...row.parentElement.rows]) {if (next.dataset.ancestor?.split('|').includes(marker)) next.remove();}
           else {
             const fragment = doc.createElement('tbody');appendValues(fragment, value, marker, depth + 1);
             let after = row;for (const item of [...fragment.rows]) {item.dataset.ancestor = [row.dataset.ancestor, marker].filter(Boolean).join('|');after.after(item);after = item;}

@@ -22,7 +22,7 @@ export function element(doc, tag, text, attrs = {}) {
   for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));return node;
 }
 export function action(doc, id, label, glyph, callback, shortcut = '') {
-  const b = element(doc, 'button', undefined, {id, type: 'button', title: label + (shortcut ? ' · ' + shortcut : ''), 'aria-label': label});
+  const b = element(doc, 'button', undefined, {...(id ? {id} : {}), type: 'button', title: label + (shortcut ? ' · ' + shortcut : ''), 'aria-label': label});
   if (glyph) b.append(icon(doc, glyph));b.append(element(doc, 'span', label));b.addEventListener('click', callback);return b;
 }
 /** Manual activation keeps keyboard navigation separate from expensive tool activation. */
