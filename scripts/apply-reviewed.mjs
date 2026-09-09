@@ -19,7 +19,7 @@ for(const item of series){
   if(git('diff','--cached','--name-only'))throw new Error('Index must be clean before source integration');
   git('apply','--check','--index',file);git('apply','--index',file);
   const changed=git('diff','--cached','--name-only').split('\n').filter(Boolean);
-  if(!changed.length||changed.some(n=>! /^(packages|apps|tests|docs|examples)\//.test(n)))throw new Error('Reviewed changes may only affect application source, tests and documentation');
+  if(!changed.length||changed.some(n=>n!=='README.md'&&! /^(packages|apps|tests|docs|examples)\//.test(n)))throw new Error('Reviewed changes may only affect application source, tests and documentation');
   state[item.patch]=item.sha256;fs.writeFileSync(statePath,JSON.stringify(state,null,2)+'\n');git('add','--','integration/applied.json');
   git('commit','-m',item.message);
   console.log('Integrated',item.patch,git('rev-parse','HEAD'));
