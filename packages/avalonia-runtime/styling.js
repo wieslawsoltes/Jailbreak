@@ -1,3 +1,4 @@
+import {gridCss,applyGridPlacement} from './grid-layout.js';
 import { matches } from './selectors.js';
 export { matches } from './selectors.js';
 export function thickness(value){
@@ -13,7 +14,7 @@ export function brush(value){if(value==null)return '';if(typeof value==='object'
   if([s,v,a].some(n=>!Number.isFinite(n)||n<0||n>1)||!Number.isFinite(hue))return '';
   const c=v*s,x=c*(1-Math.abs((hue/60)%2-1)),low=v-c,rgb=hue<60?[c,x,0]:hue<120?[x,c,0]:hue<180?[0,c,x]:hue<240?[0,x,c]:hue<300?[x,0,c]:[c,0,x];return 'rgba('+rgb.map(n=>Math.round((n+low)*255)).join(',')+','+a+')';
 }if(/^#[0-9a-f]{8}$/i.test(value))return `rgba(${parseInt(value.slice(3,5),16)},${parseInt(value.slice(5,7),16)},${parseInt(value.slice(7,9),16)},${parseInt(value.slice(1,3),16)/255})`;if(/^[A-Za-z]+$/.test(value)||/^#[\da-f]{3,6}$/i.test(value)||/^rgba?\([\d.,%\s]+\)$/.test(value)||/^hsla?\([+\-\d.,%\s]+\)$/.test(value))return value;return '';}
-export function gridTracks(value){if(!value)return '';if(Array.isArray(value))value=value.map(x=>x.Height??x.Width??'*').join(',');return String(value).split(',').map(s=>{s=s.trim();if(s==='Auto')return 'max-content';if(s.endsWith('*'))return `minmax(0,${Number(s.slice(0,-1))||1}fr)`;return dimension(s)||'auto';}).join(' ');}
+export const gridTracks=gridCss;
 export function applyStyles(control){const chain=[];for(let c=control;c;c=c.parent)chain.unshift(c);const styles=chain.flatMap(c=>c.Styles??[]),next=new Map();for(let i=0;i<styles.length;i++){const style=styles[i];if(!matches(control,style.selector))continue;for(const [property,value]of Object.entries(style.resolveSetters?.(control)??style.setters))next.set(`${i}:${property}`,{property,value,priority:100+i/1000});}
   for(const [key,old]of control._styleValues??[])if(!next.has(key))control.ClearValue(old.property,old.priority);
   for(const {property,value,priority}of next.values())control.SetValue(property,value,priority);control._styleValues=next;
@@ -30,8 +31,7 @@ export function applyCommon(control){
   style.justifySelf=align[control.HorizontalAlignment]??'';
   style.alignSelf=align[control.parent?.Orientation==='Horizontal'?control.VerticalAlignment:control.HorizontalAlignment]??'';
   if(control.parent?.type==='Grid')style.alignSelf=align[control.VerticalAlignment]??'';
-  style.gridRow=control.GetValue('Grid.Row')!=null?`${Number(control.GetValue('Grid.Row'))+1} / span ${Number(control.GetValue('Grid.RowSpan'))||1}`:'';
-  style.gridColumn=control.GetValue('Grid.Column')!=null?`${Number(control.GetValue('Grid.Column'))+1} / span ${Number(control.GetValue('Grid.ColumnSpan'))||1}`:'';
+  applyGridPlacement(control);
   style.position='';for(const key of ['left','top','right','bottom'])style[key]='';
   if(control.parent?.type==='Canvas'){style.position='absolute';
     for(const [near,far]of [['Left','Right'],['Top','Bottom']]){const a=dimension(control.GetValue('Canvas.'+near)),b=dimension(control.GetValue('Canvas.'+far));style[near.toLowerCase()]=a||(!b?'0px':'');style[far.toLowerCase()]=a?'':b;}

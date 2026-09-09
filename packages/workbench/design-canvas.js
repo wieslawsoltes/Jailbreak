@@ -20,7 +20,7 @@ export function createDesignCanvas({document:doc=globalThis.document,development
   const pan=el('div',undefined,{class:'design-pan-layer',hidden:'',tabindex:'0','aria-label':'Pan design workspace'});stage.append(pan);
   const make=(id,label,glyph,fn)=>action(doc,id,label,glyph,()=>guard(fn));
   const select=make('design-select','Select','design',()=>setTool('select')),hand=make('design-hand','Pan',null,()=>setTool('pan'));
-  select.title='Select visuals · Shift-click adds to selection';hand.title='Pan artboard with pointer or touch';toolbar.append(select,hand);
+  select.title='Select visuals · Shift-click adds to selection';hand.title='Pan artboard with pointer or touch';const interact=make('design-interact','Interact',null,()=>setTool('interact'));interact.title='Use the running application without leaving the artboard';toolbar.append(select,hand,interact);
   const divider=()=>el('span',undefined,{class:'design-toolbar-divider','aria-hidden':'true'});
   const preset=el('select',undefined,{id:'design-device','aria-label':'Design artboard preset'});
   for(const [v,label]of [['960x640','Desktop · 960 × 640'],['1280x800','Desktop · 1280 × 800'],['768x1024','Tablet · 768 × 1024'],['390x844','Phone · 390 × 844'],['custom','Custom artboard']])preset.append(el('option',label,{value:v}));
@@ -51,7 +51,7 @@ export function createDesignCanvas({document:doc=globalThis.document,development
   inspector.append(alignment,note);$('dev-property-panel').querySelector('h3').after(inspector);
   function save(){persist();}
   function configure(){if(development.options().enabled)development.designConfigure({snap:prefs.snap?8:0,guides:prefs.guides});}
-  function setTool(value){tool=value;pan.hidden=!active||tool!=='pan';select.setAttribute('aria-pressed',String(value==='select'));hand.setAttribute('aria-pressed',String(value==='pan'));if(active)development.pick(value==='select');}
+  function setTool(value){tool=value;pan.hidden=!active||tool!=='pan';select.setAttribute('aria-pressed',String(value==='select'));hand.setAttribute('aria-pressed',String(value==='pan'));interact.setAttribute('aria-pressed',String(value==='interact'));if(active)development.pick(value==='select');}
   function fit(){prefs.zoom=Math.min(2,Math.max(.25,Math.floor(Math.min((stage.clientWidth-70)/prefs.width,(stage.clientHeight-70)/prefs.height)*100)/100));apply();save();}
   function rulers(){
     top.replaceChildren();left.replaceChildren();const interval=prefs.zoom<.5?200:100;

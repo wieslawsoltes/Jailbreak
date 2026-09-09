@@ -1,3 +1,4 @@
+import {applyGridPlacement} from './grid-layout.js';
 import {shapeTags,renderShape} from './svg-shapes.js';
 import { renderProgress, progressState } from './progress.js';
 import { applyControlTheme, applyControlTemplate, renderControlTemplate, releaseControlTemplate, renderDataContent } from './templates.js';
@@ -146,6 +147,7 @@ export class Control extends StyledObject {
     else if(t==='Image'){const source=Control.assetResolver?.(this.Source)??this.Source??'';if(element.getAttribute('src')!==source)element.setAttribute('src',source);element.alt=this.GetValue('ToolTip.Tip')??'Image';element.style.objectFit=this.Stretch==='Fill'?'fill':this.Stretch==='UniformToFill'?'cover':'contain';}
     else if(t==='GpuSurface'){if(!this.surface){this.surface=new PrimitiveSurface(element,{onStatus:status=>{element.dataset.renderer=status;Control.onRendererStatus?.(status);}});this.track(this.surface);}if(dirty.has('*')||dirty.has('Scene')||dirty.has('ItemCount'))this.surface.setScene(Array.isArray(this.Scene)?this.Scene:demoScene(Number(this.Width)||720,Number(this.Height)||320,Number(this.ItemCount)||3000));}
     else if(t!=='DockPanel')this.renderContent();
+    if(t==='Grid')for(const child of this.Children)if(child instanceof Control)applyGridPlacement(child);
     if(this.headerElement)this.headerElement.textContent=accessText(this.Header??'');
     if(t==='Expander')element.open=!!this.IsExpanded;
     if(t==='TreeViewItem'){this.container.style.display=this.IsExpanded?'':'none';element.setAttribute('aria-selected',String(!!this.IsSelected));this.headerElement.textContent=(this.Children.length?(this.IsExpanded?'▾ ':'▸ '):'')+accessText(this.Header??'');}

@@ -1,3 +1,4 @@
+import {createGridTools} from './grid-tools.js';
 import {installEditorHistory} from './editor-history.js';
 import {createLanguageTools} from './language-tools.js';
 import {createDesignCanvas} from './design-canvas.js';
@@ -64,6 +65,7 @@ export function createStudio({document: doc = globalThis.document, development, 
     action(doc,'studio-new-file-create','Create file','files',()=>{try{createDocument(fileName.value.trim());fileDialog.close();}catch(error){fileError.textContent=error.message;}}));
   doc.body.append(fileDialog);$('new-file').onclick=()=>{fileName.value='';fileError.textContent='';fileDialog.showModal();fileName.focus();};
   fileName.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();$('studio-new-file-create').click();}});
+  const gridTools=createGridTools({document:doc,development,notify});off.push(()=>gridTools.dispose());
   const designer=createDesignCanvas({document:doc,development,notify,persist:persistState});
   const workArea = doc.querySelector('.work-area');workArea.id = 'studio-workspace-host';workArea.setAttribute('role', 'tabpanel');
   const binaryHost = el('section', undefined, {id: 'studio-binary-host', role: 'tabpanel', 'aria-label': 'Binary compilation workspace', hidden: ''});
