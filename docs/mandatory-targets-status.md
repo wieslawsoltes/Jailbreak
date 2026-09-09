@@ -44,3 +44,11 @@ real geometry operations to existing source transactions and hot reload.
 literal writes through aliases; it does not claim unrestricted imperative
 round-tripping. Remaining control-flow/ownership analysis and complete
 ControlCatalog/async/framework targets retain their original acceptance gates.
+
+## Original Canvas page
+
+[The pinned Canvas-page gate](milestone-upstream-canvas.md) now verifies unchanged
+XAML/C# source and actual vector/mask rendering through the primary runtime.
+`tests/fixtures/upstream.json` now identifies the requested fork correctly and
+keeps `fullControlCatalogPassed` false. The isolated host adapters and single
+page do not establish full project, full framework or global visual parity.
