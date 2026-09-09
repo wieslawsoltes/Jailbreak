@@ -25,5 +25,6 @@
   "060-grid-core.patch": "ac062a81ea2d46ece4e4ed35aa4e682727f15bf06e3cad466194af9ad34ad7aa",
   "061-grid-studio.patch": "b943ee19e87491892339feb11a80401303dd90d5cb58f1059bf31fc9e57151e3",
   "062-grid-gates.patch": "5d4a3caf3421aed575672e4c874b7541c19f5a6fd3248b65be67e76cefb04a06",
-  "063-workspace-core.patch": "c39baf66ad9d2e19e6dfed56d15b802c1582634dc8a68d5f018edcb3283fe87d"
+  "063-workspace-core.patch": "c39baf66ad9d2e19e6dfed56d15b802c1582634dc8a68d5f018edcb3283fe87d",
+  "064-components-core.patch": "730eeaa877a6b814ea7ba0d77bdadc45e335998c6853414dfbc44422c583560f"
 }
