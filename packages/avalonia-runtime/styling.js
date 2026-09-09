@@ -6,8 +6,13 @@ export function thickness(value){
   const a=String(value).split(/[, ]+/).filter(Boolean).map(Number);if(a.some(n=>!Number.isFinite(n)))return '';
   if(a.length===1)return a[0]+'px';if(a.length===2)return `${a[1]}px ${a[0]}px`;if(a.length===4)return `${a[1]}px ${a[2]}px ${a[3]}px ${a[0]}px`;return '';
 }
-export function dimension(value){if(value==null||value==='Auto'||value==='NaN'||value===Infinity)return '';if(typeof value==='number')return value+'px';if(/^\d+(\.\d+)?%$/.test(value))return value;const n=Number(value);return Number.isFinite(n)?n+'px':'';}
-export function brush(value){if(value==null)return '';if(typeof value==='object')value=value.Color??value.color??value.value??String(value);value=String(value);if(/^#[0-9a-f]{8}$/i.test(value))return `rgba(${parseInt(value.slice(3,5),16)},${parseInt(value.slice(5,7),16)},${parseInt(value.slice(7,9),16)},${parseInt(value.slice(1,3),16)/255})`;if(/^[A-Za-z]+$/.test(value)||/^#[\da-f]{3,6}$/i.test(value)||/^rgba?\([\d.,%\s]+\)$/.test(value))return value;return '';}
+export function dimension(value){if(value==null||value==='Auto'||value==='NaN'||value===Infinity)return '';if(typeof value==='number')return Number.isFinite(value)?value+'px':'';if(/^\d+(\.\d+)?%$/.test(value))return value;const n=Number(value);return Number.isFinite(n)?n+'px':'';}
+export function brush(value){if(value==null)return '';if(typeof value==='object')value=value.Color??value.color??value.value??String(value);value=String(value);if(typeof value==='string'&&/^hsva?\(/i.test(value)){
+  const m=/^hsv(a?)\(\s*([+-]?[\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%(?:\s*,\s*([\d.]+)(%?))?\s*\)$/i.exec(value);
+  if(!m||!!m[1]!==!!m[5])return '';const hue=((Number(m[2])%360)+360)%360,s=Number(m[3])/100,v=Number(m[4])/100,a=m[5]?Number(m[5])/(m[6]?100:1):1;
+  if([s,v,a].some(n=>!Number.isFinite(n)||n<0||n>1)||!Number.isFinite(hue))return '';
+  const c=v*s,x=c*(1-Math.abs((hue/60)%2-1)),low=v-c,rgb=hue<60?[c,x,0]:hue<120?[x,c,0]:hue<180?[0,c,x]:hue<240?[0,x,c]:hue<300?[x,0,c]:[c,0,x];return 'rgba('+rgb.map(n=>Math.round((n+low)*255)).join(',')+','+a+')';
+}if(/^#[0-9a-f]{8}$/i.test(value))return `rgba(${parseInt(value.slice(3,5),16)},${parseInt(value.slice(5,7),16)},${parseInt(value.slice(7,9),16)},${parseInt(value.slice(1,3),16)/255})`;if(/^[A-Za-z]+$/.test(value)||/^#[\da-f]{3,6}$/i.test(value)||/^rgba?\([\d.,%\s]+\)$/.test(value)||/^hsla?\([+\-\d.,%\s]+\)$/.test(value))return value;return '';}
 export function gridTracks(value){if(!value)return '';if(Array.isArray(value))value=value.map(x=>x.Height??x.Width??'*').join(',');return String(value).split(',').map(s=>{s=s.trim();if(s==='Auto')return 'max-content';if(s.endsWith('*'))return `minmax(0,${Number(s.slice(0,-1))||1}fr)`;return dimension(s)||'auto';}).join(' ');}
 export function applyStyles(control){const chain=[];for(let c=control;c;c=c.parent)chain.unshift(c);const styles=chain.flatMap(c=>c.Styles??[]),next=new Map();for(let i=0;i<styles.length;i++){const style=styles[i];if(!matches(control,style.selector))continue;for(const [property,value]of Object.entries(style.resolveSetters?.(control)??style.setters))next.set(`${i}:${property}`,{property,value,priority:100+i/1000});}
   for(const [key,old]of control._styleValues??[])if(!next.has(key))control.ClearValue(old.property,old.priority);
@@ -28,7 +33,9 @@ export function applyCommon(control){
   style.gridRow=control.GetValue('Grid.Row')!=null?`${Number(control.GetValue('Grid.Row'))+1} / span ${Number(control.GetValue('Grid.RowSpan'))||1}`:'';
   style.gridColumn=control.GetValue('Grid.Column')!=null?`${Number(control.GetValue('Grid.Column'))+1} / span ${Number(control.GetValue('Grid.ColumnSpan'))||1}`:'';
   style.position='';for(const key of ['left','top','right','bottom'])style[key]='';
-  if(control.parent?.type==='Canvas'){style.position='absolute';for(const key of ['Left','Top','Right','Bottom'])style[key.toLowerCase()]=dimension(control.GetValue('Canvas.'+key));}
+  if(control.parent?.type==='Canvas'){style.position='absolute';
+    for(const [near,far]of [['Left','Right'],['Top','Bottom']]){const a=dimension(control.GetValue('Canvas.'+near)),b=dimension(control.GetValue('Canvas.'+far));style[near.toLowerCase()]=a||(!b?'0px':'');style[far.toLowerCase()]=a?'':b;}
+  }
   element.setAttribute('aria-disabled',String(!control.effectiveEnabled));if(control.GetValue('ToolTip.Tip')!=null)element.title=String(control.GetValue('ToolTip.Tip'));
   if(control.Focusable===true&&element.tabIndex<0)element.tabIndex=0;
 }

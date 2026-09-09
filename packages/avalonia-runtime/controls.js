@@ -1,3 +1,4 @@
+import {shapeTags,renderShape} from './svg-shapes.js';
 import { renderProgress, progressState } from './progress.js';
 import { applyControlTheme, applyControlTemplate, renderControlTemplate, releaseControlTemplate, renderDataContent } from './templates.js';
 import { Event, ObservableCollection, RoutedEventArgs, notify, formatValue, DateTime } from '../dotnet-runtime/index.js';
@@ -80,7 +81,7 @@ export class Control extends StyledObject {
     if(t==='TreeViewItem'){this.headerElement=document.createElement('div');this.headerElement.className='jb-tree-header';this.headerElement.tabIndex=0;this.container=document.createElement('div');this.element.append(this.headerElement,this.container);this.headerElement.addEventListener('click',e=>{this.IsExpanded=!this.IsExpanded;this.IsSelected=true;let root=this.parent;while(root&&root.type!=='TreeView')root=root.parent;if(root)root.SelectedItem=this;this.raise('SelectionChanged',e);});}
     if(t==='MenuItem'){this.element=document.createElement(this.Children.length?'details':'button');this.element.id=this.uid;if(this.Children.length){this.headerElement=document.createElement('summary');this.container=document.createElement('div');this.container.className='jb-menu-children';this.element.append(this.headerElement,this.container);}else {this.element.type='button';this.container=this.element;}}
     if(t==='SplitView'){this.paneElement=document.createElement('div');this.paneElement.className='jb-split-pane';this.container=document.createElement('div');this.container.className='jb-split-content';this.element.append(this.paneElement,this.container);}
-    if(['Rectangle','Ellipse','Path','Line','Polygon'].includes(t)){this.element=document.createElementNS('http://www.w3.org/2000/svg','svg');this.element.id=this.uid;const tag={Rectangle:'rect',Ellipse:'ellipse',Path:'path',Line:'line',Polygon:'polygon'}[t];this.shape=document.createElementNS('http://www.w3.org/2000/svg',tag);this.element.append(this.shape);}
+    if(shapeTags[t]){this.element=document.createElementNS('http://www.w3.org/2000/svg','svg');this.element.id=this.uid;const tag=shapeTags[t];this.shape=document.createElementNS('http://www.w3.org/2000/svg',tag);this.element.append(this.shape);}
     const domEvents={pointerdown:'PointerPressed',pointerup:'PointerReleased',pointermove:'PointerMoved',keydown:'KeyDown',keyup:'KeyUp',focusin:'GotFocus',focusout:'LostFocus',dblclick:'DoubleTapped'};
     for(const [dom,name]of Object.entries(domEvents))this.element.addEventListener(dom,event=>{if(event.target===this.element||event.target===this.input)this.raise(name,event);});
     for(const [dom,pseudo,active]of [['pointerenter','pointerover',true],['pointerleave','pointerover',false],['pointerdown','pressed',true],['pointerup','pressed',false],['focusin','focus',true],['focusout','focus',false]])this.element.addEventListener(dom,()=>{active?this.pseudos.add(pseudo):this.pseudos.delete(pseudo);this.invalidate('pseudo');});
@@ -141,7 +142,7 @@ export class Control extends StyledObject {
     else if(['DatePicker','CalendarDatePicker','Calendar'].includes(t)){const date=this.SelectedDate?.value??this.SelectedDate;const value=date instanceof Date?`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`:date??'';if(element.value!==value)element.value=value;}
     else if(t==='TimePicker')element.value=this.SelectedTime??'';
     else if(['ItemsControl','ListBox','ComboBox','TabControl','TreeView'].includes(t))this.renderItems();
-    else if(['Rectangle','Ellipse','Path','Line','Polygon'].includes(t)){const w=Number(this.Width)||100,h=Number(this.Height)||100;element.setAttribute('viewBox',`0 0 ${w} ${h}`);element.setAttribute('width',String(w));element.setAttribute('height',String(h));this.shape.setAttribute('fill',brush(this.Fill)||'transparent');this.shape.setAttribute('stroke',brush(this.Stroke)||'none');this.shape.setAttribute('stroke-width',String(this.StrokeThickness??1));if(t==='Rectangle'){this.shape.setAttribute('width',String(w));this.shape.setAttribute('height',String(h));this.shape.setAttribute('rx',String(this.RadiusX??0));this.shape.setAttribute('ry',String(this.RadiusY??this.RadiusX??0));}if(t==='Ellipse'){for(const [k,v]of Object.entries({cx:w/2,cy:h/2,rx:w/2,ry:h/2}))this.shape.setAttribute(k,String(v));}if(t==='Path')this.shape.setAttribute('d',String(this.Data??''));if(t==='Polygon')this.shape.setAttribute('points',String(this.Points??''));if(t==='Line'){const a=String(this.StartPoint??'0,0').split(','),b=String(this.EndPoint??`${w},${h}`).split(',');for(const [k,v]of Object.entries({x1:a[0],y1:a[1],x2:b[0],y2:b[1]}))this.shape.setAttribute(k,v);}}
+    else if(shapeTags[t])renderShape(this);
     else if(t==='Image'){const source=Control.assetResolver?.(this.Source)??this.Source??'';if(element.getAttribute('src')!==source)element.setAttribute('src',source);element.alt=this.GetValue('ToolTip.Tip')??'Image';element.style.objectFit=this.Stretch==='Fill'?'fill':this.Stretch==='UniformToFill'?'cover':'contain';}
     else if(t==='GpuSurface'){if(!this.surface){this.surface=new PrimitiveSurface(element,{onStatus:status=>{element.dataset.renderer=status;Control.onRendererStatus?.(status);}});this.track(this.surface);}if(dirty.has('*')||dirty.has('Scene')||dirty.has('ItemCount'))this.surface.setScene(Array.isArray(this.Scene)?this.Scene:demoScene(Number(this.Width)||720,Number(this.Height)||320,Number(this.ItemCount)||3000));}
     else if(t!=='DockPanel')this.renderContent();
@@ -171,3 +172,11 @@ const properties=new Set([...commonProperties,...Object.values(controlDefinition
 for(const property of properties){if(!property||property.includes('.')||property in Control.prototype||['Children','Items','Resources','Styles'].includes(property))continue;Object.defineProperty(Control.prototype,property,{get(){return this.GetValue(property);},set(value){this.SetValue(property,value);},configurable:true});}
 export const controls={Control};
 for(const name of Object.keys(controlDefinitions))if(name!=='Control'){const C=class extends Control {constructor(){super(name);}};Object.defineProperty(C,'name',{value:name});for(const property of properties)if(property&&!property.includes('.'))C[property+'Property']=new AvaloniaProperty(C,property,defaults[property]??null);controls[name]=C;}
+
+// The attached-property keys are shared with XAML; NaN represents an unset edge.
+for(const edge of ['Left','Top','Right','Bottom']){
+  const property=new AvaloniaProperty(controls.Canvas,'Canvas.'+edge,NaN);
+  controls.Canvas[edge+'Property']=property;
+  controls.Canvas['Get'+edge]=element=>element.GetValue(property);
+  controls.Canvas['Set'+edge]=(element,value)=>{if(typeof value!=='number'||!Number.isFinite(value)&&!Number.isNaN(value))throw new TypeError('Canvas coordinate must be a number or NaN');return element.SetValue(property,value);};
+}

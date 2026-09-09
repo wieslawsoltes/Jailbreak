@@ -1,3 +1,4 @@
+import {vectorTypes} from './vector-model.js';
 import {bootCooperative} from '../development/construction.js';
 import { createDevelopmentSession } from '../development/runtime.js';
 import { createBinaryRuntime } from '../msil-runtime/index.js';
@@ -33,7 +34,7 @@ export class Binding {constructor(path='',mode='Default'){this.kind='binding';th
 /** Creates an independent registration context. Compilers only depend on this small ABI. */
 export function createRuntime() {
   const types=new Map(),documents=new Map();
-  const api={...DN,...controls,Object:DN.DotObject,String:DN.StringApi,Math:DN.MathApi,Array:{Empty:()=>[],...Array},
+  const api={...DN,...controls,...vectorTypes,Object:DN.DotObject,String:DN.StringApi,Math:DN.MathApi,Array:{Empty:()=>[],...Array},
     DelegateCommand:DN.RelayCommand,AvaloniaObject:StyledObject,StyledElement:StyledObject,AvaloniaProperty,StyledProperty:AvaloniaProperty,
     ResourceDictionary,TemplateAppliedEventArgs,Thickness,CornerRadius,Point,Vector:Point,Size,Rect,Color,SolidColorBrush,Uri,Colors,Brushes,Dispatcher,BindingMode,Binding,
     runtimeCss,flushLayout,types,documents};

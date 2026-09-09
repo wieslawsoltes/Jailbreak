@@ -19,11 +19,12 @@ export const controlDefinitions = {
   Menu:'Items', MenuItem:'Header Items Command CommandParameter IsChecked ToggleType', ContextMenu:'Items',
   DatePicker:'SelectedDate DayVisible MonthVisible YearVisible', CalendarDatePicker:'SelectedDate Watermark', TimePicker:'SelectedTime MinuteIncrement ClockIdentifier', Calendar:'SelectedDate DisplayDate',
   SplitView:'Content Pane IsPaneOpen OpenPaneLength CompactPaneLength DisplayMode PanePlacement',
-  Image:'Source Stretch', Rectangle:'Fill Stroke StrokeThickness RadiusX RadiusY', Ellipse:'Fill Stroke StrokeThickness', Line:'StartPoint EndPoint Stroke StrokeThickness', Path:'Data Fill Stroke StrokeThickness Stretch', Polygon:'Points Fill Stroke StrokeThickness',
+  Image:'Source Stretch', Rectangle:'OpacityMask Fill Stroke StrokeThickness RadiusX RadiusY', Ellipse:'OpacityMask Fill Stroke StrokeThickness', Line:'StartPoint EndPoint Stroke StrokeThickness', Path:'OpacityMask Data Fill Stroke StrokeThickness Stretch', Polygon:'Points Fill Stroke StrokeThickness',
+  Polyline:'Points Fill Stroke StrokeThickness',
   GpuSurface:'Scene ItemCount',
 };
 export const eventNames = (`Click DoubleTapped Tapped PointerPressed PointerReleased PointerMoved PointerEntered PointerExited KeyDown KeyUp GotFocus LostFocus TextChanged SelectionChanged ValueChanged Checked Unchecked IsCheckedChanged Loaded Unloaded`).split(' ');
-export const structuralTypes = (`Style Styles Setter ResourceDictionary DataTemplate TreeDataTemplate ControlTemplate ControlTheme SolidColorBrush Thickness CornerRadius Color FontFamily RowDefinition ColumnDefinition RowDefinitions ColumnDefinitions String Boolean Int32 Double FluentTheme SimpleTheme StyleInclude ResourceInclude Design.PreviewWith`).split(' ');
+export const structuralTypes = (`Style Styles Setter ResourceDictionary DataTemplate TreeDataTemplate ControlTemplate ControlTheme SolidColorBrush LinearGradientBrush GradientStop PathGeometry PathFigure LineSegment QuadraticBezierSegment BezierSegment Thickness CornerRadius Color FontFamily RowDefinition ColumnDefinition RowDefinitions ColumnDefinitions String Boolean Int32 Double FluentTheme SimpleTheme StyleInclude ResourceInclude Design.PreviewWith`).split(' ');
 export const defaultTwoWay = new Set(['TextBox.Text','CheckBox.IsChecked','RadioButton.IsChecked','ToggleButton.IsChecked','ToggleSwitch.IsChecked','Slider.Value','NumericUpDown.Value','ComboBox.SelectedItem','ComboBox.SelectedIndex','ListBox.SelectedItem','ListBox.SelectedIndex','DatePicker.SelectedDate']);
 export function hasProperty(type, property) {
   return commonProperties.includes(property) || eventNames.includes(property) || (controlDefinitions[type] ?? '').split(' ').includes(property) || ['Resources','Styles','DataTemplates'].includes(property);
