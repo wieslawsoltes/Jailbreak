@@ -1,0 +1,93 @@
+diff --git a/packages/development/workbench.js b/packages/development/workbench.js
+index f53153fc87a3384e15ae5f06d47ca91009d1367c..c89f66b86d0cb432d74658aabb166372d866f680 100644
+--- a/packages/development/workbench.js
++++ b/packages/development/workbench.js
+@@ -6,2 +6,4 @@ import {mappedScript,updateGeneratedLocations} from './source-map.js';
+ export function createDevelopmentWorkbench({document:doc=globalThis.document,getFiles,getActive,openFile,applySource,build,persist,send,showGenerated=()=>{}}){
++  const listeners=new Set();
++  const publish=(event,payload={})=>{for(const listener of listeners)try{listener({event,payload});}catch(error){console.warn('Development tool observer:',error);}};
+   const el=(tag,text='')=>{const e=doc.createElement(tag);e.textContent=text;return e;};
+@@ -19,3 +21,3 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
+   const status=el('div','Enable tools, then compile.');status.id='dev-status';status.setAttribute('role','status');
+-  const columns=el('div');columns.className='dev-columns';const hierarchy=el('section'),properties=el('section'),debuggerPanel=el('section');
++  const columns=el('div');columns.className='dev-columns';const hierarchy=el('section'),properties=el('section'),debuggerPanel=el('section');hierarchy.id='dev-hierarchy-panel';properties.id='dev-property-panel';debuggerPanel.id='dev-debugger-panel';
+   const refresh=el('button','Refresh tree'),pick=el('button','Select on canvas');refresh.type=pick.type='button';refresh.id='dev-refresh';pick.id='dev-pick';pick.setAttribute('aria-pressed','false');
+@@ -47,3 +49,3 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
+   const localName=el('input');localName.id='dev-local-name';localName.placeholder='Local variable';localName.setAttribute('aria-label','Local variable');const localValue=el('input');localValue.id='dev-local-value';localValue.placeholder='JSON scalar';localValue.setAttribute('aria-label','Local JSON value');const setLocal=el('button','Set local');setLocal.id='dev-set-local';setLocal.type='button';const localRow=el('div');localRow.className='dev-row';localRow.append(localName,localValue,setLocal);
+-  const note=el('p','In-IDE stepping suspends compiled C# method continuations. Constructors, accessors, native APIs and callbacks are step-over regions. Native DevTools remains available for engine-wide JavaScript debugging.');note.className='dev-note';
++  const note=el('p','In-IDE stepping suspends compiled C# method continuations. Source constructors and XAML visual construction can also suspend. Accessors, native APIs and callbacks remain step-over regions. Native DevTools remains available for engine-wide JavaScript debugging.');note.className='dev-note';
+   debuggerPanel.append(el('h3','C# / XAML / JavaScript debugger'),breakpointRow,logLabel,breakpointList,commandRow,watchRow,pauseState,frameList,controls,localRow,note,output);
+@@ -53,3 +55,3 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
+   const guarded=fn=>{try{return fn();}catch(error){tell(error.message);}};
+-  function sync(){settings.enabled=enabled.checked;settings.cooperativeDebug=cooperative.checked;settings.hotReload=hot.checked;settings.nativeBreaks=native.checked;settings.breakOnThrow=throwBreak.checked;settings.watches=watches.value.split(',').map(s=>s.trim()).filter(Boolean);send('configure',{settings});persist();}
++  function sync(){settings.enabled=enabled.checked;settings.cooperativeDebug=cooperative.checked;settings.hotReload=hot.checked;settings.nativeBreaks=native.checked;settings.breakOnThrow=throwBreak.checked;settings.watches=watches.value.split(',').map(s=>s.trim()).filter(Boolean);send('configure',{settings});persist();publish('settings',api.options());}
+   function showPause(value){pausedTasks.set(value.taskId,value);pausedTask=value.taskId;pausedFrame=value.frames[0]?.id;pauseState.textContent='Paused '+value.reason+' · '+value.point?.file+':'+value.point?.line;frameList.replaceChildren();for(const frame of value.frames){const o=el('option',frame.method+' · '+(frame.point?.line??'?'));o.value=frame.id;frameList.append(o);}debugButtons.forEach(b=>b.disabled=false);output.textContent=JSON.stringify(value,null,2);}
+@@ -84,8 +86,30 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
+   const api={button,panel,
++    subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},
++    show(){panel.hidden=false;send('inspect');},
++    state(){return {settings:api.options(),paused:pausedTasks.get(pausedTask)??null,frameId:pausedFrame,selected:selected?.source??null};},
++    mode(mode){
++      if(!['release','design','cooperative','native'].includes(mode))throw new Error('Unknown development mode');
++      enabled.checked=mode!=='release';cooperative.checked=mode==='cooperative';native.checked=mode==='native';sync();build(true);
++    },
++    hotReload(value){hot.checked=!!value;sync();},
++    pick(value){selecting=!!value;pick.setAttribute('aria-pressed',String(selecting));send('pick',{value:selecting});},
++    command(command){if(pausedTask==null)throw new Error('No paused invocation');send('debug-control',{taskId:pausedTask,command});},
++    inspectFrame(id){if(pausedTask==null)throw new Error('No paused invocation');pausedFrame=Number(id);frameList.value=String(id);send('debug-frame',{taskId:pausedTask,frameId:pausedFrame,paths:settings.watches});},
++    setLocal(name,value){if(pausedTask==null)throw new Error('No paused invocation');send('debug-local',{taskId:pausedTask,frameId:pausedFrame,name,value});},
++    watch(paths){if(!Array.isArray(paths)||paths.length>50||paths.some(p=>typeof p!=='string'||p.length>512))throw new Error('Watch paths exceed limits');watches.value=paths.join(', ');sync();if(pausedTask!=null)api.inspectFrame(pausedFrame);else send('watch');},
++    toggleBreakpoint(file,line){
++      if(typeof file!=='string'||!file||!Number.isSafeInteger(line)||line<1)throw new Error('Invalid source breakpoint');
++      const found=settings.breakpoints.some(b=>b.file===file&&b.line===line);
++      if(found)settings.breakpoints=settings.breakpoints.filter(b=>b.file!==file||b.line!==line);
++      else if(settings.breakpoints.length<1000)settings.breakpoints.push({file,line,language:file==='jailbreak-app.js'?'javascript':undefined});
++      else throw new Error('Breakpoint limit reached');renderBreakpoints();sync();
++    },
++    clearBreakpoints(){settings.breakpoints=[];renderBreakpoints();sync();},
++    breakpointBound(file,line){return !!(running?.debug?.sites?.some(p=>(!settings.cooperativeDebug||p.cooperative||settings.nativeBreaks)&&(file==='jailbreak-app.js'?p.generatedLine===line:p.file===file&&p.line===line))||running?.debug?.xamlSites?.some(p=>p.file===file&&p.line===line));},
+     options(){return {...settings,breakpoints:settings.breakpoints.map(p=>({...p})),watches:[...settings.watches]};},
+     compileOptions(){return {debug:settings.enabled,cooperativeDebug:settings.enabled&&settings.cooperativeDebug};},
+-    set(value={}){settings={enabled:!!value.enabled,cooperativeDebug:!!value.cooperativeDebug,hotReload:!!value.hotReload,nativeBreaks:value.nativeBreaks!==false,breakOnThrow:!!value.breakOnThrow,breakpoints:Array.isArray(value.breakpoints)?value.breakpoints.slice(0,1000):[],watches:Array.isArray(value.watches)?value.watches.slice(0,50):[]};enabled.checked=settings.enabled;cooperative.checked=settings.cooperativeDebug;hot.checked=settings.hotReload;native.checked=settings.nativeBreaks;throwBreak.checked=settings.breakOnThrow;watches.value=settings.watches.join(', ');history=new EditHistory();running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();propertyList.replaceChildren();renderBreakpoints();},
+-    running(next,sources){pausedTasks.clear();pausedTask=pausedFrame=null;pauseState.textContent='No suspended invocation';debugButtons.forEach(b=>b.disabled=true);pending=null;revision=0;accept(next,sources);tell(settings.enabled?'Development session running.':'Release preview running.');},
++    set(value={}){settings={enabled:!!value.enabled,cooperativeDebug:!!value.cooperativeDebug,hotReload:!!value.hotReload,nativeBreaks:value.nativeBreaks!==false,breakOnThrow:!!value.breakOnThrow,breakpoints:Array.isArray(value.breakpoints)?value.breakpoints.slice(0,1000):[],watches:Array.isArray(value.watches)?value.watches.slice(0,50):[]};enabled.checked=settings.enabled;cooperative.checked=settings.cooperativeDebug;hot.checked=settings.hotReload;native.checked=settings.nativeBreaks;throwBreak.checked=settings.breakOnThrow;watches.value=settings.watches.join(', ');history=new EditHistory();running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();propertyList.replaceChildren();pausedTasks.clear();pausedTask=pausedFrame=null;debugButtons.forEach(b=>b.disabled=true);renderBreakpoints();publish('workspace-reset');},
++    running(next,sources){pausedTasks.clear();pausedTask=pausedFrame=null;pauseState.textContent='No suspended invocation';debugButtons.forEach(b=>b.disabled=true);pending=null;revision=0;accept(next,sources);tell(settings.enabled?'Development session running.':'Release preview running.');publish('session-starting');},
+     failed(){tell(running?'Build failed; previous running app was preserved.':'Build failed.');},
+-    stop(){running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();},
++    stop(){running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();pausedTasks.clear();pausedTask=pausedFrame=null;frameList.replaceChildren();debugButtons.forEach(b=>b.disabled=true);pauseState.textContent='No suspended invocation';publish('session-stopped');},
+     tryReload(next,sources,forceRestart=false){if(forceRestart||!running||!settings.enabled||!settings.hotReload)return false;if(pending){tell('A reload is already pending; restart or retry after its result.');return true;}
+@@ -94,3 +118,3 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
+     },
+-    receive(message){const {event,payload}=message??{};
++    receive(message){const {event,payload}=message??{};if(typeof event!=='string')return;
+       if(event==='debug-paused'){showPause(payload);tell('Compiled execution suspended. Continue or step from this panel.');}
+@@ -105,2 +129,3 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
+       else if(event.startsWith('debug-')||event==='watches'){output.textContent=JSON.stringify(payload,null,2);if(event==='debug-hit')tell('Breakpoint hit. Native pause/step/resume is controlled by browser DevTools.');}
++      publish(event,payload);
+     }
+diff --git a/packages/workbench/shell.js b/packages/workbench/shell.js
+index bfda636ec517e566421b176b63d11589893b146a..b59b3618f9a3bb2f09b8dc2fd0c02c7673070efd 100644
+--- a/packages/workbench/shell.js
++++ b/packages/workbench/shell.js
+@@ -89,2 +89,3 @@ export function createWorkbenchShell({document:doc=globalThis.document,documents
+   return {show,layout,
++    registerCommands(entries){if(!Array.isArray(entries)||entries.some(e=>typeof e.label!=='string'||typeof e.run!=='function'))throw new TypeError('Invalid workbench command');commands.push(...entries);return ()=>{for(const entry of entries){const at=commands.indexOf(entry);if(at>=0)commands.splice(at,1);}};},
+     beforeRender(){savePosition();internal=true;},
+diff --git a/packages/workbench/studio-debug.js b/packages/workbench/studio-debug.js
+index 9776b7cf331b52dfb0673200d199050c394f5eab..f051c7da8c6466fc84d8626e4dae3da2efb0f821 100644
+--- a/packages/workbench/studio-debug.js
++++ b/packages/workbench/studio-debug.js
+@@ -44,3 +44,3 @@ export function createDebugWindows({document: doc, development, active, open, no
+           const marker = row.dataset.valuePath;
+-          if (expanded) for (const next of [...body.rows]) {if (next.dataset.ancestor?.split('|').includes(marker)) next.remove();}
++          if (expanded) for (const next of [...row.parentElement.rows]) {if (next.dataset.ancestor?.split('|').includes(marker)) next.remove();}
+           else {
+diff --git a/packages/workbench/studio-ui.js b/packages/workbench/studio-ui.js
+index 93934fcfee0a30c8e12db512b65f9280717c58d7..7d2ed3e485b167b9a609afc11cf5070ff0a220e4 100644
+--- a/packages/workbench/studio-ui.js
++++ b/packages/workbench/studio-ui.js
+@@ -24,3 +24,3 @@ export function element(doc, tag, text, attrs = {}) {
+ export function action(doc, id, label, glyph, callback, shortcut = '') {
+-  const b = element(doc, 'button', undefined, {id, type: 'button', title: label + (shortcut ? ' · ' + shortcut : ''), 'aria-label': label});
++  const b = element(doc, 'button', undefined, {...(id ? {id} : {}), type: 'button', title: label + (shortcut ? ' · ' + shortcut : ''), 'aria-label': label});
+   if (glyph) b.append(icon(doc, glyph));b.append(element(doc, 'span', label));b.addEventListener('click', callback);return b;

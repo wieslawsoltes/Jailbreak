@@ -1,0 +1,157 @@
+diff --git a/tests/browser/test_studio.py b/tests/browser/test_studio.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..315a2d8aef9aedc8c265b1171693dff105b296ba
+--- /dev/null
++++ b/tests/browser/test_studio.py
+@@ -0,0 +1,151 @@
++"""Studio integration gates execute the actual compiled app, debugger and binary compiler."""
++import unittest, json
++from pathlib import Path
++import test_development as baseline
++from playwright.sync_api import expect
++
++class StudioTests(unittest.TestCase):
++    setUpClass=classmethod(baseline.DevelopmentTests.setUpClass.__func__)
++    tearDownClass=classmethod(baseline.DevelopmentTests.tearDownClass.__func__)
++    setUp=baseline.DevelopmentTests.setUp
++    tearDown=baseline.DevelopmentTests.tearDown
++    source=baseline.DevelopmentTests.source
++
++    def test_top_debugger_gutter_locals_edit_and_continue_execute_real_csharp(self):
++        code=self.source('MainView.axaml.cs').replace('count += 1;', 'int delta = 1;\n        count += delta;')
++        self.page.locator('#editor').fill(code)
++        self.page.select_option('#studio-session-mode','cooperative')
++        expect(self.page.locator('#preview-state')).to_contain_text('Running',timeout=30000)
++        offset=code.index('count += delta')
++        self.page.locator('#editor').evaluate('(e,n)=>{e.focus();e.setSelectionRange(n,n);}',offset)
++        self.page.keyboard.press('F9')
++        line=code[:offset].count('\n')+1
++        expect(self.page.locator(f'.studio-gutter-point[data-line="{line}"]')).to_have_attribute('aria-pressed','true')
++        self.page.frame_locator('#preview').get_by_role('button',name='Increment',exact=True).click()
++        expect(self.page.locator('#studio-session-badge')).to_have_text('Paused')
++        expect(self.page.locator('#studio-locals')).to_contain_text('delta')
++        expect(self.page.locator('#studio-execution-line')).to_be_visible()
++        self.page.locator('#studio-locals').get_by_role('button',name='Edit delta',exact=True).click()
++        self.page.fill('#studio-local-input','7');self.page.click('#studio-local-apply')
++        expect(self.page.locator('#studio-locals')).to_contain_text('7')
++        self.page.click('#studio-tab-stack')
++        expect(self.page.locator('#studio-stack')).to_contain_text('Increment')
++        self.page.click('#run')
++        expect(self.page.frame_locator('#preview').get_by_text('Count: 7',exact=True)).to_be_visible()
++        expect(self.page.locator('#studio-execution-line')).not_to_be_visible()
++        self.assertEqual(self.errors,[])
++
++    def test_designer_perspective_properties_and_hot_reload_share_runtime(self):
++        self.page.click('#studio-hot-reload')
++        self.page.frame_locator('#preview').get_by_role('textbox').fill('keep this input')
++        root=self.page.frames[-1].evaluate('appHandle.root.uid')
++        self.page.click('#studio-view-design')
++        self.page.frame_locator('#preview').get_by_role('button',name='Increment',exact=True).click()
++        expect(self.page.get_by_label('Design Content',exact=True)).to_have_value('Increment')
++        self.page.fill('#studio-property-search','Content')
++        self.page.get_by_label('Design Content',exact=True).fill('Add one')
++        self.page.locator('.dev-property').filter(has_text='Content').get_by_role('button',name='Apply').click()
++        expect(self.page.locator('#dev-status')).to_contain_text('Hot reload 1',timeout=30000)
++        expect(self.page.frame_locator('#preview').get_by_role('button',name='Add one',exact=True)).to_be_visible()
++        expect(self.page.frame_locator('#preview').get_by_role('textbox')).to_have_value('keep this input')
++        self.assertEqual(self.page.frames[-1].evaluate('appHandle.root.uid'),root)
++        self.assertEqual(self.errors,[])
++
++    def test_embedded_binary_compiler_runs_and_preserves_source_app(self):
++        self.page.frame_locator('#preview').get_by_role('textbox').fill('retained UI')
++        self.page.click('#studio-view-binary')
++        binary=self.page.frame_locator('#studio-binary-frame')
++        expect(binary.locator('#status')).to_have_text('Conversion succeeded',timeout=30000)
++        expect(binary.locator('#invoke')).to_be_enabled(timeout=30000)
++        binary.locator('#invoke').click()
++        expect(binary.locator('#result')).to_have_text('42')
++        self.page.click('#studio-view-split')
++        expect(self.page.frame_locator('#preview').get_by_role('textbox')).to_have_value('retained UI')
++        self.page.click('#studio-view-binary')
++        expect(binary.locator('#result')).to_have_text('42')
++        self.assertEqual(self.page.locator('#studio-binary-frame').get_attribute('sandbox'),'allow-scripts allow-downloads')
++        self.assertEqual(self.errors,[])
++
++    def test_close_and_reopen_tabs_does_not_delete_edited_workspace_source(self):
++        original=self.source('MainView.axaml.cs')
++        self.page.locator('#editor').fill(original+'\n// retained after tab close\n')
++        self.page.get_by_role('button',name='Close MainView.axaml.cs',exact=True).click()
++        expect(self.page.locator('#tabs [role=tab]').filter(has_text='MainView.axaml.cs')).to_have_count(0)
++        self.page.keyboard.press('Control+Shift+t')
++        expect(self.page.locator('#editor')).to_have_value(original+'\n// retained after tab close\n')
++        with self.page.expect_download() as d:self.page.click('#save-workspace')
++        workspace=json.loads(Path(d.value.path()).read_text())
++        self.assertIn('// retained after tab close',workspace['files']['MainView.axaml.cs'])
++        self.assertIn('studio',workspace)
++        self.assertEqual(self.errors,[])
++
++    def test_error_list_search_and_navigation_use_real_compiler_diagnostics(self):
++        code=self.source('MainView.axaml.cs').replace('count += 1','UnavailableApi()')
++        self.page.locator('#editor').fill(code);self.page.click('#run')
++        expect(self.page.locator('#studio-session-badge')).to_have_text('Build failed',timeout=30000)
++        expect(self.page.locator('.diagnostic-row').first).to_be_visible()
++        self.page.fill('#studio-diagnostic-search','nonexistent-diagnostic')
++        self.assertEqual(self.page.locator('.diagnostic-row:visible').count(),0)
++        self.page.fill('#studio-diagnostic-search','UnavailableApi')
++        expect(self.page.locator('.diagnostic-row:visible').first).to_be_visible()
++        self.page.locator('.diagnostic-row:visible').first.click()
++        expect(self.page.locator('#current-path')).to_have_text('MainView.axaml.cs')
++        self.assertEqual(self.errors,[])
++
++    def test_watch_window_inspects_real_paused_frame_and_rejects_calls(self):
++        code=self.source('MainView.axaml.cs')
++        self.page.select_option('#studio-session-mode','cooperative')
++        expect(self.page.locator('#preview-state')).to_contain_text('Running',timeout=30000)
++        offset=code.index('CounterLabel.Text')
++        self.page.locator('#editor').evaluate('(e,n)=>{e.focus();e.setSelectionRange(n,n);}',offset)
++        self.page.keyboard.press('F9')
++        self.page.frame_locator('#preview').get_by_role('button',name='Increment',exact=True).click()
++        expect(self.page.locator('#studio-session-badge')).to_have_text('Paused')
++        self.page.click('#studio-tab-watch')
++        self.page.fill('#studio-watch-input','this.count, this.constructor()');self.page.click('#studio-evaluate-watches')
++        expect(self.page.locator('#studio-watch')).to_contain_text('this.count')
++        expect(self.page.locator('#studio-watch')).to_contain_text('only support property paths')
++        self.page.click('#run')
++        expect(self.page.frame_locator('#preview').get_by_text('Count: 1',exact=True)).to_be_visible()
++        self.assertEqual(self.errors,[])
++
++    def test_breakpoint_and_tool_tabs_support_keyboard_activation(self):
++        self.page.locator('#studio-tools-all').focus();self.page.keyboard.press('End');self.page.keyboard.press('Enter')
++        expect(self.page.locator('#studio-tools-debug')).to_have_attribute('aria-selected','true')
++        self.assertTrue(self.page.locator('#dev-hierarchy-panel').is_hidden())
++        self.page.locator('#studio-tab-stack').focus();self.page.keyboard.press('ArrowRight');self.page.keyboard.press('Enter')
++        expect(self.page.locator('#studio-tab-locals')).to_have_attribute('aria-selected','true')
++        self.assertEqual(self.errors,[])
++
++    def test_mobile_and_light_theme_keep_tools_available_without_overflow(self):
++        self.page.click('#theme');self.page.set_viewport_size({'width':390,'height':844})
++        self.page.locator('#development-panel header button').filter(has_text='Close').click()
++        expect(self.page.locator('#studio-view-design')).to_be_visible()
++        self.page.click('#studio-view-design')
++        expect(self.page.locator('#development-panel')).to_be_visible()
++        self.assertEqual(self.page.evaluate('document.documentElement.scrollWidth'),390)
++        self.assertEqual(self.errors,[])
++
++    def test_new_file_dialog_builds_solution_tree_and_rejects_unsafe_paths(self):
++        self.page.click('#new-file')
++        self.page.fill('#studio-new-file-name','../outside.cs');self.page.click('#studio-new-file-create')
++        expect(self.page.locator('#studio-new-file-dialog [role=alert]')).to_contain_text('relative')
++        self.page.fill('#studio-new-file-name','Views/Inspector.axaml');self.page.click('#studio-new-file-create')
++        expect(self.page.locator('#studio-new-file-dialog')).not_to_be_visible()
++        expect(self.page.locator('#files .studio-folder summary')).to_contain_text('Views')
++        expect(self.page.locator('#current-path')).to_have_text('Views/Inspector.axaml')
++        self.assertIn('<UserControl',self.page.locator('#editor').input_value())
++        self.assertEqual(self.errors,[])
++
++    def test_font_size_and_studio_commands_use_existing_workbench(self):
++        self.page.select_option('#studio-font-size','16')
++        self.assertEqual(self.page.locator('#editor').evaluate('e=>getComputedStyle(e).fontSize'),'16px')
++        self.page.keyboard.press('Control+Shift+p');self.page.fill('#wb-palette-query','View Watch window');self.page.keyboard.press('Enter')
++        expect(self.page.locator('#studio-tab-watch')).to_have_attribute('aria-selected','true')
++        with self.page.expect_download() as d:self.page.click('#save-workspace')
++        workspace=json.loads(Path(d.value.path()).read_text())
++        self.assertEqual(workspace['studio']['fontSize'],16)
++        self.assertEqual(workspace['studio']['bottom'],'watch')
++        self.assertEqual(self.errors,[])
++
++if __name__=='__main__':unittest.main(verbosity=2)

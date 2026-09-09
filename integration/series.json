@@ -1,5 +1,8 @@
 [
   {"patch":"001-resumable-xaml.patch","sha256":"baf9931092b17818ab069df0f07f7bee2ae2e8a03427b83a2aa5c8304b5ad1e3","message":"feat(debugger): resume source constructors and XAML construction with cancellation cleanup"},
   {"patch":"002-workbench-libraries.patch","sha256":"146a3cece6997669c4e1f92b96df4a2a3ffb813a71eb52cff22a013eee36b085","message":"feat(workbench): add reusable navigation search and accessible pane layout"},
-  {"patch":"003-workbench-integration.patch","sha256":"9bcbab1e79c1e5ae0652e78522c2e12deee30ad68bd430be39cd190bc4c2e396","message":"feat(ide): deploy docked Studio shell with tested editor commands and responsive tools"}
+  {"patch":"003-workbench-integration.patch","sha256":"9bcbab1e79c1e5ae0652e78522c2e12deee30ad68bd430be39cd190bc4c2e396","message":"feat(ide): deploy docked Studio shell with tested editor commands and responsive tools"},
+  {"patch":"010-studio-tools.patch","sha256":"0f6d8544029e5d4812fe26155bb9561f6ac4685571dee61a88c9235204bfce34","message":"feat(development): expose live debugger and designer controls to Studio tool windows"},
+  {"patch":"011-studio-client.patch","sha256":"bf5429a1e887d494d3b8c550bdd2c5f083766af10f529fc606f3787d870d85b7","message":"feat(ide): integrate Studio execution views source tabs diagnostics and persistent workspace"},
+  {"patch":"012-studio-browser.patch","sha256":"7bcc9264d3c1a0af53ac6396c055816b660e451d467b4d490c8ed2e9193b7f69","message":"test(studio): verify real debugging visual edits binary invocation and responsive workspaces"}
 ]
