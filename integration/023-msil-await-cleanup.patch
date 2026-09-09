@@ -1,0 +1,78 @@
+diff --git a/docs/milestone-msil-continuations.md b/docs/milestone-msil-continuations.md
+index b91ceca..784ebbe 100644
+--- a/docs/milestone-msil-continuations.md
++++ b/docs/milestone-msil-continuations.md
+@@ -14,3 +14,3 @@ Arguments, locals, evaluation stack, instruction position and exception state ar
+ 
+-The existing exception-frame engine preserves typed catches, original rethrow identity, `leave`, nested `finally`/`fault`, and cleanup continuations across pauses. Normal execution and exceptions use the existing verified path. Explicit debugger cancellation discards the normal continuation and runs outstanding **finally** handlers, not **fault** handlers. Cancelling inside an already executing IL cleanup defers cancellation until that cleanup and its nested calls finish; its effects are not replayed. Cleanup is separately bounded so an infinite cleanup cannot lock the IDE. Fatal instruction/recursion-limit errors retain the existing runtime's fail-fast policy; they are not ordinary catchable managed exceptions.
++The existing exception-frame engine preserves typed catches, original rethrow identity, `leave`, nested `finally`/`fault`, and cleanup continuations across pauses. Normal execution and exceptions use the existing verified path. Explicit debugger cancellation discards the normal continuation and runs outstanding **finally** handlers, not **fault** handlers. Cancelling inside an already executing IL cleanup defers cancellation until that cleanup and its nested calls finish; its effects are not replayed. A cleanup waiting on another task's type initializer keeps that dependency pending until it completes or fails; cancellation never supplies a fabricated result to the wait. Cleanup is separately bounded so an infinite cleanup cannot lock the IDE. Fatal instruction/recursion-limit errors retain the existing runtime's fail-fast policy; they are not ordinary catchable managed exceptions.
+ 
+diff --git a/packages/development/cooperative-debugger.js b/packages/development/cooperative-debugger.js
+index 6d44607..361b1bd 100644
+--- a/packages/development/cooperative-debugger.js
++++ b/packages/development/cooperative-debugger.js
+@@ -98,5 +98,9 @@ export function createCooperativeDebugger({point,breakpoint=()=>false,breakOnThr
+       if(task.cancelling)return;
+-      task.epoch++;task.cancelling=true;task.step=null;
++      task.cancelling=true;task.step=null;
+       // An active IL finally is allowed to finish (bounded), including nested calls.
+-      task.cancelPending=task.frames.some(f=>f.critical);task.status='running';
++      task.cancelPending=task.frames.some(f=>f.critical);
++      // Keep the current await epoch: bypassing a pending initializer here would
++      // let cleanup observe partially initialized state. Other tasks stay usable.
++      if(task.cancelPending&&task.status==='awaiting')return;
++      task.epoch++;task.status='running';
+       drive(task,undefined,task.cancelPending?'next':'return');return;
+diff --git a/tests/msil-cleanup-await.test.js b/tests/msil-cleanup-await.test.js
+new file mode 100644
+index 0000000..9cd23b1
+--- /dev/null
++++ b/tests/msil-cleanup-await.test.js
+@@ -0,0 +1,38 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {compileIL} from '../packages/msil-compiler/verified.js';
++import {createBinaryRuntime} from '../packages/msil-runtime/index.js';
++import {createCooperativeDebugger} from '../packages/development/cooperative-debugger.js';
++
++test('cancelling cleanup waiting on another type initializer preserves the awaited value',async()=>{
++  const source=`.assembly Concurrent {}
++ .class public Concurrent.B {
++ .field public static int32 value
++ .method private static void .cctor() cil managed { ldc.i4.s 42 stsfld int32 Concurrent.B::value ret }
++ .method public static int32 Get() cil managed { ldsfld int32 Concurrent.B::value ret }
++ }
++ .class public Concurrent.A {
++ .field public static int32 trace
++ .method public static void Run() cil managed {
++ .try { leave end } finally { ldsfld int32 Concurrent.B::value stsfld int32 Concurrent.A::trace endfinally }
++ end: ret }
++ .method public static int32 Trace() cil managed { ldsfld int32 Concurrent.A::trace ret }
++ }`;
++  const result=compileIL(source,{debug:true,cooperativeDebug:true});assert.equal(result.success,true,JSON.stringify(result.diagnostics));
++  const MS=createBinaryRuntime();new Function('MS',result.code)(MS);
++  const co=MS.createDebugger({breakpoint:p=>p.method==='Concurrent.B..cctor'&&p.ilOffset===0});
++  const B=MS.getType('Concurrent','Concurrent.B'),A=MS.getType('Concurrent','Concurrent.A');
++  const initializer=co.start(B,'Get'),cleanup=co.start(A,'Run');
++  assert.equal(co.state().find(t=>t.taskId===cleanup.taskId).status,'awaiting');
++  co.command(cleanup.taskId,'cancel');
++  assert.equal(co.state().find(t=>t.taskId===cleanup.taskId)?.status,'awaiting','Cancellation must not manufacture a value for pending cleanup');
++  co.command(initializer.taskId,'continue');assert.equal(await initializer.promise,42);await cleanup.promise;
++  assert.equal(A.Trace(),42);assert.equal(co.busy,false);
++});
++
++test('silent compiled safepoints keep long non-source regions cancellable without extra visible stops',async()=>{
++  const co=createCooperativeDebugger({point:()=>null,quantum:2}),seen=[];
++  const task=co.run((function*(){const frame=co.enter('owned silent region');try{while(true){seen.push('tick');yield {kind:'safepoint',critical:false};}}finally{seen.push('finally');co.leave(frame);}})());
++  assert.equal(co.state()[0].status,'scheduled');assert.equal(seen.length,2);
++  co.command(task.taskId,'cancel');await task.promise;assert.equal(seen.at(-1),'finally');assert.equal(co.busy,false);
++});
+diff --git a/tests/msil-continuations.test.js b/tests/msil-continuations.test.js
+index cc26338..9103e0a 100644
+--- a/tests/msil-continuations.test.js
++++ b/tests/msil-continuations.test.js
+@@ -115,3 +115,3 @@ test('per-task binary instruction budgets remain independent across interleaved
+ });
+-test('silent PDB checkpoints still yield to the event loop and permit loop cancellation',async()=>{
++test('compiled loop checkpoints yield to the event loop and permit cancellation',async()=>{
+   const r=compileIL(program('again: br.s again',{returns:'void'}),opts);const {MS,co}=setup(r,{instructionBudget:100000});const C=MS.getType('Demo','Demo.C');

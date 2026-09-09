@@ -7,5 +7,6 @@
   {"patch":"012-studio-browser.patch","sha256":"7bcc9264d3c1a0af53ac6396c055816b660e451d467b4d490c8ed2e9193b7f69","message":"test(studio): verify real debugging visual edits binary invocation and responsive workspaces"},
   {"patch":"020-msil-runtime.patch","sha256":"a4b1bc5feb089d956e5450383b19c9cd6950c3e58870db6c16357cab39f28bd4","message":"feat(runtime): preserve binary frames initialization budgets and cleanup across debugger suspension"},
   {"patch":"021-msil-emitter.patch","sha256":"258579eaf67cdc849279812a8ea0b2536290c491c707f99d7880e6c8ce089d2a","message":"feat(msil): emit cooperative continuations from the shared verified instruction backend"},
-  {"patch":"022-msil-client.patch","sha256":"394cf8eb5d83e9ad1cfbae35112b9662a8fb8d98442987c009c019ccc3f038e1","message":"feat(ide): step through DLL and NuGet calls in Studio and offline binary runners"}
+  {"patch":"022-msil-client.patch","sha256":"394cf8eb5d83e9ad1cfbae35112b9662a8fb8d98442987c009c019ccc3f038e1","message":"feat(ide): step through DLL and NuGet calls in Studio and offline binary runners"},
+  {"patch":"023-msil-await-cleanup.patch","sha256":"a7a70921411b323ae1ebc6866b367205b5214fc264c1d995ebafca562d1d2cdc","message":"fix(debugger): preserve pending initializer waits when cancelling active IL cleanup"}
 ]
