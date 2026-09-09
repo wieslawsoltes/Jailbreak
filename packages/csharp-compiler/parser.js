@@ -66,7 +66,7 @@ export class CSharpParser {
     const start=this.t.start,event=this.take('event');
     if(this.at(className)&&this.tokens[this.i+1]?.value==='('){
       this.next();const parameters=this.parameters();let initializer=null;
-      if(this.take(':')){const target=this.next().value;if(target!=='base')this.fail('Delegating this(...) constructors are not implemented',this.tokens[this.i-1],'JB2114');initializer={target,args:this.arguments()};}
+      if(this.take(':')){const target=this.next().value;if(!['base','this'].includes(target))this.fail('Expected base(...) or this(...) constructor initializer',this.tokens[this.i-1],'JB2114');initializer={target,args:this.arguments()};}
       return [this.node('constructor',start,{name:className,mods,attributes,parameters,initializer,body:this.block()})];
     }
     const type=this.type(),name=this.id(),generics=this.typeParameters();

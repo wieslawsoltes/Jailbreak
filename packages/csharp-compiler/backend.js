@@ -1,3 +1,4 @@
+import {constructorGraph,checkInitializer} from './constructor-chains.js';
 import { exceptionTypeNames } from '../dotnet-runtime/exceptions.js';
 import { DiagnosticBag, identifier, escapeJs } from '../compiler-core/index.js';
 import { parseCSharp, parseExpression } from './parser.js';
@@ -98,6 +99,7 @@ export function compileCSharp(input, options={}) {
       }
       case 'call':{
         const args=e.args.map(a=>expr(a,ctx));
+        if(e.callee.kind==='member'&&e.callee.object.kind==='identifier'&&e.callee.object.name==='base'){const name=escapeJs(e.callee.name),base=typeRef(current.bases[0]);return ctx.cooperative?`(yield* $co.applyReference({object:this,name:${name},method:${base}.prototype[${name}]},(function*(){return [${args.join(',')}];}).call(this)))`:`super[${name}](${args.join(',')})`;}
         if(e.callee.kind==='member'){
           const m=e.callee,name=m.name,obj=expr(m.object,ctx);
           if(name==='Load'&&flatName(m.object)?.endsWith('AvaloniaXamlLoader'))return ctx.cooperative?`(yield* JB.loadXamlSteps(${args[0]??'this'}))`:`JB.loadXaml(${args[0]??'this'})`;
@@ -232,13 +234,34 @@ export function compileCSharp(input, options={}) {
       }
     }
     const constructors=decl.members.filter(m=>m.kind==='constructor');
-    const ctorBody=[];for(const m of constructors){currentSource=m.source??decl.source;debugMethod=m.name;const ctx=context();for(const p of m.parameters)ctx.locals.set(p.name,p.type);const min=m.parameters.filter(p=>!p.value&&!p.rest).length,max=m.parameters.some(p=>p.rest)?Infinity:m.parameters.length;
-      if(m.initializer&&constructors.length>1)report('JB2213','Multiple constructors with explicit base initializers are not implemented',m);
-      ctorBody.push({m,ctx,min,max});}
-    if(constructors.length<=1){const c=ctorBody[0];if(c){currentSource=c.m.source??decl.source;debugMethod='.ctor';}const params=c?c.m.parameters.map(p=>(p.rest?'...':'')+p.name+(p.value?' = '+expr(p.value,c.ctx):'')).join(','):'';
-      const superArgs=c?.m.initializer?.args.map(a=>expr(a,c.ctx)).join(',')??'';
+    const ctorBody=constructorGraph(constructors,report).map(c=>{
+      const m=c.m;currentSource=m.source??decl.source;debugMethod='.ctor';
+      checkInitializer(m,new Set([...inherited,...membersOf(decl).filter(x=>!x.mods?.includes('static')&&!x.mods?.includes('const')).map(x=>x.name)]),report);
+      const ctx=context();for(const p of m.parameters)ctx.locals.set(p.name,p.type);return {...c,ctx};
+    });
+    const chainMode=constructors.some(m=>m.initializer?.target==='this')||constructors.length>1;
+    const planName='$ctorPlans$'+js,coPlanName='$ctorSteps$'+js,keysName='$ctorBodies$'+js;
+    const parameterText=(m,ctx)=>m.parameters.map(p=>(p.rest?'...':'')+p.name+(p.value?' = '+expr(p.value,ctx):'')).join(',');
+    const parameterValues=m=>m.parameters.map(p=>(p.rest?'...':'')+p.name).join(',');
+    const selectCtor=args=>ctorBody.map(c=>`${args}.length>=${c.min}&&${args}.length<=${c.max===Infinity?'Infinity':c.max}?${c.index}:`).join('')+'-1';
+    function emitPlan(c,cooperative=false){
+      currentSource=c.m.source??decl.source;debugMethod='.ctor';const ctx={...clone(c.ctx),cooperative},name=cooperative?coPlanName:planName;
+      const args=c.m.initializer?.args.map(a=>expr(a,ctx)).join(',')??'';
+      const terminal=c.target===null;
+      return `${cooperative?'function*($co,$args)':'function($args)'}{let [${parameterText(c.m,ctx)}]=$args;`+
+        (terminal?`const $base=[${args}];return {baseArgs:$base,frames:[[${c.index},[${parameterValues(c.m)}]]]};`:
+          `const $plan=${cooperative?'yield* ':''}${name}[${c.target}](${cooperative?'$co,':''}[${args}]);$plan.frames.push([${c.index},[${parameterValues(c.m)}]]);return $plan;`)+'}';
+    }
+    let constructorPlans='';
+    if(chainMode){
+      constructorPlans=`const ${keysName}=[${ctorBody.map(()=>`Symbol('constructor-body')`).join(',')}];\nconst ${planName}=[${ctorBody.map(c=>emitPlan(c)).join(',')}];\n`;
+      for(const c of ctorBody){currentSource=c.m.source??decl.source;debugMethod='.ctor';body.push(`[${keysName}[${c.index}]](${parameterText(c.m,c.ctx)}) ${stmt(c.m.body,c.ctx)}`);}
+      body.push(`constructor(...$args){const $which=${selectCtor('$args')};if($which<0)throw new JB.ArgumentException('No constructor matches argument count');const $plan=${planName}[$which]($args);super(...$plan.baseArgs);for(const [$which,$values]of $plan.frames)${js}.prototype[${keysName}[$which]].apply(this,$values);}`);
+    }else{
+      const c=ctorBody[0];if(c){currentSource=c.m.source??decl.source;debugMethod='.ctor';}
+      const params=c?parameterText(c.m,c.ctx):'',superArgs=c?.m.initializer?.args.map(a=>expr(a,c.ctx)).join(',')??'';
       body.push(`constructor(${params}) { super(${superArgs}); ${c?stmt(c.m.body,c.ctx):(options.xamlNames?.[decl.fullName]?'this.InitializeComponent();':'')} }`);
-    } else {body.push(`constructor(...__args) { super();\n${ctorBody.map((c,i)=>(i?'else ':'')+`if (__args.length >= ${c.min} && __args.length <= ${c.max===Infinity?'Infinity':c.max}) { const [${c.m.parameters.map(p=>(p.rest?'...':'')+p.name+(p.value?' = '+expr(p.value,c.ctx):'')).join(',')}] = __args; ${stmt(c.m.body,c.ctx)} }`).join('\n')} else { throw new JB.ArgumentException('No constructor matches argument count'); } }`);}
+    }
     const groups=new Map();for(const m of decl.members.filter(m=>m.kind==='method')){const key=(m.mods.includes('static')?'static:':'')+m.name;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(m);}
     for(const group of groups.values()){
       const arities=new Set();for(const m of group){currentSource=m.source??decl.source;debugMethod=m.name;const ctx=context({static:m.mods.includes('static'),async:m.mods.includes('async')});for(const p of m.parameters)ctx.locals.set(p.name,p.type);
@@ -274,18 +297,23 @@ export function compileCSharp(input, options={}) {
         if(m.kind==='event')initializers.push(`this.${m.name}=new JB.Event();`);
         if(m.kind==='property'&&(m.get?.kind==='auto'||m.set?.kind==='auto'))initializers.push(`this.__${m.name}=${m.init?expr(m.init,ctx,m.type):defaultValue(m.type)};`);
       }
+      if(chainMode){
+        constructorPlans+=`const ${coPlanName}=[${ctorBody.map(c=>emitPlan(c,true)).join(',')}];\n`;
+        const factories=ctorBody.map(c=>{currentSource=c.m.source??decl.source;debugMethod='.ctor';const ctx={...clone(c.ctx),cooperative:true};return `function*($co,$values){let [${parameterText(c.m,ctx)}]=$values;${stmt(c.m.body,ctx)}}`;});
+        constructorFactory=`\nJB.dev?.co.registerConstructor(${js},function*($co,$args,$newTarget){const $which=${selectCtor('$args')};if($which<0)throw new JB.ArgumentException('No constructor matches argument count');const $frame=$co.enter(${escapeJs(decl.fullName+'.ctor')});let $self,$complete=false;try{const $plan=yield* ${coPlanName}[$which]($co,$args);$self=yield* $co.construct(${base},$plan.baseArgs,$newTarget);yield* (function*(){${initializers.join('')}}).call($self);const $bodies=[${factories.join(',')}];for(const [$index,$values]of $plan.frames)yield* $bodies[$index].call($self,$co,$values);$complete=true;return $self;}finally{try{if(!$complete)$self?.Dispose?.();}finally{$co.leave($frame);}}});`;
+      }else{
       const alternatives=ctorBody.length?ctorBody:[{m:null,ctx:context(),min:0,max:0}];
       const cases=alternatives.map(c=>{
         currentSource=c.m?.source??decl.source;debugMethod='.ctor';
         const ctx={...clone(c.ctx),cooperative:true},params=(c.m?.parameters??[]).map(p=>(p.rest?'...':'')+p.name+(p.value?' = '+expr(p.value,ctx):'')).join(',');
-        if(c.m?.initializer?.target==='this')report('JB2261','Delegating constructor requires constructor-chain lowering',c.m);
         const baseArgs=c.m?.initializer?.args.map(a=>expr(a,ctx)).join(',')??'';
         const ctor=c.m?stmt(c.m.body,ctx):(options.xamlNames?.[decl.fullName]?`{yield* JB.loadXamlSteps(this,${escapeJs(decl.fullName)});}`:'{}');
-        return `if($args.length>=${c.min}&&$args.length<=${c.max===Infinity?'Infinity':c.max}){const [${params}]=$args;const $frame=$co.enter(${escapeJs(decl.fullName+'.ctor')});let $self,$complete=false;try{$self=yield* $co.construct(${base},[${baseArgs}],$newTarget);yield* (function*(){${initializers.join('')} ${ctor}}).call($self);$complete=true;return $self;}finally{try{if(!$complete)$self?.Dispose?.();}finally{$co.leave($frame);}}}`;
+        return `if($args.length>=${c.min}&&$args.length<=${c.max===Infinity?'Infinity':c.max}){let [${params}]=$args;const $frame=$co.enter(${escapeJs(decl.fullName+'.ctor')});let $self,$complete=false;try{$self=yield* $co.construct(${base},[${baseArgs}],$newTarget);yield* (function*(){${initializers.join('')} ${ctor}}).call($self);$complete=true;return $self;}finally{try{if(!$complete)$self?.Dispose?.();}finally{$co.leave($frame);}}}`;
       });
       constructorFactory=`\nJB.dev?.co.registerConstructor(${js},function*($co,$args,$newTarget){${cases.join('')}throw new JB.ArgumentException('No constructor matches argument count');});`;
     }
-    chunks.push(`class ${js} extends ${base} {\n${body.join('\n')}\n}\nJB.defineType(${escapeJs(decl.fullName)}, ${js});${continuations.length?'\nJB.dev?.co.register('+js+',['+continuations.join(',')+']);':''}${constructorFactory}`);
+    }
+    chunks.push(`${constructorPlans}class ${js} extends ${base} {\n${body.join('\n')}\n}\nJB.defineType(${escapeJs(decl.fullName)}, ${js});${continuations.length?'\nJB.dev?.co.register('+js+',['+continuations.join(',')+']);':''}${constructorFactory}`);
   }
   const cleanShape=(node,key='')=>{
     if(Array.isArray(node))return node.map(x=>cleanShape(x));
