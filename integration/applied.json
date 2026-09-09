@@ -13,5 +13,6 @@
   "031-design-surface.patch": "992944bb14cb2c0f8acfa4af18e8d80c73c6b729dd6e33712e4939bd4362250a",
   "032-design-surface.patch": "e746709f814807e8af9aba338f0f33379529ec3656333e355e7a57a013713fdb",
   "033-design-surface.patch": "44d1e4d40b40ef415b3a66a2bd49635246422759ba32af7986a1209a44743a7c",
-  "034-design-workbench.patch": "c026ed8ac77270da0a221167da6f0761b0b3823710ac6ded8e55b3eb8a4ce7b2"
+  "034-design-workbench.patch": "c026ed8ac77270da0a221167da6f0761b0b3823710ac6ded8e55b3eb8a4ce7b2",
+  "035-design-workbench.patch": "1068fe754b47273827f8f8a858159c17babe85465f3fd2ccdc15343926e96ae6"
 }

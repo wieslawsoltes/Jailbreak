@@ -1,3 +1,4 @@
+import {createDesignCanvas} from './design-canvas.js';
 import {element, action, icon, tabKeys} from './studio-ui.js';
 import {studioPreferences, diagnosticMatches, indentSource} from './studio-model.js';
 import {createDebugWindows} from './studio-debug.js';
@@ -59,6 +60,7 @@ export function createStudio({document: doc = globalThis.document, development, 
     action(doc,'studio-new-file-create','Create file','files',()=>{try{createDocument(fileName.value.trim());fileDialog.close();}catch(error){fileError.textContent=error.message;}}));
   doc.body.append(fileDialog);$('new-file').onclick=()=>{fileName.value='';fileError.textContent='';fileDialog.showModal();fileName.focus();};
   fileName.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();$('studio-new-file-create').click();}});
+  const designer=createDesignCanvas({document:doc,development,notify,persist:persistState});
   const workArea = doc.querySelector('.work-area');workArea.id = 'studio-workspace-host';workArea.setAttribute('role', 'tabpanel');
   const binaryHost = el('section', undefined, {id: 'studio-binary-host', role: 'tabpanel', 'aria-label': 'Binary compilation workspace', hidden: ''});
   workArea.after(binaryHost);
@@ -74,6 +76,7 @@ export function createStudio({document: doc = globalThis.document, development, 
   function setPerspective(name, {save = true, enable = true} = {}) {
     prefs.perspective = studioPreferences({perspective: name}).perspective;
     const isBinary = prefs.perspective === 'binary';
+    designer.setActive(prefs.perspective==='design');
     workArea.hidden = isBinary;binaryHost.hidden = !isBinary;
     if (isBinary) showBinary();
     doc.body.classList.remove('preview-expanded');
@@ -202,17 +205,17 @@ export function createStudio({document: doc = globalThis.document, development, 
   ]));
   showTools('all', false);setPerspective('split', {save: false, enable: false});activateBottom('problems', false);syncSession();initializing = false;
   return {
-    options: () => ({...prefs}),
-    restore(value) {prefs = studioPreferences(value);showTools(prefs.tools, false);setPerspective(prefs.perspective, {save: false, enable: false});activateBottom(prefs.bottom, false);propertySearch.value = '';fontSize.value=String(prefs.fontSize);doc.body.style.setProperty('--studio-font-size',prefs.fontSize+'px');debug.refresh();},
+    options: () => ({...prefs,design:designer.options()}),
+    restore(value) {prefs = studioPreferences(value);designer.restore(value?.design);showTools(prefs.tools, false);setPerspective(prefs.perspective, {save: false, enable: false});activateBottom(prefs.bottom, false);propertySearch.value = '';fontSize.value=String(prefs.fontSize);doc.body.style.setProperty('--studio-font-size',prefs.fontSize+'px');debug.refresh();},
     render() {debug.refresh();},
     diagnostics(items) {diagnosticItems = items;filterDiagnostics();if (items.some(d => d.severity === 'error')) activateBottom('problems');},
     status(kind) {
       if (kind === 'building') {liveBadge.textContent = 'Building…';liveBadge.dataset.state = 'building';}
-      else if (kind === 'ready') {ready = true;liveBadge.textContent = 'Running';liveBadge.dataset.state = 'running';if (waitingPick) {waitingPick = false;development.pick(true);}}
+      else if (kind === 'ready') {ready = true;designer.ready();liveBadge.textContent = 'Running';liveBadge.dataset.state = 'running';if (waitingPick) {waitingPick = false;development.pick(true);}}
       else if (kind === 'failed') {liveBadge.textContent = 'Build failed';liveBadge.dataset.state = 'error';}
       else if (kind === 'error') {liveBadge.textContent = 'Runtime error';liveBadge.dataset.state = 'error';}
       syncSession();
     },
-    dispose() {if (disposed) return;disposed = true;unsubscribe();debug.dispose();propertyObserver.disconnect();off.forEach(fn => fn());doc.removeEventListener('keydown', keys, true);editor.removeEventListener('keydown', indent, true);binary?.remove();fileDialog.remove();toolbar.remove();}
+    dispose() {if (disposed) return;disposed = true;designer.dispose();unsubscribe();debug.dispose();propertyObserver.disconnect();off.forEach(fn => fn());doc.removeEventListener('keydown', keys, true);editor.removeEventListener('keydown', indent, true);binary?.remove();fileDialog.remove();toolbar.remove();}
   };
 }
