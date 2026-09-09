@@ -1,3 +1,4 @@
+import {createChangeReview} from './change-review.js';
 import {createGridTools} from './grid-tools.js';
 import {installEditorHistory} from './editor-history.js';
 import {createLanguageTools} from './language-tools.js';
@@ -9,14 +10,14 @@ import {lineOffset} from './navigation.js';
 
 /** The Studio client composes the existing compiler, development session and editor.
  * It never evaluates application code or takes ownership of preview runtime objects. */
-export function createStudio({document: doc = globalThis.document, development, active, open, closeDocument, reopenDocument, createDocument, shell, notify, persist, compile, documents}) {
+export function createStudio({workspace=null,document: doc = globalThis.document, development, active, open, closeDocument, reopenDocument, createDocument, shell, notify, persist, compile, documents}) {
   const $ = id => doc.getElementById(id), el = (tag, text, attrs) => element(doc, tag, text, attrs);
   const guard = fn => {try {return fn();} catch (error) {notify(error.message);}};
   let initializing = true;
   const persistState = () => {if (!initializing) persist();};
   let prefs = studioPreferences(), ready = false, waitingPick = false, binary = null, diagnosticItems = [], disposed = false;
   const off = [];
-  const sourceHistory=installEditorHistory({document:doc,active,documents,notify});
+  const sourceHistory=installEditorHistory({document:doc,active,documents,notify,shared:workspace?direction=>workspace.history(direction):null});
   const sourceTools=createLanguageTools({document:doc,documents,active,open,notify,history:sourceHistory});
   doc.body.classList.add('vs-studio');
   doc.title = 'Jailbreak Studio — C# · XAML · JavaScript';
@@ -67,6 +68,7 @@ export function createStudio({document: doc = globalThis.document, development, 
   fileName.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();$('studio-new-file-create').click();}});
   const gridTools=createGridTools({document:doc,development,notify});off.push(()=>gridTools.dispose());
   const designer=createDesignCanvas({document:doc,development,notify,persist:persistState});
+  const changes=workspace?createChangeReview({document:doc,workspace,development,open,notify,shell,compile}):null;if(changes)off.push(()=>changes.dispose());
   const workArea = doc.querySelector('.work-area');workArea.id = 'studio-workspace-host';workArea.setAttribute('role', 'tabpanel');
   const binaryHost = el('section', undefined, {id: 'studio-binary-host', role: 'tabpanel', 'aria-label': 'Binary compilation workspace', hidden: ''});
   workArea.after(binaryHost);
