@@ -8,5 +8,6 @@
   {"patch":"020-msil-runtime.patch","sha256":"a4b1bc5feb089d956e5450383b19c9cd6950c3e58870db6c16357cab39f28bd4","message":"feat(runtime): preserve binary frames initialization budgets and cleanup across debugger suspension"},
   {"patch":"021-msil-emitter.patch","sha256":"258579eaf67cdc849279812a8ea0b2536290c491c707f99d7880e6c8ce089d2a","message":"feat(msil): emit cooperative continuations from the shared verified instruction backend"},
   {"patch":"022-msil-client.patch","sha256":"394cf8eb5d83e9ad1cfbae35112b9662a8fb8d98442987c009c019ccc3f038e1","message":"feat(ide): step through DLL and NuGet calls in Studio and offline binary runners"},
-  {"patch":"023-msil-await-cleanup.patch","sha256":"a7a70921411b323ae1ebc6866b367205b5214fc264c1d995ebafca562d1d2cdc","message":"fix(debugger): preserve pending initializer waits when cancelling active IL cleanup"}
+  {"patch":"023-msil-await-cleanup.patch","sha256":"a7a70921411b323ae1ebc6866b367205b5214fc264c1d995ebafca562d1d2cdc","message":"fix(debugger): preserve pending initializer waits when cancelling active IL cleanup"},
+  {"patch":"030-imperative-designer.patch","sha256":"edf8ef3dc2cb3879854c18f2d40a10a8c8702f7d98e23f1465aa0381088b77e4","message":"feat(designer): trace final imperative CSharp property writes through local aliases"}
 ]
