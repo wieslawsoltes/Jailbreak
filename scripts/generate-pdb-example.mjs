@@ -1,21 +1,16 @@
+/** Derive the example from repository-owned, SDK-built package bytes. No network. */
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { compileBinaryProject } from '../packages/binary-project/index.js';
-
-// Build-time fixture utility, not an implicit network dependency in the IDE.
-// Keep the example package, its PDB identity and its original source together.
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const name = 'Probe.1.0.0.nupkg';
-const data = (await fs.readFile(path.join(root, 'tests/fixtures/pdb', name + '.base64'), 'utf8')).trim();
-const result = await compileBinaryProject([{ name, data }], { debug: true, targetFramework: 'net8.0' });
-if (!result.success || !result.debug?.sites?.length || !Object.keys(result.debug.sources ?? {}).length) {
-  throw new Error('PDB example fixture did not produce verified source symbols: ' + JSON.stringify(result.diagnostics));
-}
-const destination = path.join(root, 'examples/PdbLibrary');
-await fs.mkdir(destination, { recursive: true });
-const file = path.join(destination, 'library.binary.json');
-const temporary = file + '.tmp';
-await fs.writeFile(temporary, JSON.stringify({ inputs: [{ name, tfm: 'net8.0', data }] }) + '\n');
-await fs.rename(temporary, file);
-console.log('Generated PdbLibrary from verified fixture: ' + result.debug.sites.length + ' sequence points.');
+import {fileURLToPath} from 'node:url';
+import {compileWorkspaceInputs, encodeBinaryFile} from '../packages/binary-project/workspace.js';
+const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const fixture=JSON.parse(await fs.readFile(path.join(root,'tests/fixtures/msil/pdb.json'),'utf8'));
+const name='Jailbreak.PdbExamples.1.0.0.nupkg';
+const destination=path.join(root,'examples/PdbLibrary');
+const files={};
+for(const file of ['MainView.axaml','MainView.axaml.cs','PdbLibrary.csproj'])files[file]=await fs.readFile(path.join(destination,file),'utf8');
+files['library.binary.json']=encodeBinaryFile(name,Buffer.from(fixture.files[name].base64,'base64'));
+const result=await compileWorkspaceInputs(files,{debug:true,targetFramework:'net8.0'});
+if(!result.success||!result.debug?.sites?.some(p=>p.origin==='msil')||!Object.keys(result.debug.sources??{}).length)throw new Error('Fixture must produce verified source symbols: '+JSON.stringify(result.diagnostics));
+await fs.writeFile(path.join(destination,'library.binary.json'),files['library.binary.json']+'\n');
+console.log(`Generated PdbLibrary with ${result.debug.sites.filter(p=>p.origin==='msil').length} verified IL sequence points.`);

@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="PdbLibrary.MainView">
+  <StackPanel Margin="28" Spacing="16">
+    <TextBlock Text="Debug the library, not a substitute." FontSize="26" FontWeight="Bold" />
+    <TextBlock Text="A real managed DLL, Portable PDB and checksummed original C# source, delivered together in a NuGet package." TextWrapping="Wrap" />
+    <Button Content="Call library Sum" Click="Calculate" />
+    <TextBlock x:Name="Result" Text="Ready" FontSize="22" />
+  </StackPanel>
+</UserControl>
