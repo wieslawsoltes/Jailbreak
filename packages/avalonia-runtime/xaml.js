@@ -1,3 +1,4 @@
+import {vectorObject,vectorTypes} from './vector-model.js';
 import { Control } from './controls.js';
 import { ResourceDictionary } from './properties.js';
 import { createAttributeRuntime } from './attribute-lifecycle.js';
@@ -73,6 +74,7 @@ export function createXamlRuntime(api, types, documents) {
       if(!included)throw new Error('JB3016: Include was not linked: '+String(a.Source));
       return build(included.root,parent,scope);
     }
+    if(vectorTypes[node.type])return vectorObject(node,n=>build(n,parent,scope),v=>resolve(v,parent,scope));
     if(node.type==='SolidColorBrush')return new api.SolidColorBrush(resolve(a.Color??text,parent,scope));
     if(node.type==='Color')return api.Color.Parse(text||a.Value);
     if(node.type==='String'||node.type==='FontFamily')return text;

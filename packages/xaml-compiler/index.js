@@ -1,3 +1,4 @@
+import {vectorProperties,vectorChildren} from '../avalonia-runtime/vector-model.js';
 import { parseSelector } from '../avalonia-runtime/selectors.js';
 import { DiagnosticBag, escapeJs, splitTopLevel } from '../compiler-core/index.js';
 import { parseXml } from '../compiler-core/xml.js';
@@ -44,7 +45,7 @@ export function compileXaml(text, options = {}) {
     else if(uri&&!AVA.has(uri)&&uri!==X&&!uri.includes('markup-compatibility'))report('JB1102',`Unsupported XAML namespace '${uri}'`,node);
     if(local.includes('.')) {
       const property=local.slice(local.lastIndexOf('.')+1),owner=local.slice(0,local.lastIndexOf('.'));
-      const structuralProperties={Setter:['Value'],Style:['Setters'],DataTemplate:['Content'],ControlTemplate:['Content'],ControlTheme:['Setters'],ResourceDictionary:['MergedDictionaries']};
+      const structuralProperties={...Object.fromEntries(Object.entries(vectorChildren).map(([k,v])=>[k,[v]])),Setter:['Value'],Style:['Setters'],DataTemplate:['Content'],ControlTemplate:['Content'],ControlTheme:['Setters'],ResourceDictionary:['MergedDictionaries']};
       if(Object.hasOwn(controlDefinitions,owner)?!hasProperty(owner,property):!(structuralProperties[owner]?.includes(property)||customTypes.includes(type.slice(0,type.lastIndexOf('.')))))report('JB1113',`Unsupported property element '${type}'`,node);
       return {kind:'property',property,children:node.children.map(c=>lower(c,ns,context)).filter(Boolean),span:node.span};
     }
@@ -64,6 +65,7 @@ export function compileXaml(text, options = {}) {
       if(k==='x:Key'){try{key=qualify(parseMarkup(v));}catch(e){report('JB1107',e.message,node,k);}continue;}
       if(k==='x:DataType'||k==='x:CompileBindings') { report('JB1110',`${k} is accepted as metadata; typed compiled-binding validation is not implemented`,node,k,'warning');continue; }
       if(k.startsWith('x:')){report('JB1105',`Unsupported XAML directive ${k}`,node,k);continue;}
+      if(vectorProperties[type]&&!vectorProperties[type].includes(k))report('JB1114',`Unsupported vector property '${type}.${k}'`,node,k);
       if(builtin&&!hasProperty(type,k))report('JB1106',`Unsupported property '${type}.${k}'`,node,k);
       try {
         const value=qualify(parseMarkup(v));attributes[k]=k==='TargetType'&&typeof value==='string'?resolveName(value):value;
