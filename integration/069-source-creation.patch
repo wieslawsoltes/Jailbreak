@@ -1,0 +1,42 @@
+diff --git a/apps/ide/app.js b/apps/ide/app.js
+index 6d30513cf6b1b4eb17292010e53431da70dbd478..03330a8cbbc2e5406a3fa151df9a781920bb5faf 100644
+--- a/apps/ide/app.js
++++ b/apps/ide/app.js
+@@ -100,3 +100,12 @@ $('viewport').onchange=()=>{$('preview').style.width=$('viewport').value;};$('ex
+ $('theme').onclick=()=>{document.body.classList.toggle('light');try{localStorage.setItem('jailbreak.theme',document.body.classList.contains('light')?'light':'dark');}catch{}};
+-function createDocument(path){if(!path)throw new Error('Enter a source file path');if(!/^[\w .\-/]+\.(cs|a?xaml|csproj|props|targets|slnx)$/.test(path)||path.includes('..')||path.startsWith('/')){throw new Error('Use a relative C#, XAML, project, .props, .targets or .slnx path.');}if(Object.hasOwn(files,path)){openFile(path);return;}lastBuild=null;profiles.invalidate();files[path]=path.endsWith('.cs')?'namespace MyApp;\npublic class NewClass\n{\n}\n':/\.(csproj|props|targets)$/.test(path)?'<Project/>\n':path.endsWith('.slnx')?'<Solution/>\n':'<UserControl xmlns="https://github.com/avaloniaui">\n  <TextBlock Text="Hello"/>\n</UserControl>\n';journal.observe(files,'Create '+path);renderOptions();openFile(path);modified=true;}
++function createDocument(path){
++  if(!path)throw new Error('Enter a source file path');
++  if(!/^[\w .\-/]+\.(cs|a?xaml|csproj|props|targets|slnx)$/.test(path)||path.includes('..')||path.startsWith('/'))throw new Error('Use a relative C#, XAML, project, .props, .targets or .slnx path.');
++  if(Object.hasOwn(files,path)){openFile(path);return;}
++  if(!development.canEdit())throw new Error('Finish or cancel execution/reload before creating files');
++  const text=path.endsWith('.cs')?'namespace MyApp;\npublic class NewClass\n{\n}\n':/\.(csproj|props|targets)$/.test(path)?'<Project/>\n':path.endsWith('.slnx')?'<Solution/>\n':'<UserControl xmlns="https://github.com/avaloniaui">\n  <TextBlock Text="Hello"/>\n</UserControl>\n';
++  // Apply must validate all paths, budgets and collisions before source is changed.
++  journal.commit(files,sourceTransaction([{path,before:null,after:text}],'Create '+path));
++  refreshWorkspace(path);
++}
+ for(const button of document.querySelectorAll('.activity [data-panel]'))button.onclick=()=>{for(const b of document.querySelectorAll('.activity button'))b.classList.toggle('active',b===button);for(const p of document.querySelectorAll('.side-panel'))p.hidden=p.id!==button.dataset.panel;if(innerWidth<=800)document.querySelector('.sidebar').classList.toggle('mobile-open');};
+diff --git a/tests/browser/test_workspace_refactor.py b/tests/browser/test_workspace_refactor.py
+index 834a2b6d77b4fec68417d9232d4894b0068f1974..f84dad4ad0e0a7a15c8cbfc6063168e91027f9b7 100644
+--- a/tests/browser/test_workspace_refactor.py
++++ b/tests/browser/test_workspace_refactor.py
+@@ -97,2 +97,19 @@ class WorkspaceRefactorTests(unittest.TestCase):
+         self.page.keyboard.press('Escape');expect(self.page.locator('#studio-change-review')).to_be_focused();self.assertEqual(self.errors,[])
++    def test_new_file_validation_is_atomic_and_creation_is_undoable(self):
++        before=self.source('MainView.axaml.cs')
++        self.page.click('#new-file')
++        for path,expected in [('__proto__/Bad.cs','Invalid relative'),('mainview.axaml.cs','collision')]:
++            self.page.fill('#studio-new-file-name',path);self.page.click('#studio-new-file-create')
++            expect(self.page.locator('#studio-new-file-dialog [role=alert]')).to_contain_text(expected)
++        self.page.click('#studio-new-file-cancel')
++        with self.page.expect_download() as d:self.page.click('#save-workspace')
++        files=json.loads(Path(d.value.path()).read_text())['files']
++        self.assertNotIn('__proto__/Bad.cs',files);self.assertNotIn('mainview.axaml.cs',files)
++        self.assertEqual(files['MainView.axaml.cs'],before)
++        self.page.click('#new-file');self.page.fill('#studio-new-file-name','Models/Fresh.cs');self.page.click('#studio-new-file-create')
++        expect(self.page.locator('#current-path')).to_have_text('Models/Fresh.cs')
++        self.page.click('#source-undo')
++        self.assertEqual(self.page.locator('#files button').filter(has_text='Fresh.cs').count(),0)
++        self.page.click('#source-redo');self.assertIn('class NewClass',self.source('Models/Fresh.cs'))
++        self.assertEqual(self.errors,[])
+ if __name__=='__main__':unittest.main(verbosity=2)
