@@ -95,4 +95,21 @@ class WorkspaceRefactorTests(unittest.TestCase):
         self.assertLessEqual(self.page.locator('#workspace-review').bounding_box()['width'],390)
         self.assertEqual(self.page.evaluate('document.documentElement.scrollWidth'),390)
         self.page.keyboard.press('Escape');expect(self.page.locator('#studio-change-review')).to_be_focused();self.assertEqual(self.errors,[])
+    def test_new_file_validation_is_atomic_and_creation_is_undoable(self):
+        before=self.source('MainView.axaml.cs')
+        self.page.click('#new-file')
+        for path,expected in [('__proto__/Bad.cs','Invalid relative'),('mainview.axaml.cs','collision')]:
+            self.page.fill('#studio-new-file-name',path);self.page.click('#studio-new-file-create')
+            expect(self.page.locator('#studio-new-file-dialog [role=alert]')).to_contain_text(expected)
+        self.page.click('#studio-new-file-cancel')
+        with self.page.expect_download() as d:self.page.click('#save-workspace')
+        files=json.loads(Path(d.value.path()).read_text())['files']
+        self.assertNotIn('__proto__/Bad.cs',files);self.assertNotIn('mainview.axaml.cs',files)
+        self.assertEqual(files['MainView.axaml.cs'],before)
+        self.page.click('#new-file');self.page.fill('#studio-new-file-name','Models/Fresh.cs');self.page.click('#studio-new-file-create')
+        expect(self.page.locator('#current-path')).to_have_text('Models/Fresh.cs')
+        self.page.click('#source-undo')
+        self.assertEqual(self.page.locator('#files button').filter(has_text='Fresh.cs').count(),0)
+        self.page.click('#source-redo');self.assertIn('class NewClass',self.source('Models/Fresh.cs'))
+        self.assertEqual(self.errors,[])
 if __name__=='__main__':unittest.main(verbosity=2)

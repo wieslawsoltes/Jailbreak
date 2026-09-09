@@ -30,5 +30,6 @@
   "065-workspace-client.patch": "d997a64e98619e4dee3e609e87541241dedb7e2f6dc4ff00ef296150e568179d",
   "066-workspace-wiring.patch": "458da8aa639d74c4e6d2cdb1cea81349749e74b1d55c2f56794973cc5a3ecc0f",
   "067-workspace-gates.patch": "1602902a458dd1a16cbfbc9f51d3b30f5be905689348880f984840ad3aa7674a",
-  "068-designer-resize-gate.patch": "2f8171d87407d55cb7df8b91c4f61f61901e8e86abb3fe97933f649ce0f7752f"
+  "068-designer-resize-gate.patch": "2f8171d87407d55cb7df8b91c4f61f61901e8e86abb3fe97933f649ce0f7752f",
+  "069-source-creation.patch": "83180727ad7f5db82300f975ffc3e391f8f059ecb269ba3f0d70ed30068d20a1"
 }
