@@ -4,7 +4,7 @@ import {planReload,reloadScript} from './reload.js';
 import {mappedScript,updateGeneratedLocations} from './source-map.js';
 
 /** IDE client. The preview owns runtime objects; this client only sees serializable records. */
-export function createDevelopmentWorkbench({document:doc=globalThis.document,getFiles,getActive,openFile,applySource,build,persist,send,showGenerated=()=>{}}){
+export function createDevelopmentWorkbench({document:doc=globalThis.document,getFiles,getActive,openFile,applySource,build,persist,send,showGenerated=()=>{},sharedHistory=null}){
   const listeners=new Set();
   const publish=(event,payload={})=>{for(const listener of listeners)try{listener({event,payload});}catch(error){console.warn('Development tool observer:',error);}};
   const el=(tag,text='')=>{const e=doc.createElement(tag);e.textContent=text;return e;};
@@ -52,7 +52,7 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
   debuggerPanel.append(el('h3','C# / XAML / JavaScript debugger'),breakpointRow,logLabel,breakpointList,commandRow,watchRow,pauseState,frameList,controls,localRow,note,output);
   columns.append(hierarchy,properties,debuggerPanel);panel.append(style,header,status,columns);doc.querySelector('.main-area').append(panel);
   let designSelection=[];
-  let settings={enabled:false,hotReload:false,cooperativeDebug:false,nativeBreaks:true,breakOnThrow:false,breakpoints:[],watches:[]},history=new EditHistory(),selected=null,running=null,runningFiles=null,pending=null,revision=0,selecting=false;
+  let settings={enabled:false,hotReload:false,cooperativeDebug:false,nativeBreaks:true,breakOnThrow:false,breakpoints:[],watches:[]},history=sharedHistory??new EditHistory(),selected=null,running=null,runningFiles=null,pending=null,revision=0,selecting=false;
   const tell=text=>status.textContent=text;
   const guarded=fn=>{try{return fn();}catch(error){tell(error.message);}};
   function sync(){settings.enabled=enabled.checked;settings.cooperativeDebug=cooperative.checked;settings.hotReload=hot.checked;settings.nativeBreaks=native.checked;settings.breakOnThrow=throwBreak.checked;settings.watches=watches.value.split(',').map(s=>s.trim()).filter(Boolean);send('configure',{settings});persist();publish('settings',api.options());}
@@ -86,6 +86,7 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
   addBreakpoint.onclick=()=>{const active=getActive(),value=Number(line.value);if(!active||!Number.isInteger(value)||value<1)return tell('Choose a source file and a positive line');settings.breakpoints.push({language:active==='jailbreak-app.js'?'javascript':undefined,file:active,line:value,condition:condition.value,hitCount:Number(hitCount.value)||0,log:logpoint.checked});sync();renderBreakpoints();tell('Breakpoint stored. Open browser DevTools for native pause and stepping.');};
   breakNext.onclick=()=>send('break-next');generated.onclick=showGenerated;watchButton.onclick=()=>{sync();if(pausedTask!=null)send('debug-frame',{taskId:pausedTask,frameId:pausedFrame,paths:settings.watches});else send('watch');};
   const api={button,panel,
+    canEdit(){return !pending&&!pausedTasks.size;},
     editSource(make){return sourceEdit(make);},
     sourceForSelection(){const source=selected?.source;if(!source||selected.template)return null;const files=getFiles();if(files[source.file]!==runningFiles?.[source.file])throw new Error('Source differs from the running preview; rebuild before editing');return {...source,text:files[source.file]};},
     designConfigure(settings){send('design-configure',{settings});},
@@ -117,7 +118,7 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
     breakpointBound(file,line){return !!(running?.debug?.sites?.some(p=>(!settings.cooperativeDebug||p.cooperative||settings.nativeBreaks)&&(file==='jailbreak-app.js'?p.generatedLine===line:p.file===file&&p.line===line))||running?.debug?.xamlSites?.some(p=>p.file===file&&p.line===line));},
     options(){return {...settings,breakpoints:settings.breakpoints.map(p=>({...p})),watches:[...settings.watches]};},
     compileOptions(){return {debug:settings.enabled,cooperativeDebug:settings.enabled&&settings.cooperativeDebug};},
-    set(value={}){settings={enabled:!!value.enabled,cooperativeDebug:!!value.cooperativeDebug,hotReload:!!value.hotReload,nativeBreaks:value.nativeBreaks!==false,breakOnThrow:!!value.breakOnThrow,breakpoints:Array.isArray(value.breakpoints)?value.breakpoints.slice(0,1000):[],watches:Array.isArray(value.watches)?value.watches.slice(0,50):[]};enabled.checked=settings.enabled;cooperative.checked=settings.cooperativeDebug;hot.checked=settings.hotReload;native.checked=settings.nativeBreaks;throwBreak.checked=settings.breakOnThrow;watches.value=settings.watches.join(', ');history=new EditHistory();running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();propertyList.replaceChildren();pausedTasks.clear();pausedTask=pausedFrame=null;debugButtons.forEach(b=>b.disabled=true);renderBreakpoints();designSelection=[];publish('workspace-reset');},
+    set(value={}){settings={enabled:!!value.enabled,cooperativeDebug:!!value.cooperativeDebug,hotReload:!!value.hotReload,nativeBreaks:value.nativeBreaks!==false,breakOnThrow:!!value.breakOnThrow,breakpoints:Array.isArray(value.breakpoints)?value.breakpoints.slice(0,1000):[],watches:Array.isArray(value.watches)?value.watches.slice(0,50):[]};enabled.checked=settings.enabled;cooperative.checked=settings.cooperativeDebug;hot.checked=settings.hotReload;native.checked=settings.nativeBreaks;throwBreak.checked=settings.breakOnThrow;watches.value=settings.watches.join(', ');history=sharedHistory??new EditHistory();running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();propertyList.replaceChildren();pausedTasks.clear();pausedTask=pausedFrame=null;debugButtons.forEach(b=>b.disabled=true);renderBreakpoints();designSelection=[];publish('workspace-reset');},
     running(next,sources){pausedTasks.clear();pausedTask=pausedFrame=null;pauseState.textContent='No suspended invocation';debugButtons.forEach(b=>b.disabled=true);pending=null;revision=0;accept(next,sources);tell(settings.enabled?'Development session running.':'Release preview running.');publish('session-starting');},
     failed(){tell(running?'Build failed; previous running app was preserved.':'Build failed.');},
     stop(){running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();pausedTasks.clear();pausedTask=pausedFrame=null;frameList.replaceChildren();debugButtons.forEach(b=>b.disabled=true);pauseState.textContent='No suspended invocation';designSelection=[];publish('session-stopped');},
@@ -131,7 +132,7 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
       else if(event==='debug-frame')output.textContent=JSON.stringify(payload,null,2);
       else if(event==='tree'){tree.replaceChildren();const rows=new Map(payload.map(r=>[r.id,r]));for(const node of payload){let depth=0,parent=rows.get(node.parent);while(parent&&depth<20){depth++;parent=rows.get(parent.parent);}const button=el('button','  '.repeat(depth)+node.type+(node.name?' #'+node.name:''));button.type='button';button.dataset.visualId=node.id;button.setAttribute('role','treeitem');button.setAttribute('aria-selected',String(node.selected));button.onclick=e=>send('select',{id:node.id,additive:e.shiftKey||e.ctrlKey||e.metaKey});tree.append(button);}}
       else if(event==='selection-changed'){
-        designSelection=payload.items??[];for(const button of tree.querySelectorAll('[data-visual-id]'))button.setAttribute('aria-selected',String(designSelection.some(i=>i.id===button.dataset.visualId)));
+        designSelection=payload.items??[];if(selected&&!designSelection.some(item=>item.id===selected.id)){selected=null;selection.textContent='Select a visual to inspect its source.';propertyList.replaceChildren();runtimeProperties.textContent='';}for(const button of tree.querySelectorAll('[data-visual-id]'))button.setAttribute('aria-selected',String(designSelection.some(i=>i.id===button.dataset.visualId)));
       }
       else if(event==='design-edit')guarded(()=>{
         if(payload.revision!==revision||pending||pausedTasks.size)throw new Error('Design edit is stale or an execution/reload is suspended');
