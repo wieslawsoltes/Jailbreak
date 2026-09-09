@@ -43,6 +43,9 @@ class DesignCanvasTests(unittest.TestCase):
         expect(self.page.locator('#design-artboard-size')).to_contain_text('50%')
         self.assertEqual(frame.evaluate('innerWidth'),960)
         self.page.select_option('#design-device','390x844')
+        # The cross-process iframe resize is asynchronous even after select_option.
+        # Require the real logical viewport, not merely its parent's CSS attribute.
+        frame.wait_for_function('innerWidth === 390',timeout=5000)
         self.assertEqual(frame.evaluate('innerWidth'),390)
         self.assertEqual(frame.evaluate('appHandle.root.uid'),root)
         self.assertEqual(self.source('MainView.axaml'),before)
