@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {compileAssembly, readAssembly} from '../packages/msil-compiler/verified.js';
 import {convertNuget} from '../packages/nuget/index.js';
 import {createBinaryRuntime} from '../packages/msil-runtime/index.js';
-import {exceptionCases} from '../tests/helpers/exception-cases.js';
+import {exceptionCases,exceptionCasesAsync} from '../tests/helpers/exception-cases.js';
 
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const out=path.join(root,'test-results/exceptions-clr');
@@ -29,14 +29,17 @@ const model=readAssembly(bytes);
 assert.deepEqual(model.methods.map(m=>({method:m.name,token:m.token,
   clauses:m.body.exceptionClauses.map(c=>({...c,catchType:c.catchType?.name??null}))})),regions);
 const reports=[];
-for(const [kind,compiled] of [['DLL',compileAssembly(bytes)],['NuGet',await convertNuget(packageBytes,{targetFramework:'net8.0'})]]){
+for(const [kind,compiled] of [['DLL',compileAssembly(bytes)],['NuGet',await convertNuget(packageBytes,{targetFramework:'net8.0'})],['Cooperative DLL',compileAssembly(bytes,{debug:true,cooperativeDebug:true})],['Cooperative NuGet',await convertNuget(packageBytes,{targetFramework:'net8.0',debug:true,cooperativeDebug:true})]]){
   assert.equal(compiled.success,true,JSON.stringify(compiled.diagnostics));
   const MS=createBinaryRuntime();new Function('MS',compiled.code)(MS);
-  const actual=exceptionCases(MS.getType('Jailbreak.ExceptionExamples','ExceptionExamples.Recovery'));
+  const Type=MS.getType('Jailbreak.ExceptionExamples','ExceptionExamples.Recovery');
+  const co=compiled.debug?.cooperative?MS.createDebugger():null;
+  const actual=co?await exceptionCasesAsync(new Proxy({}, {get:(_,name)=>(...args)=>co.start(Type,name,args).promise})):exceptionCases(Type);
+  co?.dispose();
   assert.deepEqual(actual,oracle,`${kind} exception values, types, identity and cleanup order must match CLR`);
   reports.push({kind,methods:compiled.stats.methods,cases:actual.length,actual});
 }
 const sha256=data=>createHash('sha256').update(data).digest('hex');
 await fs.writeFile(path.join(out,'comparison.json'),JSON.stringify({passed:true,
   dllSha256:sha256(bytes),packageSha256:sha256(packageBytes),metadataMatches:true,oracle,reports},null,2)+'\n');
-console.log(`Fresh SDK DLL and NuGet each match all ${oracle.length} CLR exception/checked-arithmetic cases and exception metadata.`);
+console.log(`Fresh SDK DLL/NuGet and both cooperative conversions each match all ${oracle.length} CLR exception/checked-arithmetic cases and exception metadata.`);
