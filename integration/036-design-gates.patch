@@ -1,0 +1,216 @@
+diff --git a/README.md b/README.md
+index 3709a6e..7fd430e 100644
+--- a/README.md
++++ b/README.md
+@@ -87 +87,8 @@ Remaining gaps include full C# semantics and .NET APIs, full SDK/MSBuild/NuGet/s
+ Independent implementation; see LICENSE. Original Avalonia fixtures retain their separate MIT copyright/license notices. This is not an official Avalonia distribution.
++
++## Source-backed design canvas
++
++The Studio Designer now has logical-pixel artboards, zoom/rulers, multi-selection,
++snapping, alignment/distribution and undoable source edits. See [the canvas
++workflow and boundaries](docs/milestone-design-canvas.md) and [flow-ordered C#
++property editing](docs/milestone-imperative-designer.md).
+diff --git a/docs/mandatory-targets-status.md b/docs/mandatory-targets-status.md
+index 921154c..fd9829a 100644
+--- a/docs/mandatory-targets-status.md
++++ b/docs/mandatory-targets-status.md
+@@ -37 +37,10 @@ machine-code symbols, legacy native embedded source and native async metadata
+ remain outside the explicitly tested profile.
++
++## Designer canvas and imperative source progress
++
++[The artboard and multi-selection milestone](milestone-design-canvas.md) connects
++real geometry operations to existing source transactions and hot reload.
++[Flow-ordered local C# analysis](milestone-imperative-designer.md) targets final
++literal writes through aliases; it does not claim unrestricted imperative
++round-tripping. Remaining control-flow/ownership analysis and complete
++ControlCatalog/async/framework targets retain their original acceptance gates.
+diff --git a/docs/milestone-design-canvas.md b/docs/milestone-design-canvas.md
+new file mode 100644
+index 0000000..de72c51
+--- /dev/null
++++ b/docs/milestone-design-canvas.md
+@@ -0,0 +1,74 @@
++# Source-backed designer canvas
++
++The Studio Designer perspective now exposes the real running application as a
++logical-pixel artboard. It is not a screenshot or a second UI implementation.
++The source compiler, opaque-origin preview, debugger, designer transactions and
++hot-reload runtime remain the execution path.
++
++## Artboard and selection
++
++Desktop, tablet and phone presets change the preview's actual viewport size.
++25–200% zoom and Fit change only presentation; they preserve runtime object
++identity and do not rewrite source. Rulers describe unzoomed design pixels.
++Grid visibility, 8-pixel snapping, smart guides and artboard preferences persist
++with the source workspace. Pan supports pointer/touch dragging and arrow keys.
++Switching Code, Split, Designer and Binary views does not reconstruct the app.
++
++Shift/Ctrl-click in the hierarchy or on the canvas toggles up to 128 selected
++visuals. The primary selection has a named movement handle and a resize handle.
++Dragging previews outlines only, not application mutations. Pointer-up commits
++one source transaction; Escape/pointer cancellation discards it. Shift constrains
++movement or aspect ratio; Alt bypasses snapping and guides. Zoomed pointer
++coordinates are interpreted inside the iframe in logical pixels.
++
++## Geometry editing
++
++X/Y/W/H fields, six edge/center alignments, equal-gap horizontal/vertical
++distribution and matching the first selected size produce source edits for the
++whole selection. Multi-edit transactions apply descending original source spans
++so inserted attributes cannot invalidate later positions. Undo/redo restores the
++entire edit, and compatible hot reload retains control instances, typed input,
++fields and event subscriptions.
++
++Movement/alignment/distribution require same-document, same-Canvas XAML siblings
++with literal Left/Top coordinates, no margins, opposing anchors or transforms.
++Repeated template origins, ambiguous ownership, C#-constructed layout, expression
++values and mixed parents are rejected rather than reassigned guessed coordinates.
++The existing single-control property/resize designer still handles its separate
++supported XAML and C# profiles. Generic Grid/StackPanel drag constraint solving,
++rotation, free reparenting and multi-selection resizing are not implemented here.
++
++Stale source text, paused execution, pending reloads and revision changes reject
++layout intents before source is changed. Source mutation never occurs during
++pointer movement. Changed source must be rebuilt before using its old geometry.
++
++## Reusable modules
++
++- `design-geometry.js`: bounded pure alignment, distribution, movement and guides.
++- `design-transactions.js`: one preimage-checked source transaction per selection.
++- `design-surface.js`: preview-owned overlays, selection, gestures and cleanup.
++- `workbench/design-canvas.js`: Studio artboard, rulers and geometry inspector.
++
++The existing authenticated parent/frame/session-channel protocol carries only
++serializable geometry and source-edit intents. Controls and execution stay in
++the script-only sandbox. No application source is evaluated by the IDE designer.
++
++## Verification and example
++
++Choose **Designer Workspace**, open **Designer**, enable **Hot reload**, select
++the three action buttons with Shift, then align their top edges or distribute
++them. Type into the input beforehand: its text and the application root survive.
++The C#-constructed button demonstrates final-assignment source editing from
++[the imperative designer milestone](milestone-imperative-designer.md).
++
++Ten geometry/transaction tests cover bounding math, negative cases, budget limits,
++CRLF preservation, protected bindings and undo/redo. Eight browser tests cover
++actual multi-selection, alignment, distribution, snapped dragging, Escape,
++zoomed physical pointer coordinates, stale source refusal, pan, device changes,
++C# editing, preserved app identity and mobile overflow. Existing Studio and
++native/cooperative debugger tests remain mandatory. The full hosted HTTP browser
++suite is distinct from offline tests; local environments that block navigation
++must not count those blocked tests as passing.
++
++Full unmodified ControlCatalog, unrestricted C# round-tripping and complete
++language/async/framework compatibility remain mandatory, not implied by this UI.
+diff --git a/examples/DesignerWorkspace/DesignerWorkspace.csproj b/examples/DesignerWorkspace/DesignerWorkspace.csproj
+new file mode 100644
+index 0000000..d3b2f03
+--- /dev/null
++++ b/examples/DesignerWorkspace/DesignerWorkspace.csproj
+@@ -0,0 +1 @@
++<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>
+diff --git a/examples/DesignerWorkspace/MainView.axaml b/examples/DesignerWorkspace/MainView.axaml
+new file mode 100644
+index 0000000..1acd291
+--- /dev/null
++++ b/examples/DesignerWorkspace/MainView.axaml
+@@ -0,0 +1,41 @@
++<UserControl xmlns="https://github.com/avaloniaui"
++             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
++             x:Class="DesignerWorkspace.MainView">
++  <Grid RowDefinitions="Auto,*" Background="#F4F6FA">
++    <Border Padding="28,22" Background="White" BorderBrush="#E2E6EF" BorderThickness="0,0,0,1">
++      <Grid ColumnDefinitions="*,Auto">
++        <StackPanel Spacing="4">
++          <TextBlock Text="FORM / FUNCTION" FontSize="11" Foreground="#6F62CA" FontWeight="Bold" />
++          <TextBlock Text="Design workspace" FontSize="25" FontWeight="Bold" Foreground="#222C42" />
++        </StackPanel>
++        <Border Grid.Column="1" Background="#EDF8F1" CornerRadius="20" Padding="14,7" VerticalAlignment="Center">
++          <TextBlock x:Name="Activity" Text="Ready to create" Foreground="#297245" FontSize="12" />
++        </Border>
++      </Grid>
++    </Border>
++    <Canvas Grid.Row="1" x:Name="Board" Height="490" Margin="24">
++      <!-- These cards and actions are ordinary source-backed Avalonia controls. -->
++      <Border x:Name="Hero" Canvas.Left="16" Canvas.Top="16" Width="380" Height="164" Background="#6252C9" CornerRadius="14" Padding="24">
++        <StackPanel Spacing="10">
++          <TextBlock Text="FROM SOURCE TO SURFACE" FontSize="10" Foreground="#DBD6FF" FontWeight="Bold" />
++          <TextBlock Text="Make room for ideas." FontSize="26" FontWeight="Bold" Foreground="White" />
++          <TextBlock Text="Shape the interface. Keep the source.&#10;Your running application stays right here." FontSize="13" Foreground="#E2DFFF" TextWrapping="Wrap" />
++        </StackPanel>
++      </Border>
++      <Border x:Name="Metrics" Canvas.Left="420" Canvas.Top="32" Width="228" Height="148" Background="White" BorderBrush="#E2E6EF" BorderThickness="1" CornerRadius="14" Padding="22">
++        <StackPanel Spacing="9">
++          <TextBlock Text="ONE CONNECTED WORKSPACE" FontSize="10" Foreground="#748198" FontWeight="Bold" />
++          <TextBlock Text="Code. Design. Debug." FontSize="18" Foreground="#27344B" FontWeight="Bold" />
++          <TextBlock Text="Real controls. Real interactions." FontSize="12" Foreground="#748198" />
++        </StackPanel>
++      </Border>
++      <TextBlock Canvas.Left="16" Canvas.Top="214" Width="600" Height="28" Text="ACTIONS / Shift-click these controls, then align or distribute" FontSize="11" FontWeight="Bold" Foreground="#748198" />
++      <Button x:Name="PreviewAction" Canvas.Left="16" Canvas.Top="252" Width="160" Height="44" Content="Preview" Click="Activate" Background="White" />
++      <Button x:Name="ValidateAction" Canvas.Left="240" Canvas.Top="268" Width="160" Height="44" Content="Validate" Click="Activate" Background="White" />
++      <Button x:Name="PublishAction" Canvas.Left="488" Canvas.Top="284" Width="160" Height="44" Content="Publish" Click="Activate" Background="#6252C9" Foreground="White" />
++      <TextBox x:Name="Note" Canvas.Left="16" Canvas.Top="348" Width="380" Height="44" Text="Type here. Design edits retain this state." />
++      <StackPanel x:Name="CodeHost" Canvas.Left="420" Canvas.Top="348" Width="228" Height="44" />
++      <TextBlock Canvas.Left="16" Canvas.Top="426" Width="650" Height="24" Text="Literal layout edits are one source transaction. No screenshot substitutes." FontSize="11" Foreground="#8793A6" />
++    </Canvas>
++  </Grid>
++</UserControl>
+diff --git a/examples/DesignerWorkspace/MainView.axaml.cs b/examples/DesignerWorkspace/MainView.axaml.cs
+new file mode 100644
+index 0000000..71b6a0f
+--- /dev/null
++++ b/examples/DesignerWorkspace/MainView.axaml.cs
+@@ -0,0 +1,23 @@
++using Avalonia.Controls;
++namespace DesignerWorkspace;
++
++public partial class MainView : UserControl
++{
++    private int count = 0;
++    public MainView()
++    {
++        InitializeComponent();
++        var code = new Button { Name = "CodeAction", Content = "Initializer value" };
++        var action = code;
++        action.Content = "Created in C#";
++        action.Width = 180;
++        action.Height = 40;
++        code.Click += Activate;
++        CodeHost.Children.Add(code);
++    }
++    private void Activate(object sender, RoutedEventArgs e)
++    {
++        count += 1;
++        Activity.Text = $"{count} actions completed";
++    }
++}
+diff --git a/examples/DesignerWorkspace/README.md b/examples/DesignerWorkspace/README.md
+new file mode 100644
+index 0000000..802b257
+--- /dev/null
++++ b/examples/DesignerWorkspace/README.md
+@@ -0,0 +1,19 @@
++# Designer workspace
++
++Run this actual C#/XAML sample, then switch to Designer. Enable Hot reload. Select
++Preview, then Shift-click Validate and Publish. Align Top and Distribute
++Horizontally write their literal Canvas coordinates as one undoable source edit.
++Drag the selection label to move the group. Snap uses an 8-pixel grid; Alt bypasses
++snapping, Shift constrains the movement axis, and Escape cancels an unfinished drag.
++
++Changing zoom never changes the application viewport dimensions, reconstructed
++control identities or source. Device presets change the actual iframe viewport;
++this is not a screenshot. Split/Code/Binary views retain the existing iframe.
++
++Select CodeAction in the hierarchy: the inspector shows `Created in C#`, from the
++last `action.Content` assignment rather than the overwritten initializer. Editing
++it updates that exact assignment. Constructor edits still require an explicit
++restart; changing the source is not confused with method-body hot reload.
++
++This example exercises the supported literal Canvas and straight-line C# designer
++profile. Arbitrary control flow and dynamic property expressions remain protected.

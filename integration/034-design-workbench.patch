@@ -1,0 +1,127 @@
+diff --git a/apps/ide/style.css b/apps/ide/style.css
+index b1a9457..6fc17ca 100644
+--- a/apps/ide/style.css
++++ b/apps/ide/style.css
+@@ -131 +131,29 @@ body.wb-studio{--wb-explorer:230px;--wb-inspector:330px;--wb-bottom:160px;--wb-s
+ @media(max-width:380px){.wb-studio .workspace-control select{max-width:100px}.wb-studio .project-symbol{display:none}.wb-studio #wb-view-mode{max-width:85px}.wb-studio .brand strong{display:none}}
++/* Source-backed artboard: preview pixels do not change when zooming the frame. */
++.design-artboard{display:contents}
++.design-ruler{display:none}.design-pan-layer{display:none}
++.design-canvas-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:7px 10px;border-bottom:1px solid var(--border);background:var(--panel);flex:none;font-size:11px}
++.design-canvas-toolbar button{display:flex;align-items:center;gap:5px;padding:4px 7px;font-size:10px;border:1px solid transparent;border-radius:4px;white-space:nowrap}
++.design-canvas-toolbar button[aria-pressed=true]{color:var(--accent);background:var(--hover);border-color:var(--border)}
++.design-canvas-toolbar select{padding:4px 6px;font-size:10px;max-width:185px}.design-toolbar-divider{height:18px;width:1px;background:var(--border);margin:0 3px}
++.designer-artboard-active .preview-stage{display:block!important;position:relative;overflow:auto!important;padding:36px 30px 30px!important;background:var(--editor)!important;scrollbar-width:thin}
++.designer-artboard-active .preview-stage.design-grid-visible{background-image:radial-gradient(var(--line) .7px,transparent .7px)!important;background-size:12px 12px!important}
++.designer-artboard-active .design-artboard{display:block;position:relative;width:var(--design-scaled-width);height:var(--design-scaled-height);flex:none;margin:0 auto;box-shadow:0 12px 50px #0005;outline:1px solid var(--border)}
++.designer-artboard-active #preview{position:absolute!important;left:0;top:0;width:var(--design-width)!important;height:var(--design-height)!important;min-width:0!important;max-width:none!important;min-height:0!important;border-radius:0!important;transform:scale(var(--design-zoom));transform-origin:0 0}
++.designer-artboard-active .design-ruler{display:block;position:absolute;color:var(--muted);font:9px/1.3 ui-monospace,monospace;pointer-events:none}
++.design-ruler.top{left:0;right:0;top:-24px;height:19px;border-bottom:1px solid var(--line);background:repeating-linear-gradient(90deg,var(--line) 0,var(--line) 1px,transparent 1px,transparent var(--design-ruler-step));background-position:bottom;background-size:100% 5px;background-repeat:no-repeat}
++.design-ruler.left{top:0;bottom:0;left:-26px;width:21px;border-right:1px solid var(--line);background:repeating-linear-gradient(0deg,var(--line) 0,var(--line) 1px,transparent 1px,transparent var(--design-ruler-step));background-position:right;background-size:5px 100%;background-repeat:no-repeat}
++.design-ruler span{position:absolute}.design-ruler.top span{top:0;transform:translateX(3px)}.design-ruler.left span{left:0;writing-mode:vertical-rl;transform:rotate(180deg) translateY(-3px)}
++.design-canvas-status{display:flex;gap:12px;align-items:center;padding:6px 12px;background:var(--panel);border-top:1px solid var(--border);font-size:10px;color:var(--muted);flex:none;min-width:0}
++#design-selection-label{color:var(--accent);font-weight:600;white-space:nowrap}.design-canvas-hint{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}#design-artboard-size{margin-left:auto;white-space:nowrap}
++.design-layout-inspector{border:1px solid var(--border);background:var(--editor);padding:10px;margin:9px 0;border-radius:6px}
++.design-layout-heading{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:10px;letter-spacing:.6px}.design-muted{color:var(--muted);letter-spacing:0;font-size:9px}
++#development-panel .design-geometry-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:10px 0}
++#development-panel .design-geometry-fields label{display:flex;gap:7px;font-size:10px;color:var(--muted)}#development-panel .design-geometry-fields input{width:100%;min-width:0;background:var(--panel);font:11px ui-monospace,monospace;padding:6px}
++#development-panel .design-align-actions{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:10px}
++#development-panel .design-align-actions button{font-size:15px;min-height:28px;padding:3px}
++#development-panel .design-align-actions button:disabled,#design-apply-geometry:disabled{opacity:.35;cursor:default}
++#development-panel #design-layout-note{font-size:10px;line-height:1.5;margin-bottom:0}
++.designer-artboard-active .design-pan-layer:not([hidden]){display:block;position:sticky;bottom:0;left:0;width:100%;height:100%;min-height:100%;z-index:6;cursor:grab;touch-action:none;margin-top:calc(-1 * var(--design-scaled-height));background:transparent}
++.design-pan-layer:active{cursor:grabbing}
++@media(max-width:800px){.design-canvas-toolbar{gap:3px;padding:5px}.design-canvas-toolbar button{font-size:9px;padding:4px 5px}.design-canvas-toolbar select{max-width:145px}.design-canvas-hint{display:none}.designer-artboard-active .preview-stage{min-height:180px}.design-canvas-status{font-size:9px;padding:5px 7px}#design-guides{display:none}}
+diff --git a/packages/workbench/design-canvas.js b/packages/workbench/design-canvas.js
+new file mode 100644
+index 0000000..150781a
+--- /dev/null
++++ b/packages/workbench/design-canvas.js
+@@ -0,0 +1,87 @@
++import {element,action} from './studio-ui.js';
++import {validateSelection} from '../development/design-geometry.js';
++
++export function canvasPreferences(input={}) {
++  const bounded=(key,def,min,max)=>Number.isFinite(input?.[key])?Math.min(max,Math.max(min,input[key])):def;
++  return {width:Math.round(bounded('width',960,240,4096)),height:Math.round(bounded('height',640,160,4096)),zoom:bounded('zoom',1,.25,2),grid:input?.grid!==false,snap:input?.snap===true,guides:input?.guides!==false};
++}
++/** Real iframe artboard. Zoom changes presentation only; layout remains in design pixels. */
++export function createDesignCanvas({document:doc=globalThis.document,development,notify,persist}) {
++  const el=(tag,text,attrs)=>element(doc,tag,text,attrs),$=id=>doc.getElementById(id);
++  const frame=$('preview'),stage=doc.querySelector('.preview-stage'),pane=doc.querySelector('.preview-pane');
++  let prefs=canvasPreferences(),active=false,items=[],tool='select',panning=null;
++  const guard=fn=>{try{return fn();}catch(error){notify(error.message);}};
++  const toolbar=el('div',undefined,{id:'design-canvas-toolbar',class:'design-canvas-toolbar',role:'toolbar','aria-label':'Artboard, zoom and layout tools',hidden:''});
++  pane.insertBefore(toolbar,stage);
++  // Install once before initial application startup. Later perspective switches do
++  // not reparent the iframe, so its execution context and hot-reload state survive.
++  const board=el('div',undefined,{class:'design-artboard'}),top=el('div',undefined,{class:'design-ruler top','aria-hidden':'true'}),left=el('div',undefined,{class:'design-ruler left','aria-hidden':'true'});
++  stage.insertBefore(board,frame);board.append(frame,top,left);
++  const pan=el('div',undefined,{class:'design-pan-layer',hidden:'',tabindex:'0','aria-label':'Pan design workspace'});stage.append(pan);
++  const make=(id,label,glyph,fn)=>action(doc,id,label,glyph,()=>guard(fn));
++  const select=make('design-select','Select','design',()=>setTool('select')),hand=make('design-hand','Pan',null,()=>setTool('pan'));
++  select.title='Select visuals · Shift-click adds to selection';hand.title='Pan artboard with pointer or touch';toolbar.append(select,hand);
++  const divider=()=>el('span',undefined,{class:'design-toolbar-divider','aria-hidden':'true'});
++  const preset=el('select',undefined,{id:'design-device','aria-label':'Design artboard preset'});
++  for(const [v,label]of [['960x640','Desktop · 960 × 640'],['1280x800','Desktop · 1280 × 800'],['768x1024','Tablet · 768 × 1024'],['390x844','Phone · 390 × 844'],['custom','Custom artboard']])preset.append(el('option',label,{value:v}));
++  preset.onchange=()=>{if(preset.value==='custom')return;const [width,height]=preset.value.split('x').map(Number);prefs={...prefs,width,height};apply();save();};
++  const zoom=el('select',undefined,{id:'design-zoom','aria-label':'Design zoom'});
++  for(const [v,label]of [['.25','25%'],['.5','50%'],['.75','75%'],['1','100%'],['1.25','125%'],['1.5','150%'],['2','200%'],['custom','Fit']])zoom.append(el('option',label,{value:v}));
++  zoom.onchange=()=>{if(zoom.value==='custom')fit();else{prefs.zoom=Number(zoom.value);apply();save();}};
++  const fitButton=make('design-fit','Fit',null,fit);
++  const grid=make('design-grid','Grid',null,()=>{prefs.grid=!prefs.grid;apply();save();}),snap=make('design-snap','Snap · 8px',null,()=>{prefs.snap=!prefs.snap;apply();save();}),guides=make('design-guides','Smart guides',null,()=>{prefs.guides=!prefs.guides;apply();save();});
++  toolbar.append(divider(),preset,zoom,fitButton,divider(),grid,snap,guides);
++  const status=el('div',undefined,{class:'design-canvas-status',hidden:''}),selectionLabel=el('span','No selection',{id:'design-selection-label'}),dimensions=el('span','',{id:'design-artboard-size'});
++  status.append(selectionLabel,el('span','Shift-click · multi-select  /  Drag label · move  /  Alt · unsnapped',{class:'design-canvas-hint'}),dimensions);stage.after(status);
++  const inspector=el('section',undefined,{id:'design-layout-inspector',class:'design-layout-inspector'}),header=el('div',undefined,{class:'design-layout-heading'});
++  header.append(el('strong','LAYOUT'),el('span','Source-backed edits',{class:'design-muted'}));inspector.append(header);
++  const geometry=el('div',undefined,{class:'design-geometry-fields'}),fields={};
++  for(const [key,label]of [['x','X'],['y','Y'],['width','W'],['height','H']]){
++    const input=el('input',undefined,{type:'number',step:1,id:'design-'+key,'aria-label':'Selection '+key}),wrapper=el('label',label);wrapper.append(input);fields[key]=input;geometry.append(wrapper);
++  }
++  const applyGeometry=make('design-apply-geometry','Apply bounds',null,()=>{
++    if(items.length!==1)throw new Error('Select one movable visual for bounds editing');
++    const values=Object.fromEntries(Object.entries(fields).map(([key,input])=>[{x:'Canvas.Left',y:'Canvas.Top',width:'Width',height:'Height'}[key],input.value===''?NaN:Number(input.value)]));development.setGeometry(values);
++  });inspector.append(geometry,applyGeometry);
++  const alignment=el('div',undefined,{class:'design-align-actions',role:'toolbar','aria-label':'Align and distribute selection'}),actions=new Map();
++  for(const [key,label,short]of [['left','Align left','⇤'],['center-x','Align horizontal centers','↔'],['right','Align right','⇥'],['top','Align top','↥'],['center-y','Align vertical centers','↕'],['bottom','Align bottom','↧'],['distribute-x','Distribute horizontally','H⋯'],['distribute-y','Distribute vertically','V⋯'],['same-width','Match first selected width','W='],['same-height','Match first selected height','H=']]){
++    const button=make('design-align-'+key,label,null,()=>development.arrange(key));button.textContent=short;actions.set(key,button);alignment.append(button);
++  }
++  const note=el('p','Select literal XAML children in a Canvas to move, align or distribute.',{id:'design-layout-note'});
++  inspector.append(alignment,note);$('dev-property-panel').querySelector('h3').after(inspector);
++  function save(){persist();}
++  function configure(){if(development.options().enabled)development.designConfigure({snap:prefs.snap?8:0,guides:prefs.guides});}
++  function setTool(value){tool=value;pan.hidden=!active||tool!=='pan';select.setAttribute('aria-pressed',String(value==='select'));hand.setAttribute('aria-pressed',String(value==='pan'));if(active)development.pick(value==='select');}
++  function fit(){prefs.zoom=Math.min(2,Math.max(.25,Math.floor(Math.min((stage.clientWidth-70)/prefs.width,(stage.clientHeight-70)/prefs.height)*100)/100));apply();save();}
++  function rulers(){
++    top.replaceChildren();left.replaceChildren();const interval=prefs.zoom<.5?200:100;
++    for(let n=0;n<=prefs.width;n+=interval){const label=el('span',String(n));label.style.left=n*prefs.zoom+'px';top.append(label);}
++    for(let n=0;n<=prefs.height;n+=interval){const label=el('span',String(n));label.style.top=n*prefs.zoom+'px';left.append(label);}
++  }
++  function apply(){
++    prefs=canvasPreferences(prefs);doc.body.classList.toggle('designer-artboard-active',active);toolbar.hidden=status.hidden=!active;
++    for(const [key,value]of Object.entries({'--design-width':prefs.width+'px','--design-height':prefs.height+'px','--design-zoom':prefs.zoom,'--design-scaled-width':prefs.width*prefs.zoom+'px','--design-scaled-height':prefs.height*prefs.zoom+'px','--design-ruler-step':100*prefs.zoom+'px'}))stage.style.setProperty(key,value);
++    stage.classList.toggle('design-grid-visible',prefs.grid);
++    const key=prefs.width+'x'+prefs.height;preset.value=[...preset.options].some(o=>o.value===key)?key:'custom';
++    zoom.value=[...zoom.options].some(o=>o.value!== 'custom'&&Number(o.value)===prefs.zoom)?String(prefs.zoom):'custom';
++    // Decimal option spelling must be canonical when selecting values programmatically.
++    const exact=[...zoom.options].find(o=>o.value!=='custom'&&Number(o.value)===prefs.zoom);if(exact)zoom.value=exact.value;
++    for(const [button,value]of [[grid,prefs.grid],[snap,prefs.snap],[guides,prefs.guides]])button.setAttribute('aria-pressed',String(value));
++    dimensions.textContent=prefs.width+' × '+prefs.height+' · '+Math.round(prefs.zoom*100)+'%';rulers();setTool(tool);configure();
++  }
++  function selection(payload){
++    items=payload.items??[];selectionLabel.textContent=items.length===1?(items[0].name||items[0].type):items.length?items.length+' visuals selected':'No selection';
++    let reason='';try{validateSelection(items);}catch(e){reason=e.message;}
++    note.textContent=reason||'Canvas coordinates · anchor is the first selected visual. Edits preserve source and hot-reload state.';
++    for(const [key,input]of Object.entries(fields)){input.value=items.length===1&&Number.isFinite(items[0].layout?.[key])?Math.round(items[0].layout[key]*1000)/1000:'';input.disabled=!!reason||items.length!==1;}
++    applyGeometry.disabled=!!reason||items.length!==1;
++    for(const [key,button]of actions){button.disabled=!!reason||items.length<(key.startsWith('distribute-')?3:2);}
++  }
++  pan.addEventListener('pointerdown',e=>{if(e.button!==0&&e.button!==1)return;e.preventDefault();panning={x:e.clientX,y:e.clientY,left:stage.scrollLeft,top:stage.scrollTop};pan.setPointerCapture(e.pointerId);});
++  pan.addEventListener('pointermove',e=>{if(panning){stage.scrollLeft=panning.left+panning.x-e.clientX;stage.scrollTop=panning.top+panning.y-e.clientY;}});
++  const stopPan=()=>{panning=null;};pan.addEventListener('pointerup',stopPan);pan.addEventListener('pointercancel',stopPan);
++  pan.addEventListener('keydown',e=>{const delta={ArrowLeft:[-40,0],ArrowRight:[40,0],ArrowUp:[0,-40],ArrowDown:[0,40]}[e.key];if(delta){e.preventDefault();stage.scrollBy(...delta);}else if(e.key==='Escape')setTool('select');});
++  const off=development.subscribe(({event,payload})=>{if(event==='selection-changed')selection(payload);else if(event==='workspace-reset'||event==='session-stopped')selection({items:[]});});
++  selection({items:[]});apply();
++  return {options:()=>({...prefs}),restore(value){prefs=canvasPreferences(value);apply();},setActive(value){active=!!value;apply();},ready(){configure();if(active)setTool(tool);},dispose(){off();toolbar.remove();status.remove();inspector.remove();pan.remove();}};
++}

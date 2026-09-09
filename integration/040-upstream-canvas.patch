@@ -1,0 +1,251 @@
+diff --git a/docs/mandatory-targets-status.md b/docs/mandatory-targets-status.md
+index fd9829a..beb81e0 100644
+--- a/docs/mandatory-targets-status.md
++++ b/docs/mandatory-targets-status.md
+@@ -46 +46,9 @@ round-tripping. Remaining control-flow/ownership analysis and complete
+ ControlCatalog/async/framework targets retain their original acceptance gates.
++
++## Original Canvas page
++
++[The pinned Canvas-page gate](milestone-upstream-canvas.md) now verifies unchanged
++XAML/C# source and actual vector/mask rendering through the primary runtime.
++`tests/fixtures/upstream.json` now identifies the requested fork correctly and
++keeps `fullControlCatalogPassed` false. The isolated host adapters and single
++page do not establish full project, full framework or global visual parity.
+diff --git a/docs/milestone-upstream-canvas.md b/docs/milestone-upstream-canvas.md
+new file mode 100644
+index 0000000..d108067
+--- /dev/null
++++ b/docs/milestone-upstream-canvas.md
+@@ -0,0 +1,60 @@
++# Unchanged upstream Canvas page and retained vectors
++
++`examples/UpstreamCanvas/CanvasPage.xaml` and `.xaml.cs` exactly match the requested
++`wieslawsoltes/Avalonia` repository at
++`b709c58c6b1b8aa3b90866c7c001b7bf82b6353b`. The gate checks their Git blob hashes,
++then compiles and constructs the page in release, native-debug and cooperative
++constructor modes. The owned csproj isolates the page with the existing
++`ContentPage` and `ScrollPage` host adapters. No drawing code replaces its XAML.
++**The complete original ControlCatalog project is still not passing.**
++
++## Runtime implementation
++
++`vector-model.js` provides finite point/geometry data, path figures and line,
++quadratic and cubic segments, linear gradients and stops. Public JS models are
++available in the existing runtime API for compiled C#; XAML constructs the same
++models. `svg-shapes.js` retains the existing native SVG element backend while
++adding path-object emission, polylines, opacity masks, gradient paint and correct
++unclipped negative-coordinate geometry. WebGPU remains the existing primitive
++surface backend; these SVG shapes are not described as WebGPU tessellation.
++
++Each SVG has one bounded definitions container. Paint updates replace its old
++resources instead of accumulating gradients/masks. Opacity masks use alpha, not
++black/white luminance. Literal HSV/HSVA colors normalize to RGB; HSL/HSLA uses
++native CSS color syntax. Resource URLs are generated internal IDs, never source
++URL strings. Native DOM attributes are set without inserting source markup.
++
++`Canvas.Get/SetLeft/Top/Right/Bottom` and their attached properties now share the
++XAML coordinate keys. Unset edges use NaN. Left/Top take precedence; otherwise
++Right/Bottom apply, and absent edges resolve to zero. Number.NaN is no longer
++emitted as an invalid CSS dimension that accidentally suppresses the other edge.
++
++## Evidence and development tools
++
++Six unit tests verify upstream hashes, all eight instantiated shapes, all three
++compilation modes, typed C# attached-property calls, finite geometry, color
++conversion and rejection of unsupported vector object properties. Three browser
++tests verify actual path data, mask resources and representative output pixels;
++repeated paint updates, edge precedence and resource cleanup; debugger/source
++identity, visual inspection and offline export without network access. Vector
++children retain normal source identities and construction checkpoints. Property
++replacement triggers the existing invalidation path. Geometry objects/resources
++with nested mutations require assignment/rebuild; no unimplemented observable
++geometry tracking is claimed. Designer movement remains restricted by the
++literal-Canvas rules in the canvas milestone.
++
++## Exact scope
++
++This implements the vector constructs used by this page plus cubic segments,
++linear gradient fills/strokes and ordinary shape stretching. ArcSegment object
++models, geometry combinations, dash/cap/join control APIs, unfilled subfigures,
++transforms, arbitrary brush kinds and pixel parity for every geometry/stretch
++combination remain separate targets. Invalid unsupported object slots report a
++compile/runtime diagnostic, not an empty placeholder.
++
++## Primary sources
++
++- https://github.com/wieslawsoltes/Avalonia/blob/b709c58c6b1b8aa3b90866c7c001b7bf82b6353b/samples/ControlCatalog/Pages/CanvasPage.xaml
++- https://github.com/wieslawsoltes/Avalonia/blob/b709c58c6b1b8aa3b90866c7c001b7bf82b6353b/src/Avalonia.Controls/Canvas.cs
++- https://www.w3.org/TR/SVG2/painting.html
++- https://www.w3.org/TR/SVG2/pservers.html
+diff --git a/examples/UpstreamCanvas/CanvasPage.xaml b/examples/UpstreamCanvas/CanvasPage.xaml
+new file mode 100644
+index 0000000..a9e3421
+--- /dev/null
++++ b/examples/UpstreamCanvas/CanvasPage.xaml
+@@ -0,0 +1,38 @@
++<ContentPage Theme="{StaticResource ScrollPage}" xmlns="https://github.com/avaloniaui"
++             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
++             Header="Canvas"
++             x:Class="ControlCatalog.Pages.CanvasPage">
++  <StackPanel Orientation="Vertical" Spacing="4">
++    <TextBlock Classes="h2">A panel which lays out its children by explicit coordinates</TextBlock>
++    <Canvas Background="Yellow" Width="300" Height="400">
++      <Rectangle Fill="Blue" Width="63" Height="41" Canvas.Left="40" Canvas.Top="31" RadiusX="10" RadiusY="10">
++        <Rectangle.OpacityMask>
++          <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
++            <LinearGradientBrush.GradientStops>
++              <GradientStop Offset="0" Color="Black"/>
++              <GradientStop Offset="1" Color="Transparent"/>
++            </LinearGradientBrush.GradientStops>
++          </LinearGradientBrush>
++        </Rectangle.OpacityMask>
++      </Rectangle>
++      <Rectangle Fill="hsva(240, 83%, 73%, 90%)" Stroke="hsl(5, 85%, 85%)" StrokeThickness="2" Width="40" Height="20" Canvas.Left="150" Canvas.Top="10" RadiusX="10" RadiusY="5" />
++      <Ellipse Fill="Green" Width="58" Height="58" Canvas.Left="88" Canvas.Top="100"/>
++      <Path Fill="Orange" Data="M 0,0 c 0,0 50,0 50,-50 c 0,0 50,0 50,50 h -50 v 50 l -50,-50 Z" Canvas.Left="30" Canvas.Top="250"/>
++      <Path Fill="OrangeRed" Canvas.Left="180" Canvas.Top="250">
++        <Path.Data>
++          <PathGeometry>
++            <PathFigure StartPoint="0,0" IsClosed="True">
++              <QuadraticBezierSegment Point1="50,0" Point2="50,-50" />
++              <QuadraticBezierSegment Point1="100,-50" Point2="100,0" />
++              <LineSegment Point="50,0" />
++              <LineSegment Point="50,50" />
++            </PathFigure>
++          </PathGeometry>
++        </Path.Data>
++      </Path>
++      <Line StartPoint="120,185" EndPoint="30,115" Stroke="Red" StrokeThickness="2"/>
++      <Polygon Points="75,0 120,120 0,45 150,45 30,120" Stroke="DarkBlue" StrokeThickness="1" Fill="Violet" Canvas.Left="150" Canvas.Top="31"/>
++      <Polyline Points="0,0 65,0 78,-26 91,39 104,-39 117,13 130,0 195,0" Stroke="Brown" Canvas.Left="30" Canvas.Top="350"/>
++    </Canvas>
++  </StackPanel>
++</ContentPage>
+diff --git a/examples/UpstreamCanvas/CanvasPage.xaml.cs b/examples/UpstreamCanvas/CanvasPage.xaml.cs
+new file mode 100644
+index 0000000..b94aabc
+--- /dev/null
++++ b/examples/UpstreamCanvas/CanvasPage.xaml.cs
+@@ -0,0 +1,12 @@
++using Avalonia.Controls;
++
++namespace ControlCatalog.Pages
++{
++    public partial class CanvasPage : ContentPage
++    {
++        public CanvasPage()
++        {
++            InitializeComponent();
++        }
++    }
++}
+diff --git a/examples/UpstreamCanvas/LICENSE.Avalonia.txt b/examples/UpstreamCanvas/LICENSE.Avalonia.txt
+new file mode 100644
+index 0000000..4195180
+--- /dev/null
++++ b/examples/UpstreamCanvas/LICENSE.Avalonia.txt
+@@ -0,0 +1,22 @@
++The MIT License (MIT)
++
++Copyright (c) AvaloniaUI OÜ
++All Rights Reserved
++
++Permission is hereby granted, free of charge, to any person obtaining a copy
++of this software and associated documentation files (the "Software"), to deal
++in the Software without restriction, including without limitation the rights
++to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++copies of the Software, and to permit persons to whom the Software is
++furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in all
++copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++SOFTWARE.
+diff --git a/examples/UpstreamCanvas/README.md b/examples/UpstreamCanvas/README.md
+new file mode 100644
+index 0000000..55d04b7
+--- /dev/null
++++ b/examples/UpstreamCanvas/README.md
+@@ -0,0 +1,12 @@
++# Unmodified upstream Canvas page
++
++The XAML and C# here are byte-identical to `samples/ControlCatalog/Pages/CanvasPage`
++in `wieslawsoltes/Avalonia` at `b709c58c6b1b8aa3b90866c7c001b7bf82b6353b`.
++The owned csproj is an isolated browser gate, not the full original project.
++`ContentPage` and `ScrollPage` use the existing documented browser host adapters.
++The page has no replacement drawing code: its paths, gradient mask, colors and
++polylines are constructed from the original XAML by the shared runtime.
++
++Select **Upstream Canvas** in Studio. The source remains editable as in other
++samples, but gate integrity always checks the untouched repository fixture.
++Full unmodified ControlCatalog remains mandatory and not passing.
+diff --git a/examples/UpstreamCanvas/UpstreamCanvas.csproj b/examples/UpstreamCanvas/UpstreamCanvas.csproj
+new file mode 100644
+index 0000000..d3b2f03
+--- /dev/null
++++ b/examples/UpstreamCanvas/UpstreamCanvas.csproj
+@@ -0,0 +1 @@
++<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>
+diff --git a/tests/browser/test_upstream_canvas.py b/tests/browser/test_upstream_canvas.py
+new file mode 100644
+index 0000000..5f1bff1
+--- /dev/null
++++ b/tests/browser/test_upstream_canvas.py
+@@ -0,0 +1,50 @@
++"""Unchanged pinned CanvasPage rendered by its compiled source, with pixel checks."""
++import unittest,base64,json
++from pathlib import Path
++import test_development as baseline
++from playwright.sync_api import expect
++ROOT=Path(__file__).resolve().parents[2]
++class UpstreamCanvasTests(unittest.TestCase):
++    setUpClass=classmethod(baseline.DevelopmentTests.setUpClass.__func__)
++    tearDownClass=classmethod(baseline.DevelopmentTests.tearDownClass.__func__)
++    tearDown=baseline.DevelopmentTests.tearDown
++    def setUp(self):
++        baseline.DevelopmentTests.setUp(self)
++        self.page.select_option('#samples','UpstreamCanvas');self.preview=self.page.frame_locator('#preview')
++        expect(self.preview.locator('.jb-Canvas svg')).to_have_count(8,timeout=30000)
++    def test_original_mask_colors_geometry_and_polylines_are_rendered(self):
++        canvas=self.preview.locator('.jb-Canvas');svg=canvas.locator('svg')
++        self.assertEqual(svg.nth(4).locator('path').get_attribute('d'),'M 0,0 Q 50,0 50,-50 Q 100,-50 100,0 L 50,0 L 50,50 Z')
++        self.assertEqual(svg.nth(1).locator('rect').last.get_attribute('fill'),'rgba(32,32,186,0.9)')
++        self.assertEqual(svg.nth(7).locator('polyline').get_attribute('points'),'0,0 65,0 78,-26 91,39 104,-39 117,13 130,0 195,0')
++        self.assertEqual(svg.nth(0).locator('mask').evaluate('e=>e.style.maskType'),'alpha')
++        png=canvas.screenshot();(ROOT/'test-results'/'upstream-canvas-vectors.png').write_bytes(png)
++        # Decode the actual browser screenshot using native Canvas. No optional
++        # image library is needed by CI and no source graphics are substituted.
++        pixels=self.page.evaluate("""async data=>{const image=new Image();image.src='data:image/png;base64,'+data;await image.decode();const c=document.createElement('canvas');c.width=image.width;c.height=image.height;const ctx=c.getContext('2d');ctx.drawImage(image,0,0);return {width:c.width,height:c.height,points:[[117,129],[49,41],[94,62],[2,2],[80,270],[230,270]].map(([x,y])=>Array.from(ctx.getImageData(x,y,1,1).data).slice(0,3))};}""",base64.b64encode(png).decode())
++        self.assertEqual(canvas.bounding_box()['width'],300);self.assertIn(pixels['width'],[300,301]);self.assertEqual(pixels['height'],400)
++        green,near,far,yellow,orange,orangeRed=pixels['points']
++        self.assertEqual(green,[0,128,0]);self.assertGreater(near[2],far[2]+100);self.assertGreater(far[0],near[0]+100)
++        self.assertEqual(yellow,[255,255,0]);self.assertEqual(orange,[255,165,0]);self.assertEqual(orangeRed,[255,69,0])
++        self.assertEqual(self.errors,[])
++    def test_attached_edges_precedence_dynamic_paint_and_resources_do_not_leak(self):
++        f=self.page.frames[-1]
++        result=f.evaluate('''()=>{const J=Jailbreak,c=appHandle.root.Content.Children[1],v=c.Children[0];J.Canvas.SetRight(v,8);J.Canvas.SetLeft(v,NaN);J.Canvas.SetBottom(v,9);J.Canvas.SetTop(v,NaN);J.flushLayout();const edge=[v.element.offsetLeft,v.element.getBoundingClientRect().left-c.element.getBoundingClientRect().left,v.element.getBoundingClientRect().top-c.element.getBoundingClientRect().top];J.Canvas.SetLeft(v,17);J.Canvas.SetTop(v,23);J.flushLayout();const pos=[v.element.style.left,v.element.style.right,v.element.style.top,v.element.style.bottom];for(let i=0;i<20;i++){v.Opacity=.9+i*.001;J.flushLayout();}const defs=v.element.querySelectorAll('defs').length,gradients=v.element.querySelectorAll('linearGradient').length;v.OpacityMask=null;J.flushLayout();return {edge,pos,defs,gradients,mask:v.shape.getAttribute('mask'),retained:c.Children[0]===v};}''')
++        self.assertAlmostEqual(result['edge'][1],229,delta=.1);self.assertAlmostEqual(result['edge'][2],350,delta=.1)
++        self.assertEqual(result['pos'],['17px','','23px','']);self.assertEqual(result['defs'],1);self.assertEqual(result['gradients'],1)
++        self.assertIsNone(result['mask']);self.assertTrue(result['retained']);self.assertEqual(self.errors,[])
++    def test_original_page_exports_offline_and_remains_source_debuggable(self):
++        self.page.select_option('#studio-session-mode','cooperative')
++        expect(self.preview.locator('.jb-Canvas svg')).to_have_count(8,timeout=30000)
++        self.page.click('#studio-view-design');self.page.click('#design-fit')
++        expect(self.page.locator('#dev-tree')).to_contain_text('Polyline')
++        self.page.locator('#dev-tree button').filter(has_text='Polyline').click()
++        expect(self.page.get_by_label('Design Points',exact=True)).to_have_value('0,0 65,0 78,-26 91,39 104,-39 117,13 130,0 195,0')
++        with self.page.expect_download() as d:self.page.click('#export')
++        page=self.browser.new_page();requests=[];page.on('request',lambda r:requests.append(r.url))
++        try:
++            page.set_content(Path(d.value.path()).read_text(),wait_until='load');expect(page.locator('.jb-Canvas svg')).to_have_count(8)
++            self.assertEqual(requests,[])
++        finally:page.close()
++        self.assertEqual(self.errors,[])
++if __name__=='__main__':unittest.main(verbosity=2)

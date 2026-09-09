@@ -1,0 +1,185 @@
+diff --git a/tests/browser/test_design_canvas.py b/tests/browser/test_design_canvas.py
+new file mode 100644
+index 0000000..5a2a5cf
+--- /dev/null
++++ b/tests/browser/test_design_canvas.py
+@@ -0,0 +1,120 @@
++"""Source-backed designer gestures on an actual C#/XAML application, not a mock canvas."""
++import unittest,json
++from pathlib import Path
++import test_development as baseline
++from playwright.sync_api import expect
++ROOT=Path(__file__).resolve().parents[2]
++class DesignCanvasTests(unittest.TestCase):
++    setUpClass=classmethod(baseline.DevelopmentTests.setUpClass.__func__)
++    tearDownClass=classmethod(baseline.DevelopmentTests.tearDownClass.__func__)
++    tearDown=baseline.DevelopmentTests.tearDown
++    source=baseline.DevelopmentTests.source
++    def setUp(self):
++        baseline.DevelopmentTests.setUp(self)
++        self.page.select_option('#samples','DesignerWorkspace')
++        expect(self.page.frame_locator('#preview').get_by_role('button',name='Preview',exact=True)).to_be_visible(timeout=30000)
++        self.page.click('#studio-view-design')
++        expect(self.page.locator('#dev-tree')).to_contain_text('#PreviewAction',timeout=30000)
++        self.page.click('#studio-hot-reload')
++        self.preview=self.page.frame_locator('#preview')
++    def select(self,name,add=False):
++        self.page.locator('#dev-tree button').filter(has_text='#'+name).click(modifiers=['Shift'] if add else [])
++    def test_multiselect_alignment_distribution_is_one_undoable_live_source_edit(self):
++        frame=self.page.frames[-1];root=frame.evaluate('appHandle.root.uid')
++        self.page.click('#design-hand');self.preview.get_by_role('textbox').fill('preserve typed value',force=True)
++        self.page.click('#design-select')
++        self.select('PreviewAction');self.select('ValidateAction',True);self.select('PublishAction',True)
++        expect(self.page.locator('#design-selection-label')).to_have_text('3 visuals selected')
++        self.page.click('#design-align-top')
++        expect(self.page.locator('#dev-status')).to_contain_text('Hot reload 1',timeout=30000)
++        self.assertEqual(frame.evaluate("[appHandle.root.PreviewAction,appHandle.root.ValidateAction,appHandle.root.PublishAction].map(c=>Number(c.GetValue('Canvas.Top')))"),[252,252,252])
++        self.assertEqual(frame.evaluate('appHandle.root.uid'),root)
++        expect(self.preview.get_by_role('textbox')).to_have_value('preserve typed value')
++        self.page.click('#design-align-distribute-x')
++        expect(self.page.locator('#dev-status')).to_contain_text('Hot reload 2',timeout=30000)
++        self.assertEqual(frame.evaluate("Number(appHandle.root.ValidateAction.GetValue('Canvas.Left'))"),252)
++        self.page.get_by_role('button',name='Undo design',exact=True).click()
++        expect(self.page.locator('#dev-status')).to_contain_text('Hot reload 3',timeout=30000)
++        self.assertEqual(frame.evaluate("Number(appHandle.root.ValidateAction.GetValue('Canvas.Left'))"),240)
++        self.assertEqual(self.errors,[])
++    def test_zoom_and_device_changes_preserve_application_identity_and_source(self):
++        frame=self.page.frames[-1];root=frame.evaluate('appHandle.root.uid');before=self.source('MainView.axaml')
++        self.page.select_option('#design-zoom','.5')
++        expect(self.page.locator('#design-artboard-size')).to_contain_text('50%')
++        self.assertEqual(frame.evaluate('innerWidth'),960)
++        self.page.select_option('#design-device','390x844')
++        self.assertEqual(frame.evaluate('innerWidth'),390)
++        self.assertEqual(frame.evaluate('appHandle.root.uid'),root)
++        self.assertEqual(self.source('MainView.axaml'),before)
++        self.page.click('#studio-view-split');self.assertEqual(frame.evaluate('appHandle.root.uid'),root)
++        with self.page.expect_download() as d:self.page.click('#save-workspace')
++        workspace=json.loads(Path(d.value.path()).read_text());self.assertEqual(workspace['studio']['design']['width'],390)
++    def test_drag_label_snaps_and_escape_cancels_without_source_change(self):
++        self.select('PreviewAction');self.page.click('#design-snap');self.page.click('#design-guides')
++        handle=self.preview.get_by_role('button',name='Move selected visuals',exact=True)
++        box=handle.bounding_box();x=box['x']+15;y=box['y']+8
++        self.page.mouse.move(x,y);self.page.mouse.down();self.page.mouse.move(x+29,y+17,steps=5);self.page.mouse.up()
++        expect(self.page.locator('#dev-status')).to_contain_text('Hot reload 1',timeout=30000)
++        frame=self.page.frames[-1]
++        self.assertEqual(frame.evaluate("Number(appHandle.root.PreviewAction.GetValue('Canvas.Left'))"),48)
++        before=self.source('MainView.axaml');box=handle.bounding_box();x=box['x']+15;y=box['y']+8
++        self.page.mouse.move(x,y);self.page.mouse.down();self.page.mouse.move(x+80,y+20,steps=3);self.page.keyboard.press('Escape');self.page.mouse.up()
++        self.assertEqual(self.source('MainView.axaml'),before)
++        self.assertEqual(self.errors,[])
++    def test_geometry_fields_apply_exact_coordinates_and_dimensions(self):
++        self.select('PreviewAction')
++        for key,value in [('x','32'),('y','248'),('width','184'),('height','48')]:self.page.fill('#design-'+key,value)
++        self.page.click('#design-apply-geometry')
++        expect(self.page.locator('#dev-status')).to_contain_text('Hot reload 1',timeout=30000)
++        self.assertEqual(self.page.frames[-1].evaluate("[Number(appHandle.root.PreviewAction.GetValue('Canvas.Left')),appHandle.root.PreviewAction.Width,appHandle.root.PreviewAction.Height]"),[32,184,48])
++        self.assertIn('Canvas.Left="32"',self.source('MainView.axaml'))
++        self.assertEqual(self.errors,[])
++    def test_imperative_csharp_property_targets_last_assignment_and_requires_restart(self):
++        self.select('CodeAction')
++        expect(self.page.get_by_label('Design Content',exact=True)).to_have_value('Created in C#')
++        self.page.get_by_label('Design Content',exact=True).fill('Edited assignment')
++        self.page.locator('.dev-property').filter(has_text='Content').get_by_role('button',name='Apply').click()
++        expect(self.page.locator('#dev-status')).to_contain_text('Restart required',timeout=30000)
++        code=self.source('MainView.axaml.cs');self.assertIn('Content = "Initializer value"',code);self.assertIn('action.Content = "Edited assignment"',code)
++        self.page.click('#dev-restart')
++        expect(self.preview.get_by_role('button',name='Edited assignment',exact=True)).to_be_visible(timeout=30000)
++        self.assertEqual(self.errors,[])
++    def test_cross_parent_selection_disables_layout_and_mobile_has_no_document_overflow(self):
++        self.select('PreviewAction');self.select('CodeAction',True)
++        expect(self.page.locator('#design-align-top')).to_be_disabled()
++        self.page.set_viewport_size({'width':390,'height':844})
++        self.page.locator('#development-panel header button').filter(has_text='Close').click()
++        self.page.click('#design-fit')
++        self.assertEqual(self.page.evaluate('document.documentElement.scrollWidth'),390)
++        self.assertEqual(self.errors,[])
++    def test_canvas_shift_click_and_zoomed_drag_use_logical_coordinates(self):
++        self.page.select_option('#design-zoom','.5');self.page.click('#design-guides')
++        # Chromium Playwright's frame locator reports unscaled child bounds for
++        # CSS-transformed iframes. Drive the actual physical pixel coordinates.
++        def physical(locator):
++            r=locator.evaluate('e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}}')
++            f=self.page.locator('#preview').bounding_box()
++            return f['x']+(r['x']+r['width']/2)*.5,f['y']+(r['y']+r['height']/2)*.5
++        self.page.mouse.click(*physical(self.preview.get_by_role('button',name='Preview',exact=True)))
++        self.page.keyboard.down('Shift');self.page.mouse.click(*physical(self.preview.get_by_role('button',name='Validate',exact=True)));self.page.keyboard.up('Shift')
++        expect(self.page.locator('#design-selection-label')).to_have_text('2 visuals selected')
++        handle=self.preview.get_by_role('button',name='Move selected visuals',exact=True)
++        x,y=physical(handle)
++        self.page.mouse.move(x,y);self.page.mouse.down();self.page.mouse.move(x+20,y+10,steps=4);self.page.mouse.up()
++        expect(self.page.locator('#dev-status')).to_contain_text('Hot reload 1',timeout=30000)
++        self.assertEqual(self.page.frames[-1].evaluate("[appHandle.root.PreviewAction,appHandle.root.ValidateAction].map(c=>[Number(c.GetValue('Canvas.Left')),Number(c.GetValue('Canvas.Top'))])"),[[56,272],[280,288]])
++        self.assertEqual(self.errors,[])
++    def test_pan_scrolls_only_workspace_and_stale_source_rejects_layout_edit(self):
++        self.page.select_option('#design-zoom','2');self.page.click('#design-hand')
++        pan=self.page.locator('.design-pan-layer');pan.focus();pan.press('ArrowRight')
++        self.assertGreater(self.page.locator('.preview-stage').evaluate('e=>e.scrollLeft'),0)
++        pan.press('Escape');expect(pan).not_to_be_visible()
++        self.page.click('#design-fit');self.select('PreviewAction')
++        before=self.source('MainView.axaml');changed=before.replace('Text="Design workspace"','Text="Edited source"')
++        self.page.click('#studio-view-split');self.page.locator('#editor').fill(changed);self.page.click('#studio-view-design')
++        self.page.fill('#design-x','88');self.page.click('#design-apply-geometry')
++        expect(self.page.locator('#dev-status')).to_contain_text('Source differs')
++        self.assertEqual(self.source('MainView.axaml'),changed)
++        self.assertEqual(self.page.frames[-1].evaluate("Number(appHandle.root.PreviewAction.GetValue('Canvas.Left'))"),16)
++        self.assertEqual(self.errors,[])
++if __name__=='__main__':unittest.main(verbosity=2)
+diff --git a/tests/design-geometry.test.js b/tests/design-geometry.test.js
+new file mode 100644
+index 0000000..7a3159e
+--- /dev/null
++++ b/tests/design-geometry.test.js
+@@ -0,0 +1,53 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {arrangeSelection,moveSelection,snapGuides,selectionBounds,validateSelection} from '../packages/development/design-geometry.js';
++import {editSelectionProperties} from '../packages/development/design-transactions.js';
++import {EditHistory} from '../packages/development/designer.js';
++import {canvasPreferences} from '../packages/workbench/design-canvas.js';
++const item=(id,x,y,width=40,height=20)=>({id,movable:true,parent:{id:'canvas',type:'Canvas'},source:{language:'xaml',file:'View.axaml',offset:0},layout:{x,y,width,height}});
++const items=()=>[item('a',10,20),item('b',70,40),item('c',180,80)];
++test('alignment uses selection bounds and does not mutate source geometry',()=>{
++  const selection=items(),before=JSON.stringify(selection);assert.deepEqual(arrangeSelection(selection,'left').map(i=>i.values['Canvas.Left']),[10,10,10]);
++  assert.deepEqual(arrangeSelection(selection,'bottom').map(i=>i.values['Canvas.Top']),[80,80,80]);assert.equal(JSON.stringify(selection),before);
++});
++test('center and trailing-edge alignment account for different widths and heights',()=>{
++  const selection=[item('a',0,10,40,20),item('b',60,70,60,40)];
++  assert.deepEqual(arrangeSelection(selection,'center-x').map(i=>i.values['Canvas.Left']),[40,30]);
++  assert.deepEqual(arrangeSelection(selection,'right').map(i=>i.values['Canvas.Left']),[80,60]);
++  assert.deepEqual(arrangeSelection(selection,'center-y').map(i=>i.values['Canvas.Top']),[50,40]);
++});
++test('equal-gap distribution preserves the outer extents and respects visual sizes',()=>{
++  const result=arrangeSelection([item('b',80,0,20),item('a',0,0,40),item('c',200,0,60)],'distribute-x');
++  assert.deepEqual(result.map(i=>[i.id,i.values['Canvas.Left']]),[['a',0],['b',110],['c',200]]);
++});
++test('group snapping moves every member by the same delta; no cumulative drift',()=>{
++  const original=items(),edits=moveSelection(original,13,5,{snap:8});assert.deepEqual(edits.map(e=>e.values['Canvas.Left']-original.find(i=>i.id===e.id).layout.x),[14,14,14]);
++  assert.equal(edits[0].values['Canvas.Top'],24);
++});
++test('guide snapping chooses close sibling edges and ignores unrelated parents',()=>{
++  const original=[item('a',10,10)],snap=snapGuides(original,[item('b',100,100)],47,0,5);assert.equal(snap.dx,50);assert.ok(snap.guides.some(g=>g.axis==='x'));
++  assert.equal(snapGuides(original,[{...item('b',100,100),parent:{id:'other',type:'Canvas'}}],47,0,5).dx,47);
++});
++test('size matching uses first selection as explicit anchor',()=>{
++  assert.deepEqual(arrangeSelection([item('a',0,0,55),item('b',50,20,90)],'same-width').map(i=>i.values.Width),[55,55]);
++});
++test('layout rejects transforms templates mismatched hosts invalid numbers and ambiguous identities',()=>{
++  for(const bad of [[...items(),items()[0]],[{...item('a',0,0),movable:false}],items().map(i=>({...i,template:true})),[item('a',0,NaN)],items().map((i,n)=>({...i,parent:{id:'p'+n,type:'Canvas'}})),items().map(i=>({...i,source:{...i.source,language:'csharp'}}))])assert.throws(()=>validateSelection(bad));
++  assert.throws(()=>arrangeSelection(items().slice(0,2),'distribute-x'));assert.throws(()=>arrangeSelection(items(),'unknown'));assert.throws(()=>moveSelection(items(),Infinity,0));
++});
++test('batch property edits preserve preceding source offsets comments and CRLF',()=>{
++  const text='<Canvas>\r\n<!-- keep -->\r\n<Button Name="A" Canvas.Left="10" Canvas.Top="20"/>\r\n<Button Name="B" Canvas.Left="100" Canvas.Top="30"/>\r\n</Canvas>',files={'View.axaml':text};
++  const a={...item('a',10,20),source:{language:'xaml',file:'View.axaml',offset:text.indexOf('<Button')}},b={...item('b',100,30),source:{language:'xaml',file:'View.axaml',offset:text.lastIndexOf('<Button')}};
++  const transaction=editSelectionProperties(files,[a,b],[{id:'a',values:{Width:120,'Canvas.Left':30}},{id:'b',values:{Width:180,'Canvas.Left':130}}]);
++  assert.match(transaction.after,/<!-- keep -->/);assert.equal(transaction.after.split('\r\n').length,5);assert.equal(files['View.axaml'],text);
++  const history=new EditHistory();history.apply(files,transaction);history.undo(files);assert.equal(files['View.axaml'],text);history.redo(files);assert.equal(files['View.axaml'],transaction.after);
++});
++test('batch validation refuses protected values without partially modifying files',()=>{
++  const text='<Canvas><Button Canvas.Left="{Binding X}"/><Button Width="40"/></Canvas>',files={'View.axaml':text},a={...item('a',0,0),source:{language:'xaml',file:'View.axaml',offset:8}},b={...item('b',40,0),source:{language:'xaml',file:'View.axaml',offset:text.lastIndexOf('<Button')}};
++  assert.throws(()=>editSelectionProperties(files,[a,b],[{id:'b',values:{Width:50}},{id:'a',values:{'Canvas.Left':10}}]),/protected/);assert.equal(files['View.axaml'],text);
++  for(const edit of [{id:'missing',values:{Width:50}},{id:'a',values:{Width:-1}},{id:'a',values:{Name:'new'}},{id:'a',values:{Height:NaN}}])assert.throws(()=>editSelectionProperties(files,[a,b],[edit]));
++});
++test('artboard preferences are bounded numbers and do not carry CSS injection',()=>{
++  assert.deepEqual(canvasPreferences({width:'10px;display:none',height:Infinity,zoom:50,snap:true}),{width:960,height:640,zoom:2,grid:true,snap:true,guides:true});
++  assert.equal(canvasPreferences(null).width,960);assert.equal(canvasPreferences({width:-1}).width,240);
++});

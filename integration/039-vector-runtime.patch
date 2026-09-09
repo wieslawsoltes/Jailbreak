@@ -1,0 +1,82 @@
+diff --git a/packages/avalonia-runtime/vector-model.js b/packages/avalonia-runtime/vector-model.js
+new file mode 100644
+index 0000000..f10598b
+--- /dev/null
++++ b/packages/avalonia-runtime/vector-model.js
+@@ -0,0 +1,40 @@
++/** Reusable, finite vector/brush models. Source values never contain DOM or URLs. */
++export const vectorProperties={
++  LinearGradientBrush:['StartPoint','EndPoint','GradientStops','Opacity','SpreadMethod'],
++  GradientStop:['Offset','Color'],PathGeometry:['Figures','FillRule'],
++  PathFigure:['StartPoint','IsClosed','IsFilled','Segments'],LineSegment:['Point'],
++  QuadraticBezierSegment:['Point1','Point2'],BezierSegment:['Point1','Point2','Point3']
++};
++export const vectorChildren={LinearGradientBrush:'GradientStops',PathGeometry:'Figures',PathFigure:'Segments'};
++export class VectorCollection extends Array {Add(item){if(this.length>=100000)throw new Error('Vector collection budget exceeded');this.push(item);}get Count(){return this.length;}}
++export class GradientStop {constructor(color='Transparent',offset=0){this.Color=color;this.Offset=offset;}}
++export class LinearGradientBrush {constructor(){this.StartPoint='0%,0%';this.EndPoint='100%,0%';this.Opacity=1;this.SpreadMethod='Pad';this.GradientStops=new VectorCollection();}}
++export class PathGeometry {constructor(){this.Figures=new VectorCollection();this.FillRule='EvenOdd';}toString(){return pathData(this);}ToString(){return this.toString();}}
++export class PathFigure {constructor(){this.StartPoint='0,0';this.IsClosed=false;this.IsFilled=true;this.Segments=new VectorCollection();}}
++export class LineSegment {constructor(point='0,0'){this.Point=point;}}
++export class QuadraticBezierSegment {constructor(){this.Point1='0,0';this.Point2='0,0';}}
++export class BezierSegment {constructor(){this.Point1='0,0';this.Point2='0,0';this.Point3='0,0';}}
++export const vectorTypes={LinearGradientBrush,GradientStop,PathGeometry,PathFigure,LineSegment,QuadraticBezierSegment,BezierSegment};
++export function finiteVector(value){const n=Number(value);if(!Number.isFinite(n)||Math.abs(n)>1e9)throw new Error('Vector coordinate must be finite and bounded');return n;}
++export function pointValues(value){const a=typeof value==='object'&&value!==null?[value.X,value.Y]:String(value).trim().split(/[,\s]+/);if(a.length!==2)throw new Error('Expected two point coordinates');return a.map(finiteVector);}
++export function relativePoint(value){const a=String(value).trim().split(/[,\s]+/);if(a.length!==2)throw new Error('Expected a relative point');const percent=a.map(n=>n.endsWith('%'));if(percent[0]!==percent[1])throw new Error('Mixed point units are not supported');return {units:percent[0]?'objectBoundingBox':'userSpaceOnUse',values:a.map(n=>finiteVector(n.replace(/%$/,''))/(percent[0]?100:1))};}
++export function pathData(geometry){
++  if(!(geometry instanceof PathGeometry)){
++    const d=String(geometry??'');if(d.length>1000000||!/^[\s,\d.eE+\-MmLlHhVvCcSsQqTtAaZz]*$/.test(d))throw new Error('Unsupported or oversized path data');return d;
++  }
++  const commands=[];let budget=0;
++  for(const figure of geometry.Figures){if(!(figure instanceof PathFigure)||figure.IsFilled===false||figure.IsFilled==='False')throw new Error('This path profile requires filled PathFigures');commands.push('M '+pointValues(figure.StartPoint).join(','));
++    for(const s of figure.Segments){if(++budget>100000)throw new Error('Path segment budget exceeded');if(s instanceof LineSegment)commands.push('L '+pointValues(s.Point).join(','));else if(s instanceof QuadraticBezierSegment)commands.push('Q '+pointValues(s.Point1).join(',')+' '+pointValues(s.Point2).join(','));else if(s instanceof BezierSegment)commands.push('C '+[s.Point1,s.Point2,s.Point3].map(p=>pointValues(p).join(',')).join(' '));else throw new Error('Unsupported path segment');}
++    if(figure.IsClosed===true||String(figure.IsClosed).toLowerCase()==='true')commands.push('Z');
++  }return commands.join(' ');
++}
++export function pointList(value){if(Array.isArray(value)){if(value.length>100000)throw new Error('Point count exceeded');return value.map(v=>pointValues(v).join(',')).join(' ');}const data=String(value??'');if(!data.trim())return '';if(data.length>1000000)throw new Error('Point data budget exceeded');const a=data.trim().split(/[,\s]+/).map(finiteVector);if(a.length%2)throw new Error('Point list requires coordinate pairs');return a.map((v,i)=>v+(i%2?'':',')).join(' ').replace(/, /g,',');}
++/** Validated XAML object construction using the same public models as compiled C#. */
++export function vectorObject(node,build,resolve){
++  const Type=vectorTypes[node.type];if(!Type)return undefined;const value=new Type();
++  for(const [key,v]of Object.entries(node.attributes)){if(!vectorProperties[node.type].includes(key)||key===vectorChildren[node.type])throw new Error('Unsupported vector property '+node.type+'.'+key);const resolved=resolve(v);if(resolved&&typeof resolved==='object'&&resolved.kind)throw new Error('Vector object bindings require explicit invalidation support');value[key]=resolved;}
++  for(const child of node.children.filter(n=>n.kind!=='text')){
++    if(child.kind==='property'){if(child.property!==vectorChildren[node.type])throw new Error('Unsupported vector property element');for(const n of child.children.filter(n=>n.kind!=='text'))value[child.property].Add(build(n));}
++    else{const name=vectorChildren[node.type];if(!name)throw new Error('Unexpected child of '+node.type);value[name].Add(build(child));}
++  }return value;
++}
+diff --git a/packages/avalonia-runtime/xaml.js b/packages/avalonia-runtime/xaml.js
+index 07d41a0..d6bf597 100644
+--- a/packages/avalonia-runtime/xaml.js
++++ b/packages/avalonia-runtime/xaml.js
+@@ -1 +1,2 @@
++import {vectorObject,vectorTypes} from './vector-model.js';
+ import { Control } from './controls.js';
+@@ -75,2 +76,3 @@ export function createXamlRuntime(api, types, documents) {
+     }
++    if(vectorTypes[node.type])return vectorObject(node,n=>build(n,parent,scope),v=>resolve(v,parent,scope));
+     if(node.type==='SolidColorBrush')return new api.SolidColorBrush(resolve(a.Color??text,parent,scope));
+diff --git a/packages/csharp-compiler/backend.js b/packages/csharp-compiler/backend.js
+index 43c500a..e63965e 100644
+--- a/packages/csharp-compiler/backend.js
++++ b/packages/csharp-compiler/backend.js
+@@ -6,3 +6,3 @@ export { lexCSharp } from './lexer.js';
+ export { parseCSharp } from './parser.js';
+-const builtins = new Set(('Object ObservableObject AvaloniaObject AvaloniaProperty StyledProperty StyledElement Exception ArgumentException ArgumentNullException InvalidOperationException NotSupportedException DivideByZeroException List ObservableCollection Dictionary HashSet Queue Stack StringBuilder Event EventArgs TemplateAppliedEventArgs RoutedEventArgs PropertyChangedEventArgs PropertyChangedEventHandler EventHandler Action Func Task CancellationTokenSource RelayCommand DelegateCommand ReactiveCommand Math Console String Convert Enumerable Array DateTime TimeSpan Guid Debug Enum AvaloniaXamlLoader Brushes Colors Thickness CornerRadius Point Size Rect Vector Color SolidColorBrush Uri Binding ApplicationLifetime Dispatcher BindingMode').split(' ').concat(Object.keys(controlDefinitions),exceptionTypeNames().map(n=>n.slice(7))));
++const builtins = new Set(('Object ObservableObject AvaloniaObject AvaloniaProperty StyledProperty StyledElement Exception ArgumentException ArgumentNullException InvalidOperationException NotSupportedException DivideByZeroException List ObservableCollection Dictionary HashSet Queue Stack StringBuilder Event EventArgs TemplateAppliedEventArgs RoutedEventArgs PropertyChangedEventArgs PropertyChangedEventHandler EventHandler Action Func Task CancellationTokenSource RelayCommand DelegateCommand ReactiveCommand Math Console String Convert Enumerable Array DateTime TimeSpan Guid Debug Enum AvaloniaXamlLoader Brushes Colors Thickness CornerRadius Point Size Rect Vector Color SolidColorBrush LinearGradientBrush GradientStop PathGeometry PathFigure LineSegment QuadraticBezierSegment BezierSegment Uri Binding ApplicationLifetime Dispatcher BindingMode').split(' ').concat(Object.keys(controlDefinitions),exceptionTypeNames().map(n=>n.slice(7))));
+ const interfaces = new Set('IDisposable INotifyPropertyChanged INotifyCollectionChanged ICommand IEnumerable ICollection IList IReadOnlyList IDictionary IEquatable IComparable IValueConverter'.split(' '));
+diff --git a/packages/xaml-compiler/index.js b/packages/xaml-compiler/index.js
+index 1b3570c..ad01bc5 100644
+--- a/packages/xaml-compiler/index.js
++++ b/packages/xaml-compiler/index.js
+@@ -1 +1,2 @@
++import {vectorProperties,vectorChildren} from '../avalonia-runtime/vector-model.js';
+ import { parseSelector } from '../avalonia-runtime/selectors.js';
+@@ -46,3 +47,3 @@ export function compileXaml(text, options = {}) {
+       const property=local.slice(local.lastIndexOf('.')+1),owner=local.slice(0,local.lastIndexOf('.'));
+-      const structuralProperties={Setter:['Value'],Style:['Setters'],DataTemplate:['Content'],ControlTemplate:['Content'],ControlTheme:['Setters'],ResourceDictionary:['MergedDictionaries']};
++      const structuralProperties={...Object.fromEntries(Object.entries(vectorChildren).map(([k,v])=>[k,[v]])),Setter:['Value'],Style:['Setters'],DataTemplate:['Content'],ControlTemplate:['Content'],ControlTheme:['Setters'],ResourceDictionary:['MergedDictionaries']};
+       if(Object.hasOwn(controlDefinitions,owner)?!hasProperty(owner,property):!(structuralProperties[owner]?.includes(property)||customTypes.includes(type.slice(0,type.lastIndexOf('.')))))report('JB1113',`Unsupported property element '${type}'`,node);
+@@ -66,2 +67,3 @@ export function compileXaml(text, options = {}) {
+       if(k.startsWith('x:')){report('JB1105',`Unsupported XAML directive ${k}`,node,k);continue;}
++      if(vectorProperties[type]&&!vectorProperties[type].includes(k))report('JB1114',`Unsupported vector property '${type}.${k}'`,node,k);
+       if(builtin&&!hasProperty(type,k))report('JB1106',`Unsupported property '${type}.${k}'`,node,k);
