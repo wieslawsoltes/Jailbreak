@@ -1,0 +1,149 @@
+name: Complete reviewed desktop tools
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/complete-desktop-tools-20260909.yml']
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: jailbreak-complete-desktop-tools
+  cancel-in-progress: false
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Recover exact reviewed source without overwriting changed files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python3 - <<'PY'
+          import base64, hashlib, json, pathlib, re, subprocess, tempfile
+          root = pathlib.Path.cwd()
+          pending = [
+              '8858197a967f06045cb91b12d41b9a2bc5b3fc71',
+              'bdbb37390aa33f3c2d8a04471d45c4d872ede230',
+              'a38c98c862f902db0290bddcfc5efe21a2cbe5ac',
+          ]
+          provenance = root / 'docs/evidence/recovered-desktop-tools.json'
+          state = json.loads(provenance.read_text()) if provenance.exists() else {}
+          def run(*args, check=True):
+              p = subprocess.run(args, capture_output=True, text=True)
+              if check and p.returncode:
+                  raise RuntimeError(p.stderr or p.stdout or 'Command failed: ' + args[0])
+              return p
+          if run('git', 'status', '--porcelain').stdout:
+              raise RuntimeError('Source checkout must be clean')
+          prerequisite = '20aaca0c26670bce1be5c5e52f56b7021e028ec8'
+          run('git', 'merge-base', '--is-ancestor', prerequisite, 'HEAD')
+          def allowed(name):
+              p = pathlib.PurePosixPath(name)
+              return (not p.is_absolute() and '..' not in p.parts and '\\' not in name
+                  and (p.parts[0] in {'packages', 'apps', 'tests', 'docs', 'examples'}
+                       or name in {'README.md', 'scripts/build.mjs', 'scripts/gate.mjs', 'scripts/check.mjs'}))
+          patches = []
+          with tempfile.TemporaryDirectory(prefix='jailbreak-reviewed-') as directory:
+              for number, sha in enumerate(pending, 1):
+                  if sha in state:
+                      print('Already integrated:', sha)
+                      continue
+                  payload = json.loads(run('gh', 'api', 'repos/wieslawsoltes/Jailbreak/git/blobs/' + sha).stdout)
+                  if payload.get('encoding') != 'base64':
+                      raise RuntimeError('Unexpected GitHub blob encoding')
+                  data = base64.b64decode(payload['content'])
+                  actual = hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+                  if actual != sha or len(data) > 1000000:
+                      raise RuntimeError('Reviewed source identity or size check failed')
+                  text = data.decode('utf-8')
+                  headers = [line for line in text.splitlines() if line.startswith('diff --git ')]
+                  if not headers or any(line.startswith(('GIT binary patch', 'Binary files ', 'new file mode 120000', 'new file mode 160000')) for line in text.splitlines()):
+                      raise RuntimeError('Expected ordinary reviewed UTF-8 source patches')
+                  for header in headers:
+                      match = re.fullmatch(r'diff --git a/(\S+) b/(\S+)', header)
+                      if not match or not all(allowed(n) for n in match.groups()):
+                          raise RuntimeError('Source patch includes an unapproved path: ' + header)
+                  path = pathlib.Path(directory) / (str(number) + '.patch')
+                  path.write_bytes(data)
+                  patches.append((number, sha, path, hashlib.sha256(data).hexdigest()))
+              # Every applied change remains in this disposable checkout until all
+              # unit, sample, syntax, independent CLR and browser gates pass.
+              for number, sha, path, checksum in patches:
+                  if run('git', 'apply', '--reverse', '--check', '--index', str(path), check=False).returncode == 0:
+                      state[sha] = {'sha256': checksum, 'status': 'already-present', 'baseline': run('git', 'rev-parse', 'HEAD').stdout.strip()}
+                  else:
+                      run('git', 'apply', '--check', '--index', str(path))
+                      run('git', 'apply', '--index', str(path))
+                      changed = run('git', '-c', 'core.quotePath=false', 'diff', '--cached', '--name-only').stdout.splitlines()
+                      if not changed or any(not allowed(name) for name in changed):
+                          raise RuntimeError('Patch changed paths outside its approved source scope')
+                      state[sha] = {'sha256': checksum, 'status': 'integrated', 'files': changed, 'baseline': run('git', 'rev-parse', 'HEAD').stdout.strip()}
+                  provenance.parent.mkdir(parents=True, exist_ok=True)
+                  provenance.write_text(json.dumps(state, indent=2) + '\n')
+                  run('git', 'add', '--', str(provenance.relative_to(root)))
+                  run('git', 'commit', '-m', 'feat(ide): integrate reviewed desktop tools stage ' + str(number))
+                  print('Recovered source commit:', run('git', 'rev-parse', 'HEAD').stdout.strip())
+          PY
+      - name: Verify compiler runtime editor and designer unit tests
+        run: |
+          mkdir -p test-results/desktop-verification
+          set -o pipefail
+          npm test 2>&1 | tee test-results/desktop-verification/unit.log
+      - name: Verify original-source and application gates
+        run: |
+          set -o pipefail
+          npm run gate 2>&1 | tee test-results/desktop-verification/gate.log
+          npm run build 2>&1 | tee test-results/desktop-verification/build.log
+          npm run check 2>&1 | tee test-results/desktop-verification/syntax.log
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Verify unchanged CLR comparison requirements
+        run: |
+          set -o pipefail
+          node scripts/verify-msil-clr.mjs 2>&1 | tee test-results/desktop-verification/msil-clr.log
+          node scripts/verify-exceptions-clr.mjs 2>&1 | tee test-results/desktop-verification/exceptions-clr.log
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install canonical browser test tools
+        run: |
+          python -m pip install playwright==1.55.0
+          python -m playwright install --with-deps chromium
+      - name: Verify every real hosted browser workflow
+        run: |
+          set -o pipefail
+          python -m unittest discover -s tests/browser -p 'test_*.py' -v 2>&1 | tee test-results/desktop-verification/browser.log
+      - name: Retain exact tested source and provenance
+        if: always()
+        run: |
+          mkdir -p test-results/desktop-verification
+          git rev-parse HEAD > test-results/desktop-verification/commit.txt
+          git status --porcelain > test-results/desktop-verification/worktree-status.txt
+          git archive --format=tar.gz HEAD > test-results/desktop-verification/source.tar.gz
+          sha256sum test-results/desktop-verification/source.tar.gz > test-results/desktop-verification/source.sha256
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-tools-source-and-verification
+          path: test-results
+      - name: Publish verified source without force or history replacement
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
+          git push origin HEAD:main
+      - name: Run canonical Pages verification and deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run toolchain.yml --ref main
