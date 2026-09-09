@@ -18,16 +18,18 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
           $output = Join-Path $env:RUNNER_TEMP 'native-symbols'
+          $library = (Resolve-Path 'tests\fixtures\native-pdb-src\Library.cs').Path
+          $oracle = (Resolve-Path 'tests\fixtures\native-pdb-src\Oracle.cs').Path
           New-Item -ItemType Directory -Force $output | Out-Null
-          & $csc /nologo /target:library /debug:full /optimize- "/out:$output\Jailbreak.NativeSymbols.dll" tests/fixtures/native-pdb-src/Library.cs
+          & $csc /nologo /target:library /debug:full /optimize- "/out:$output\Jailbreak.NativeSymbols.dll" $library
           if ($LASTEXITCODE) { throw 'Native-symbol DLL compilation failed' }
-          & $csc /nologo /debug:full /optimize- "/reference:$output\Jailbreak.NativeSymbols.dll" "/out:$output\Oracle.exe" tests/fixtures/native-pdb-src/Oracle.cs
+          & $csc /nologo /debug:full /optimize- "/reference:$output\Jailbreak.NativeSymbols.dll" "/out:$output\Oracle.exe" $oracle
           if ($LASTEXITCODE) { throw 'CLR oracle compilation failed' }
           & "$output\Oracle.exe" "$output\oracle.json"
           if ($LASTEXITCODE) { throw 'CLR native symbol oracle failed' }
           $pdb = [IO.File]::ReadAllBytes("$output\Jailbreak.NativeSymbols.pdb")
           if (![Text.Encoding]::ASCII.GetString($pdb, 0, 32).StartsWith('Microsoft C/C++ MSF 7.00')) { throw 'Fixture must be native MSF7, not Portable PDB' }
-          $source = [IO.File]::ReadAllText((Resolve-Path tests/fixtures/native-pdb-src/Library.cs))
+          $source = [IO.File]::ReadAllText($library)
           $files = @{}
           foreach ($name in @('Jailbreak.NativeSymbols.dll', 'Jailbreak.NativeSymbols.pdb')) {
             $bytes = [IO.File]::ReadAllBytes("$output\$name")
