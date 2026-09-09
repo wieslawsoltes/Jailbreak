@@ -1,0 +1,430 @@
+diff --git a/docs/milestone-resumable-xaml.md b/docs/milestone-resumable-xaml.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..7f3db8296614ff015091fa90ee8e44e01da54e22
+--- /dev/null
++++ b/docs/milestone-resumable-xaml.md
+@@ -0,0 +1,36 @@
++# Resumable XAML and source constructors
++
++The primary IDE's **Develop → In-IDE stepping** mode now constructs applications through cooperative continuations. A breakpoint in a C# constructor can step into `InitializeComponent`, pause before a XAML visual is allocated, inspect its parent/owner, step to a sibling or out to the constructor, then resume the actual application. Browser DevTools is not needed for these pauses.
++
++## Shared execution path
++
++`buildSteps` and `propertySteps` in the existing XAML runtime are the single traversal. Normal `loadXaml` drains that traversal synchronously; `loadXamlSteps` yields source checkpoints to the existing cooperative scheduler. No substitute tree, copied XAML interpreter, promise-returning constructor or replay of the constructor is used.
++
++The C# backend emits development-only constructor factories. A factory allocates through the registered base factory or `Reflect.construct` of a native base with the final prototype, applies instance initializers, executes the constructor body and returns that same object. Existing native constructors remain the release path. The factories support the backend's existing arity-based constructor subset, explicit base arguments, fields/events/auto-property initializers, nested construction and method calls. They preserve the release backend's initializer order; this is not a claim that all C# constructor/virtual-dispatch semantics are already compatible with the CLR.
++
++`bootCooperative` returns a handle immediately, with `root`, `taskId` and `ready`. The root is mounted and reported ready only after successful construction. The normal `boot` ABI is unchanged. Application event handlers retain the existing cooperative method dispatch.
++
++## Cancellation and failure
++
++A paused construction belongs to the task, not to the previously running app. Cancelling the task unwinds generators, disposes partial children and the staged root, restores exported name descriptors, clears pending bindings and removes the temporary style. Constructor statements after the paused point do not execute. Construction failure follows the same cleanup path. Disposal errors do not prevent remaining children from being cleaned up.
++
++A previously hydrated root cannot be resumed as a new construction. Hot reload still requires all paused invocations to finish or cancel first. Partial construction is visible through debugger frame snapshots; it is not installed as the running visual hierarchy.
++
++Source-type `InitializeComponent` now resolves its own runtime's loader. Constructing two independent runtime contexts no longer lets the most recently created runtime redirect the earlier context's constructor to a different XAML document.
++
++## APIs
++
++- `co.run(iterator, {breakOnEntry})` starts an authored/compiled generator in the same scheduler used by C# methods.
++- `co.registerConstructor(Type, factory)` and `co.construct(Type, args, newTarget)` provide constructor continuation dispatch.
++- `JB.loadXamlSteps(instance, id)` hydrates a fresh object; `JB.createFromXamlSteps(id)` includes allocation.
++- `JB.bootCooperative(manifest, host)` stages browser startup and publishes the completed root.
++
++All source locations and continuation factories are development-only compiler output. Release compilation does not contain `registerConstructor`, `loadXamlSteps` or debugger checkpoints.
++
++## Verification
++
++`tests/xaml-continuations.test.js` tests real constructor and XAML execution, shared-runtime isolation, nested constructors, base arguments, fresh-root cancellation, property-element children, failure cleanup and release stripping. `tests/browser/test_xaml_construction.py` checks in-IDE pause/step/out/continue and cancellation with an actual compiled application. The existing developer-tool browser suite remains required.
++
++## Remaining boundaries
++
++Templates, lazy resource evaluation, native constructors, property setters/accessors and native runtime callbacks remain synchronous step-over regions. The full source compiler still rejects delegating `this(...)` constructors and other unsupported language features. Arbitrary native/managed callbacks are not transformed by this feature. This is genuine resumable visual construction and source-constructor execution for the current compiler subset, not full Avalonia or full C# compatibility. Complete unmodified ControlCatalog, general imperative designer analysis and MSIL/async state-machine coverage remain separately gated mandatory targets.
+diff --git a/packages/avalonia-runtime/controls.js b/packages/avalonia-runtime/controls.js
+index 6d84c16f9170c147908f747ec8cba13ab5609f8d..aff15d4ef5d8da5add43787b7e31708bc7c96818 100644
+--- a/packages/avalonia-runtime/controls.js
++++ b/packages/avalonia-runtime/controls.js
+@@ -53,3 +53,3 @@ export class Control extends StyledObject {
+   FindName(name){return this.FindControl(name);}
+-  InitializeComponent(){if(!Control.xamlLoader)throw new Error('XAML loader is not installed');Control.xamlLoader(this);}
++  InitializeComponent(){if(!Control.xamlLoader)throw new Error('XAML loader is not installed');(this.constructor.$xamlLoader??Control.xamlLoader)(this);}
+   ApplyTemplate(){applyControlTheme(this);return applyControlTemplate(this);}
+diff --git a/packages/avalonia-runtime/index.js b/packages/avalonia-runtime/index.js
+index 59d4a37bde801924166d372df3c5877cfb6de0e8..9e78589852732139184eafffc327aced871c5f41 100644
+--- a/packages/avalonia-runtime/index.js
++++ b/packages/avalonia-runtime/index.js
+@@ -1 +1,2 @@
++import {bootCooperative} from '../development/construction.js';
+ import { createDevelopmentSession } from '../development/runtime.js';
+@@ -40,3 +41,3 @@ export function createRuntime() {
+   api.binary=createBinaryRuntime({log:(...args)=>api.Console?.WriteLine?.(...args)});
+-  api.defineType=(name,type)=>{if(types.has(name))throw new Error(`Duplicate runtime type '${name}'`);types.set(name,type);if(typeof type==='function')Object.defineProperty(type,'$fullName',{value:name,configurable:true});return type;};
++  api.defineType=(name,type)=>{if(types.has(name))throw new Error(`Duplicate runtime type '${name}'`);types.set(name,type);if(typeof type==='function')Object.defineProperties(type,{$fullName:{value:name,configurable:true},$xamlLoader:{value:instance=>api.loadXaml(instance),configurable:true}});return type;};
+   for(const [name,type]of Object.entries(controls))types.set(name,type);
+@@ -46,2 +47,3 @@ export function createRuntime() {
+   api.ApplicationLifetime={MainWindow:null};
++  api.bootCooperative=(manifest,host)=>bootCooperative(api,manifest,host);
+   api.boot=(manifest,host=globalThis.document?.body)=>{
+diff --git a/packages/avalonia-runtime/xaml.js b/packages/avalonia-runtime/xaml.js
+index ffefa8d905709085841c8cd8b1e9e70fffc4ec43..07d41a0e34b63d78a9e0a7c7550d458d2b837e21 100644
+--- a/packages/avalonia-runtime/xaml.js
++++ b/packages/avalonia-runtime/xaml.js
+@@ -25,3 +25,7 @@ export function createXamlRuntime(api, types, documents) {
+   function finish(scope){for(let i=0;i<scope.pending.length;i++)scope.pending[i]();scope.pending=[];}
+-  function safely(scope,fn){try{return fn();}catch(error){for(const child of scope.created??[])child.Dispose();throw error;}}
++  function cleanup(scope){for(const child of [...(scope.created??[])].reverse())try{child.Dispose();}catch{}scope.pending=[];}
++  function safely(scope,fn){try{return fn();}catch(error){cleanup(scope);throw error;}}
++  function drain(iterator){let step;do{step=iterator.next();}while(!step.done);return step.value;}
++  function build(node,parent,scope,existing=null){return drain(buildSteps(node,parent,scope,existing));}
++  function property(target,node,scope){return drain(propertySteps(target,node,scope));}
+   function dictionary(node,parent,scope,existing=null){
+@@ -82,3 +86,3 @@ export function createXamlRuntime(api, types, documents) {
+   }
+-  function property(target,node,scope){
++  function* propertySteps(target,node,scope){
+     const p=node.property,children=node.children.filter(n=>n.kind!=='text');
+@@ -87,20 +91,23 @@ export function createXamlRuntime(api, types, documents) {
+       else dictionary({children},target,scope,target.Resources);
+-    }else if(p==='Styles'){for(const child of children){const style=build(child,target,scope);target.Styles.push(...(Array.isArray(style)?style:[style]));}}
+-    else if(p==='Children'||p==='Items'){for(const child of children)target.Children.Add(build(child,target,scope));}
+-    else if(p==='RowDefinitions'||p==='ColumnDefinitions')set(target,p,children.map(n=>build(n,target,scope)).join(','));
++    }else if(p==='Styles'){for(const child of children){const style=yield* buildSteps(child,target,scope);target.Styles.push(...(Array.isArray(style)?style:[style]));}}
++    else if(p==='Children'||p==='Items'){for(const child of children)target.Children.Add(yield* buildSteps(child,target,scope));}
++    else if(p==='RowDefinitions'||p==='ColumnDefinitions'){const values=[];for(const n of children)values.push(yield* buildSteps(n,target,scope));set(target,p,values.join(','));}
+     else if(p==='Inlines')set(target,'Text',node.children.map(n=>n.kind==='text'?n.text:n.attributes?.Text??n.children?.filter(c=>c.kind==='text').map(c=>c.text).join('')??'').join(''));
+-    else {if(children.length>1)throw new Error('Property '+p+' requires a single value');set(target,p,children.length?build(children[0],target,scope):node.children.map(n=>n.text??'').join(' '));}
++    else {if(children.length>1)throw new Error('Property '+p+' requires a single value');set(target,p,children.length?(yield* buildSteps(children[0],target,scope)):node.children.map(n=>n.text??'').join(' '));}
+   }
+-  function build(node,parent,scope,existing=null){
++  function* buildSteps(node,parent,scope,existing=null){
+     if(node.kind==='text')return node.text;if(node.kind==='object')return object(node,parent,scope);
+     const Type=resolveType(node.type);if(typeof Type!=='function')throw new Error('JB3006: Type '+node.type+' is not registered');
+-    const target=existing??new Type();if(target instanceof Control){if(!existing)scope.created.push(target);target.parent=parent instanceof Control?parent:null;target._resourceParent=parent;target._nameScope=scope.names;target._xamlScope=scope;if(scope.templatedParent)target.TemplatedParent=scope.templatedParent;}
++    const frame=scope.co?.enter('XAML '+node.type);let target;
++    try{
++    if(scope.co&&node.source)yield {kind:'checkpoint',point:{...node.source,cooperative:true,phase:'construct'},locals:()=>({parent,owner:scope.owner})};
++    target=existing??(scope.co?(yield* scope.co.construct(Type,[])):new Type());if(target instanceof Control){if(!existing)scope.created.push(target);target.parent=parent instanceof Control?parent:null;target._resourceParent=parent;target._nameScope=scope.names;target._xamlScope=scope;if(scope.templatedParent)target.TemplatedParent=scope.templatedParent;}
+     if(node.source)api.dev?.register(target,node.source);
+     const name=node.attributes.Name;if(name){scope.names.set(name,target);if(scope.exportNames)scope.owner[name]=target;}
+-    for(const child of node.children)if(child.kind==='property'&&['Resources','Styles'].includes(child.property))property(target,child,scope);
++    for(const child of node.children)if(child.kind==='property'&&['Resources','Styles'].includes(child.property))yield* propertySteps(target,child,scope);
+     for(const [name,value]of Object.entries(node.attributes))attr(target,name,value,scope);
+-    for(const child of node.children)if(child.kind==='property'&&!['Resources','Styles'].includes(child.property))property(target,child,scope);
++    for(const child of node.children)if(child.kind==='property'&&!['Resources','Styles'].includes(child.property))yield* propertySteps(target,child,scope);
+     const children=node.children.filter(n=>n.kind!=='property');
+     if(children.every(n=>n.kind==='text')&&children.length)set(target,['TextBlock','Run'].includes(target.type)?'Text':'Content',children.map(n=>n.text).join(' '));
+-    else for(const child of children){const value=build(child,target,scope);if(target instanceof Control){
++    else for(const child of children){const value=yield* buildSteps(child,target,scope);if(target instanceof Control){
+       if(['Button','ToggleButton','ContentControl','ContentPresenter','UserControl','Window','ScrollViewer','TabItem','Expander','GroupBox','ContentPage','Border'].includes(target.type)&&children.length===1)set(target,'Content',value);
+@@ -112,2 +119,3 @@ export function createXamlRuntime(api, types, documents) {
+     return target;
++    }finally{if(frame)scope.co.leave(frame);}
+   }
+@@ -118,2 +126,25 @@ export function createXamlRuntime(api, types, documents) {
+   }
++  /** Consume exactly the same traversal as loadXaml, pausing before each visual.
++   * Only fresh instances may be cooperatively hydrated; cancellation owns/disposes
++   * the partially built root, never a previously running app.
++   */
++  function* loadXamlSteps(instance,id=null){
++    const co=api.dev?.co;if(!co)return loadXaml(instance,id);
++    id??=instance.constructor.$fullName??instance.$type;const ir=documents.get(id);
++    if(!ir)throw new Error('JB3007: XAML '+id+' was not registered');
++    if(instance._xamlLoaded===ir)return instance;
++    if(instance._xamlLoaded||instance.Children?.Count||instance.Content instanceof Control)throw new Error('Resumable hydration requires a fresh instance');
++    const scope={names:new Map(),owner:instance,pending:[],created:[],exportNames:true,templatedParent:null,co},before=new Map();let complete=false;
++    // Names are exported while constructing so later statements resolve them. On
++    // failure/cancellation restore all prior descriptors, including absent fields.
++    const visit=n=>{if(n.attributes?.Name&&!before.has(n.attributes.Name))before.set(n.attributes.Name,Object.getOwnPropertyDescriptor(instance,n.attributes.Name));for(const c of n.children??[])visit(c);};visit(ir.root);
++    try{yield* buildSteps(ir.root,null,scope,instance);finish(scope);instance._xamlLoaded=ir;complete=true;return instance;}
++    finally{if(!complete){cleanup(scope);for(const [name,descriptor]of before){if(descriptor)Object.defineProperty(instance,name,descriptor);else delete instance[name];}scope.names.clear();try{instance.Dispose();}catch{}}}
++  }
++  function* createFromXamlSteps(id){
++    const ir=documents.get(id);if(!ir)throw new Error('XAML '+id+' was not registered');
++    const Type=resolveType(ir.className??ir.root.type),co=api.dev?.co;
++    const instance=co?(yield* co.construct(Type,[])):new Type();
++    if(instance._xamlLoaded!==ir)yield* loadXamlSteps(instance,id);return instance;
++  }
+   function createFromXaml(id){const ir=documents.get(id);if(!ir)throw new Error('XAML '+id+' was not registered');const Type=resolveType(ir.className??ir.root.type);const instance=new Type();if(instance._xamlLoaded!==ir)loadXaml(instance,id);return instance;}
+@@ -148,3 +179,3 @@ export function createXamlRuntime(api, types, documents) {
+   }
+-  return {loadXaml,createFromXaml,applicationResources,resolveType,prepareXamlFragment,prepareXamlAttribute,refreshXamlSubscriptions,prepareXamlEnvironment};
++  return {loadXaml,loadXamlSteps,createFromXaml,createFromXamlSteps,applicationResources,resolveType,prepareXamlFragment,prepareXamlAttribute,refreshXamlSubscriptions,prepareXamlEnvironment};
+ }
+diff --git a/packages/csharp-compiler/backend.js b/packages/csharp-compiler/backend.js
+index 511f86960ad1aafcec131f1061f441e3b300edd0..43c500a466af0a1dbbcb482885e9691e8e3954b6 100644
+--- a/packages/csharp-compiler/backend.js
++++ b/packages/csharp-compiler/backend.js
+@@ -102,3 +102,3 @@ export function compileCSharp(input, options={}) {
+           const m=e.callee,name=m.name,obj=expr(m.object,ctx);
+-          if(name==='Load'&&flatName(m.object)?.endsWith('AvaloniaXamlLoader'))return `JB.loadXaml(${args[0]??'this'})`;
++          if(name==='Load'&&flatName(m.object)?.endsWith('AvaloniaXamlLoader'))return ctx.cooperative?`(yield* JB.loadXamlSteps(${args[0]??'this'}))`:`JB.loadXaml(${args[0]??'this'})`;
+           if(name==='FindControl'||name==='FindName')return `${obj}.${name}(${args.join(',')})`;
+@@ -109,2 +109,3 @@ export function compileCSharp(input, options={}) {
+         if(ctx.cooperative){
++          if(e.callee.kind==='identifier'&&e.callee.name==='InitializeComponent'&&!ctx.members.has('InitializeComponent')||e.callee.kind==='member'&&e.callee.name==='InitializeComponent'&&e.callee.object.kind==='identifier'&&e.callee.object.name==='this'&&!ctx.members.has('InitializeComponent'))return `(yield* JB.loadXamlSteps(this,${escapeJs(options.xamlNames?.[current.fullName]?current.fullName:null)}))`;
+           if(e.callee.kind==='member')return `(yield* $co.applyReference($co.reference(${expr(e.callee.object,ctx)},${escapeJs(e.callee.name)},${!!e.callee.optional}),(function*(){return [${args.join(',')}];}).call(this)))`;
+@@ -140,3 +141,3 @@ export function compileCSharp(input, options={}) {
+         if(t.rank){if(e.length)return `JB.newArray(${expr(e.length,ctx)},${defaultValue({...t,rank:0})})`;return `[${(e.items??[]).map(a=>expr(a,ctx)).join(',')}]`;}
+-        let code=`new ${typeRef(t,e)}(${e.args.map(a=>expr(a,ctx)).join(',')})`;
++        let code=ctx.cooperative?`(yield* $co.construct(${typeRef(t,e)},[${e.args.map(a=>expr(a,ctx)).join(',')}]))`:`new ${typeRef(t,e)}(${e.args.map(a=>expr(a,ctx)).join(',')})`;
+         if(e.members?.length)code=`Object.assign(${code},{${e.members.map(m=>`${escapeJs(m.name)}:${expr(m.value,ctx)}`).join(',')}})`;
+@@ -261,3 +262,28 @@ export function compileCSharp(input, options={}) {
+     }
+-    chunks.push(`class ${js} extends ${base} {\n${body.join('\n')}\n}\nJB.defineType(${escapeJs(decl.fullName)}, ${js});${continuations.length?'\nJB.dev?.co.register('+js+',['+continuations.join(',')+']);':''}`);
++    // Constructor factories allocate through the native base with the final prototype.
++    // They preserve the release backend's field/constructor order, without running
++    // a source constructor twice or making constructors return promises.
++    let constructorFactory='';
++    if(options.debug&&options.cooperativeDebug){
++      const initializers=[];
++      for(const m of decl.members){
++        currentSource=m.source??decl.source;debugMethod='.ctor';
++        if(m.mods.includes('static')||m.mods.includes('const'))continue;
++        const ctx=context({cooperative:true});
++        if(m.kind==='field')initializers.push(`this.${m.name}=${m.init?expr(m.init,ctx,m.type):defaultValue(m.type)};`);
++        if(m.kind==='event')initializers.push(`this.${m.name}=new JB.Event();`);
++        if(m.kind==='property'&&(m.get?.kind==='auto'||m.set?.kind==='auto'))initializers.push(`this.__${m.name}=${m.init?expr(m.init,ctx,m.type):defaultValue(m.type)};`);
++      }
++      const alternatives=ctorBody.length?ctorBody:[{m:null,ctx:context(),min:0,max:0}];
++      const cases=alternatives.map(c=>{
++        currentSource=c.m?.source??decl.source;debugMethod='.ctor';
++        const ctx={...clone(c.ctx),cooperative:true},params=(c.m?.parameters??[]).map(p=>(p.rest?'...':'')+p.name+(p.value?' = '+expr(p.value,ctx):'')).join(',');
++        if(c.m?.initializer?.target==='this')report('JB2261','Delegating constructor requires constructor-chain lowering',c.m);
++        const baseArgs=c.m?.initializer?.args.map(a=>expr(a,ctx)).join(',')??'';
++        const ctor=c.m?stmt(c.m.body,ctx):(options.xamlNames?.[decl.fullName]?`{yield* JB.loadXamlSteps(this,${escapeJs(decl.fullName)});}`:'{}');
++        return `if($args.length>=${c.min}&&$args.length<=${c.max===Infinity?'Infinity':c.max}){const [${params}]=$args;const $frame=$co.enter(${escapeJs(decl.fullName+'.ctor')});let $self,$complete=false;try{$self=yield* $co.construct(${base},[${baseArgs}],$newTarget);yield* (function*(){${initializers.join('')} ${ctor}}).call($self);$complete=true;return $self;}finally{try{if(!$complete)$self?.Dispose?.();}finally{$co.leave($frame);}}}`;
++      });
++      constructorFactory=`\nJB.dev?.co.registerConstructor(${js},function*($co,$args,$newTarget){${cases.join('')}throw new JB.ArgumentException('No constructor matches argument count');});`;
++    }
++    chunks.push(`class ${js} extends ${base} {\n${body.join('\n')}\n}\nJB.defineType(${escapeJs(decl.fullName)}, ${js});${continuations.length?'\nJB.dev?.co.register('+js+',['+continuations.join(',')+']);':''}${constructorFactory}`);
+   }
+diff --git a/packages/development/construction.js b/packages/development/construction.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..38a47f757417d2d49089fd83b5a298e4692010cb
+--- /dev/null
++++ b/packages/development/construction.js
+@@ -0,0 +1,38 @@
++import {Control,flushLayout} from '../avalonia-runtime/controls.js';
++import {runtimeCss} from '../avalonia-runtime/styling.js';
++/** Start a staged application through compiled constructor/XAML continuations.
++ * The returned handle exists even while paused. The host is mounted only once
++ * construction finishes; cancellation never replaces a previous running root.
++ */
++export function bootCooperative(api,manifest,host=globalThis.document?.body){
++  const co=api.dev?.co;if(!co)throw new Error('Cooperative boot requires a development session');
++  if(!host)throw new Error('A browser DOM host is required');
++  const style=document.createElement('style');style.textContent=runtimeCss;host.append(style);
++  const assets=manifest.assets??{};
++  Control.assetResolver=source=>{const path=String(source??'').replace(/^avares:\/\/[^/]+\//,'');return assets[path]??assets[Object.keys(assets).find(k=>k.endsWith('/'+path))]??source;};
++  Control.xamlLoader=api.loadXaml;Control.onRendererStatus=status=>api.onRendererStatus?.(status);
++  let disposed=false,staged=null,mounted=false,task;
++  const oldRoot=api.root,oldWindow=api.ApplicationLifetime.MainWindow;
++  const handle={root:null,ready:null,taskId:null,dispose(){
++    if(disposed)return;disposed=true;
++    if(task&&co.state().some(t=>t.taskId===task.taskId))co.command(task.taskId,'cancel');
++    try{staged?.Dispose();}finally{style.remove();if(api.root===staged){api.root=oldRoot;api.ApplicationLifetime.MainWindow=oldWindow;}}
++  }};
++  function* construct(){
++    let completed=false;
++    try{
++      const Type=manifest.entryType?api.resolveType(manifest.entryType):null;
++      staged=Type?(yield* co.construct(Type,[])):(yield* api.createFromXamlSteps(manifest.entryXaml));
++      if(manifest.entryXaml&&!staged._xamlLoaded)yield* api.loadXamlSteps(staged,manifest.entryXaml);
++      if(!(staged instanceof Control))throw new Error('Entry point must be a browser control');
++      if(disposed)return null;
++      staged.mount(host);mounted=true;flushLayout();
++      if(staged.Title)document.title=staged.Title;
++      api.root=staged;api.ApplicationLifetime.MainWindow=staged;handle.root=staged;
++      completed=true;api.dev.refresh();return staged;
++    }finally{
++      if(!completed){try{staged?.Dispose();}finally{style.remove();if(mounted&&api.root===staged){api.root=oldRoot;api.ApplicationLifetime.MainWindow=oldWindow;}}}
++    }
++  }
++  task=co.run(construct());handle.taskId=task.taskId;handle.ready=task.promise.then(root=>{if(!root&&!handle.root)handle.cancelled=true;return handle;});return handle;
++}
+diff --git a/packages/development/cooperative-debugger.js b/packages/development/cooperative-debugger.js
+index cd9eaaccd1ceee1b94419d1c7f2564bb56f2ee75..7b166e3be28cfd934a579dc7862bc9df7301fdee 100644
+--- a/packages/development/cooperative-debugger.js
++++ b/packages/development/cooperative-debugger.js
+@@ -3,3 +3,3 @@ import {snapshot,readWatch} from './watch.js';
+ export function createCooperativeDebugger({point,breakpoint=()=>false,breakOnThrow=()=>false,report=()=>{},quantum=1000,maxSteps=1000000,maxFrames=512,maxTasks=32}={}){
+-  const methods=new WeakMap(),bound=new WeakMap(),handlers=new WeakMap(),tasks=new Map();
++  const constructors=new WeakMap(),methods=new WeakMap(),bound=new WeakMap(),handlers=new WeakMap(),tasks=new Map();
+   let current=null,nextTask=1,nextFrame=1,disposed=false;
+@@ -118,2 +118,5 @@ export function createCooperativeDebugger({point,breakpoint=()=>false,breakOnThr
+   const api={register,invoke,call,start,eventFunction,command,inspectFrame,setLocal,
++    run(iterator,options={}){if(!iterator||typeof iterator.next!=='function'||typeof iterator.return!=='function')throw new TypeError('Expected a compiled continuation');return launch(iterator,options);},
++    registerConstructor(Type,factory){if(typeof Type!=='function'||typeof factory!=='function')throw new TypeError('Invalid constructor continuation');constructors.set(Type,factory);},
++    *construct(Type,args=[],newTarget=Type){const factory=constructors.get(Type);if(factory)return yield* factory(api,args,newTarget);return Reflect.construct(Type,args,newTarget);},
+     read(fn){try{return fn();}catch{return '[unavailable]';}},
+diff --git a/packages/development/workbench.js b/packages/development/workbench.js
+index 575d65b711c01d8efaf16350b7b0ca62ebb0538e..f53153fc87a3384e15ae5f06d47ca91009d1367c 100644
+--- a/packages/development/workbench.js
++++ b/packages/development/workbench.js
+@@ -58,3 +58,3 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
+   function renderBreakpoints(){breakpointList.replaceChildren();for(const [index,b]of settings.breakpoints.entries()){
+-    const bound=running?.debug?.sites?.some(p=>(!settings.cooperativeDebug||p.cooperative||settings.nativeBreaks)&&(b.language==='javascript'?p.generatedLine===b.line:p.file===b.file&&p.line===b.line))||(!settings.cooperativeDebug||settings.nativeBreaks)&&running?.debug?.xamlSites?.some(p=>p.file===b.file&&p.line===b.line);
++    const bound=running?.debug?.sites?.some(p=>(!settings.cooperativeDebug||p.cooperative||settings.nativeBreaks)&&(b.language==='javascript'?p.generatedLine===b.line:p.file===b.file&&p.line===b.line))||running?.debug?.xamlSites?.some(p=>p.file===b.file&&p.line===b.line);
+     const button=el('button',`${bound?'●':'○'} ${b.file}:${b.line}${b.condition?' ['+b.condition+']':''}${b.log?' log':''} ×`);button.type='button';button.title='Click to remove; ○ means unbound';button.onclick=()=>{settings.breakpoints.splice(index,1);renderBreakpoints();sync();};breakpointList.append(button);
+diff --git a/packages/project-system/backend.js b/packages/project-system/backend.js
+index fa44e91958a672f72dfd914b59aa914ec760ea03..b9c9fe5b9f8f6ef46f1e30e56994159e8a9b7d0a 100644
+--- a/packages/project-system/backend.js
++++ b/packages/project-system/backend.js
+@@ -79,2 +79,2 @@ export function compileProject(input,options={}) {
+ }
+-export function executable(result){if(!result.success)throw new Error('Cannot run an unsuccessful compilation');if(!result.manifest.entryXaml&&!result.manifest.entryType)throw new Error('No UI entry point; this compilation is a library');return `(function(JB){\n${result.code}\nreturn JB.boot(${escapeJs(result.manifest)}, document.getElementById('app'));\n})(globalThis.Jailbreak);`;}
++export function executable(result){if(!result.success)throw new Error('Cannot run an unsuccessful compilation');if(!result.manifest.entryXaml&&!result.manifest.entryType)throw new Error('No UI entry point; this compilation is a library');return `(function(JB){\n${result.code}\nreturn JB.${result.debug?.cooperative?'bootCooperative':'boot'}(${escapeJs(result.manifest)}, document.getElementById('app'));\n})(globalThis.Jailbreak);`;}
+diff --git a/packages/project-system/preview.js b/packages/project-system/preview.js
+index 39ebcbe841e2fe472fc4ca99dec4db4290e20b68..9a11bbe01fdac324541edc9794ad738f5eef82f0 100644
+--- a/packages/project-system/preview.js
++++ b/packages/project-system/preview.js
+@@ -8,3 +8,3 @@ export function previewDocument(result,runtime,{channel='',title='Jailbreak appl
+   const bridge=`const channel=${JSON.stringify(channel)};const report=(kind,message)=>parent.postMessage({jailbreak:true,channel,kind,message},'*');addEventListener('error',e=>report('error',e.message));addEventListener('unhandledrejection',e=>report('error',String(e.reason?.message??e.reason)));const log=console.log.bind(console);console.log=(...a)=>{log(...a);report('log',a.map(String).join(' '));};`;
+-  let boot=`try{${development?developmentBridge(development,result.debug):''}Jailbreak.onRendererStatus=s=>report('renderer',s);globalThis.appHandle=${executable(result)};report('ready','Application is running');}catch(e){report('error',e.stack??e.message);document.getElementById('error').textContent=e.stack??e.message;}`;
++  let boot=`try{${development?developmentBridge(development,result.debug):''}Jailbreak.onRendererStatus=s=>report('renderer',s);globalThis.appHandle=${executable(result)};if(appHandle.ready)appHandle.ready.then(h=>{if(!h.cancelled)report('ready','Application is running');else report('log','Application construction cancelled');}).catch(e=>{report('error',e.stack??e.message);document.getElementById('error').textContent=e.stack??e.message;});else report('ready','Application is running');}catch(e){report('error',e.stack??e.message);document.getElementById('error').textContent=e.stack??e.message;}`;
+   if(development&&result.debug){
+diff --git a/tests/browser/test_xaml_construction.py b/tests/browser/test_xaml_construction.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..4f128bc431e1fa09a394cf776385788cb83cab38
+--- /dev/null
++++ b/tests/browser/test_xaml_construction.py
+@@ -0,0 +1,66 @@
++"""The IDE remains interactive while real compiled constructors/XAML are paused."""
++import unittest
++import test_development as baseline
++from playwright.sync_api import expect
++
++class XamlConstructionTests(unittest.TestCase):
++    setUpClass=classmethod(baseline.DevelopmentTests.setUpClass.__func__)
++    tearDownClass=classmethod(baseline.DevelopmentTests.tearDownClass.__func__)
++    setUp=baseline.DevelopmentTests.setUp
++    tearDown=baseline.DevelopmentTests.tearDown
++    source=baseline.DevelopmentTests.source
++
++    def pause_in_xaml(self):
++        self.page.check('#dev-cooperative')
++        expect(self.page.locator('#dev-tree')).to_contain_text('#IncrementButton',timeout=30000)
++        text=self.source('MainView.axaml')
++        line=text[:text.index('<TextBox')].count('\n')+1
++        self.page.fill('#dev-breakpoint-line',str(line))
++        self.page.click('#dev-add-breakpoint')
++        self.page.click('#dev-restart')
++        expect(self.page.locator('#dev-pause-state')).to_contain_text('Paused',timeout=30000)
++        expect(self.page.locator('#dev-frames option').first).to_contain_text('XAML TextBox')
++        return self.page.frames[-1]
++
++    def test_xaml_pause_step_and_constructor_tail_in_live_ide(self):
++        frame=self.pause_in_xaml()
++        self.assertIsNone(frame.evaluate('appHandle.root'))
++        self.assertEqual(frame.locator('#app .jb-control').count(),0)
++        self.page.click('#dev-debug-into')
++        expect(self.page.locator('#dev-frames option').first).to_contain_text('XAML TextBlock')
++        self.assertIsNone(frame.evaluate('appHandle.root'))
++        self.page.click('#dev-debug-continue')
++        expect(self.page.frame_locator('#preview').get_by_role('button',name='Built in C#',exact=True)).to_be_visible(timeout=30000)
++        self.page.frame_locator('#preview').get_by_role('button',name='Increment',exact=True).click()
++        expect(self.page.frame_locator('#preview').get_by_text('Count: 1',exact=True)).to_be_visible()
++        self.assertEqual(self.errors,[])
++
++    def test_cancel_does_not_mount_a_partially_constructed_app(self):
++        frame=self.pause_in_xaml()
++        self.page.click('#dev-debug-cancel')
++        expect(self.page.locator('#dev-pause-state')).to_have_text('cancelled')
++        self.assertIsNone(frame.evaluate('appHandle.root'))
++        self.assertTrue(frame.evaluate('appHandle.cancelled'))
++        self.assertEqual(frame.locator('#app').inner_html(),'')
++        self.page.locator('#dev-breakpoints button').first.click()
++        self.page.click('#dev-restart')
++        expect(self.page.frame_locator('#preview').get_by_role('button',name='Increment',exact=True)).to_be_visible(timeout=30000)
++        self.assertEqual(self.errors,[])
++
++    def test_source_constructor_pause_precedes_initialize_component(self):
++        self.page.check('#dev-cooperative')
++        expect(self.page.locator('#dev-tree')).to_contain_text('#IncrementButton',timeout=30000)
++        text=self.source('MainView.axaml.cs')
++        line=text[:text.index('InitializeComponent();')].count('\n')+1
++        self.page.fill('#dev-breakpoint-line',str(line));self.page.click('#dev-add-breakpoint');self.page.click('#dev-restart')
++        expect(self.page.locator('#dev-pause-state')).to_contain_text('Paused',timeout=30000)
++        expect(self.page.locator('#dev-frames option').first).to_contain_text('.ctor')
++        self.page.click('#dev-debug-into')
++        expect(self.page.locator('#dev-frames option').first).to_contain_text('XAML UserControl')
++        self.page.click('#dev-debug-out')
++        expect(self.page.locator('#dev-frames option').first).to_contain_text('.ctor')
++        self.page.click('#dev-debug-continue')
++        expect(self.page.frame_locator('#preview').get_by_role('button',name='Built in C#',exact=True)).to_be_visible(timeout=30000)
++        self.assertEqual(self.errors,[])
++
++if __name__=='__main__': unittest.main(verbosity=2)
+diff --git a/tests/xaml-continuations.test.js b/tests/xaml-continuations.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..46e82fbde79e04150637e3f308a11721a7d3f866
+--- /dev/null
++++ b/tests/xaml-continuations.test.js
+@@ -0,0 +1,66 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {compileProject} from '../packages/project-system/index.js';
++import {createRuntime} from '../packages/avalonia-runtime/index.js';
++const files={
++ 'View.axaml':`<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Demo.View">
++ <StackPanel Name="Panel">
++  <TextBox Name="Input" Text="initial"/>
++  <Button Name="Action" Content="Run" Click="HandleClick"/>
++ </StackPanel>
++</UserControl>`,
++ 'View.cs':`namespace Demo;
++ public partial class View : UserControl {
++ public static int finished=0;
++ public int count=5;
++ public View(){InitializeComponent(); finished+=1; Action.Content="Ready";}
++ public void HandleClick(object s,RoutedEventArgs e){ count+=1; Input.Text=$"{count}"; }
++ }`
++};
++function build(input=files){const result=compileProject(input,{debug:true,cooperativeDebug:true});assert.equal(result.success,true,JSON.stringify(result.diagnostics));const JB=createRuntime(),events=[];JB.enableDevelopment({debug:result.debug,nativeBreaks:false,report:(event,data)=>events.push({event,data})});new Function('JB',result.code)(JB);return {JB,result,events};}
++function paused(JB){return JB.dev.co.state().find(t=>t.status==='paused');}
++test('XAML pauses before allocating the target and resumes before constructor tail',async()=>{
++ const {JB,events}=build();JB.dev.configure({breakpoints:[{file:'View.axaml',line:4}]});
++ const task=JB.dev.co.run(JB.createFromXamlSteps('Demo.View'));const state=paused(JB);assert.ok(state);assert.equal(state.point.language,'xaml');
++ const stop=events.findLast(e=>e.event==='debug-paused').data;assert.ok(stop.frames.some(f=>f.method==='Demo.View.ctor'));
++ const owner=events.findLast(e=>e.event==='debug-hit').data.locals.owner;assert.ok(owner);
++ assert.equal(JB.types.get('Demo.View').finished,0);
++ JB.dev.co.command(task.taskId,'continue');const root=await task.promise;
++ assert.equal(root.Action.Content,'Ready');assert.equal(root.count,5);assert.equal(JB.types.get('Demo.View').finished,1);assert.equal(root.Input.Text,'initial');
++ await root.Action.raise('Click');await new Promise(r=>setTimeout(r,5));assert.equal(root.count,6);root.Dispose();
++});
++test('cancelling paused hydration disposes children and does not run constructor tail',async()=>{
++ const {JB}=build();JB.dev.configure({breakpoints:[{file:'View.axaml',line:4}]});
++ const original=JB.dev.register,created=[];JB.dev.register=(control,source)=>{created.push(control);return original(control,source);};
++ const task=JB.dev.co.run(JB.createFromXamlSteps('Demo.View'));assert.ok(paused(JB));
++ JB.dev.co.command(task.taskId,'cancel');await task.promise;
++ assert.ok(created.length>=3);assert.ok(created.every(c=>c._disposed));assert.equal(JB.types.get('Demo.View').finished,0);assert.equal(JB.dev.co.busy,false);
++ assert.equal(created[0].Input,undefined);assert.equal(created[0].Action,undefined);
++});
++test('normal and resumable construction have matching property and namescope results',async()=>{
++ const native=build(),co=build();const a=native.JB.createFromXaml('Demo.View'),b=await co.JB.dev.co.run(co.JB.createFromXamlSteps('Demo.View')).promise;
++ for(const root of [a,b]){assert.equal(root.FindControl('Input'),root.Input);assert.equal(root.Action.Content,'Ready');assert.equal(root.count,5);root.Dispose();}
++});
++test('constructor continuations preserve base allocation field initializers and calls',async()=>{
++ const {JB}=build({'Ctor.cs':`public class Base { public int x=2; public Base(int a){x+=a;} } public class Derived:Base { public int y=3; public Derived(int a):base(a){y+=x;} public static Derived Make(){return new Derived(4);} }`});
++ const T=JB.types.get('Derived'),root=await JB.dev.co.start(T,'Make').promise;
++ assert.ok(root instanceof T);assert.equal(root.x,6);assert.equal(root.y,9);assert.deepEqual([new T(4).x,new T(4).y],[root.x,root.y]);
++});
++test('nested CSharp UI constructors suspend inside child XAML exactly once',async()=>{
++ const input={'Inner.axaml':'<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Inner"><Button Name="B" Content="inner"/></UserControl>',
++ 'Test.cs':'public partial class Inner:UserControl {public static int runs=0;public Inner(){InitializeComponent();runs++;}} public class Make {public static Inner Run(){return new Inner();}}'};
++ const {JB}=build(input);JB.dev.configure({breakpoints:[{file:'Inner.axaml',line:1}]});const task=JB.dev.co.start(JB.types.get('Make'),'Run');
++ let stops=0;while(paused(JB)){stops++;JB.dev.co.command(task.taskId,'continue');}const root=await task.promise;
++ assert.equal(stops,2);assert.equal(JB.types.get('Inner').runs,1);assert.equal(root.B.Content,'inner');root.Dispose();
++});
++test('resumable property-element children traverse the same loader',async()=>{
++ const {JB}=build({'A.axaml':'<StackPanel xmlns="https://github.com/avaloniaui"><StackPanel.Children><Button Name="B" Content="Hi"/></StackPanel.Children></StackPanel>'});
++ const task=JB.dev.co.run(JB.createFromXamlSteps('A.axaml'));const root=await task.promise;assert.equal(root.Children.Count,1);assert.equal(root.FindControl('B').Content,'Hi');root.Dispose();
++});
++test('XAML errors fail the task and roll back partial root ownership',async()=>{
++ const {JB}=build();const ir=JB.documents.get('Demo.View');ir.root.children[0].children[1].type='NotRegistered';const created=[];const orig=JB.dev.register;JB.dev.register=(c,s)=>{created.push(c);orig(c,s);};
++ const task=JB.dev.co.run(JB.createFromXamlSteps('Demo.View'));await assert.rejects(task.promise,/NotRegistered/);assert.ok(created.every(c=>c._disposed));assert.equal(JB.dev.co.busy,false);assert.equal(JB.types.get('Demo.View').finished,0);
++});
++test('cooperative constructors and XAML are absent from release emitted code',()=>{
++ const result=compileProject(files);assert.equal(result.success,true);assert.doesNotMatch(result.code,/registerConstructor|loadXamlSteps|checkpoint/);assert.equal(result.debug,undefined);
++});

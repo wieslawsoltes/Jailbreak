@@ -1,0 +1,51 @@
+name: Integrate reviewed source
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['integration/**', 'scripts/apply-reviewed.mjs', '.github/workflows/integrate-reviewed.yml']
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: jailbreak-reviewed-source
+  cancel-in-progress: false
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply checksum-validated readable source patches
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          node scripts/apply-reviewed.mjs
+      - name: Verify ordinary source commits
+        run: |
+          npm test
+          npm run gate
+          npm run build
+          npm run check
+      - name: Retain exact tested source
+        run: |
+          mkdir -p test-results/source
+          git archive --format=tar.gz HEAD > test-results/source/source.tar.gz
+          git rev-parse HEAD > test-results/source/commit.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reviewed-source-evidence
+          path: test-results
+      - name: Publish without overwriting concurrent commits
+        run: git push origin HEAD:main
+      - name: Run full browser CLR and Pages verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run toolchain.yml --ref main
