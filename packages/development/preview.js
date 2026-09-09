@@ -8,7 +8,11 @@ addEventListener('message',event=>{
   if(event.source!==parent||message?.channel!==channel||message?.jailbreakDev!==1)return;
   try{
     if(message.action==='inspect')report('development',{event:'tree',payload:development.tree()});
-    else if(message.action==='select')development.select(String(message.id));
+    else if(message.action==='select')development.select(String(message.id),{additive:!!message.additive});
+    else if(message.action==='design-configure')development.surface.configure(message.settings);
+    else if(message.action==='design-arrange')development.surface.arrange(message.command);
+    else if(message.action==='design-set')development.surface.setGeometry(message.values);
+    else if(message.action==='design-clear')development.surface.clear();
     else if(message.action==='pick')development.pick(message.value);
     else if(message.action==='configure')development.configure(message.settings??{});
     else if(message.action==='break-next')development.breakNext();

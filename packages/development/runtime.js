@@ -1,3 +1,4 @@
+import {createDesignSurface} from './design-surface.js';
 import {createCooperativeDebugger} from './cooperative-debugger.js';
 import {beginTemplateTransaction} from '../avalonia-runtime/template-transaction.js';
 import {eventNames} from '../avalonia-runtime/schema.js';
@@ -51,31 +52,20 @@ export function createDevelopmentSession(JB,{debug={},report=()=>{},nativeBreaks
     return native?stop&&nativeBreaks:stop;
   }
   function watchResults(){return watches.map(path=>{try{return {path,value:snapshot(readWatch(lastLocals??{this:JB.root},path))};}catch(error){return {path,error:error.message};}});}
-  function tree(){return registry().map(({c,parent})=>({id:c.uid,parent,type:c.constructor.$fullName??c.type,name:c.Name??'',source:origins.get(c)??null,template:!!c.TemplatedParent,selected:c===selected}));}
+  function tree(){return registry().map(({c,parent})=>({id:c.uid,parent,type:c.constructor.$fullName??c.type,name:c.Name??'',source:origins.get(c)??null,template:!!c.TemplatedParent,selected:surface.has(c.uid)}));}
   function inspect(id){const c=resolve(id);if(!c)throw new Error('Visual was disposed or is not part of the application');
     const values={};for(const name of new Set([...c._metadata.keys(),...c._values.keys()])){
       const value=c.GetValue(name);values[name]={value:snapshot(value,{depth:1}),local:c._values.get(name)?.has(1000)??false,binding:bindings.get(c)?.[name]??null};
     }
-    return {id:c.uid,type:c.constructor.$fullName??c.type,source:origins.get(c)??null,template:!!c.TemplatedParent,properties:values};
+    const r=c.element?.getBoundingClientRect(),rect=r?{x:r.x,y:r.y,width:r.width,height:r.height}:null;
+    const left=c.GetValue('Canvas.Left'),top=c.GetValue('Canvas.Top'),style=c.element?.ownerDocument?.defaultView?.getComputedStyle(c.element);
+    let transformed=false;for(let e=c.element;e;e=e.parentElement){const computed=e.ownerDocument?.defaultView?.getComputedStyle(e);if(computed?.transform&&computed.transform!=='none'){transformed=true;break;}}
+    const movable=!!rect&&c.parent?.type==='Canvas'&&!c.TemplatedParent&&origins.get(c)?.language==='xaml'&&left!=null&&top!=null&&Number.isFinite(Number(left))&&Number.isFinite(Number(top))&&c.GetValue('Canvas.Right')==null&&c.GetValue('Canvas.Bottom')==null&&!transformed&&['marginLeft','marginRight','marginTop','marginBottom'].every(k=>!parseFloat(style?.[k]??'0'));
+    return {id:c.uid,type:c.constructor.$fullName??c.type,name:c.Name??'',source:origins.get(c)??null,template:!!c.TemplatedParent,properties:values,rect,movable,
+      parent:c.parent?{id:c.parent.uid,type:c.parent.type}:null,layout:rect?{x:Number(left??0),y:Number(top??0),width:rect.width,height:rect.height}:null};
   }
-  let overlay=null,resizeObserver=null,drag=null;
-  function resizeHandle(){
-    const handle=document.createElement('button');handle.type='button';handle.setAttribute('aria-label','Resize selected visual');handle.style.cssText='position:absolute;right:-6px;bottom:-6px;width:12px;height:12px;padding:0;pointer-events:auto;cursor:nwse-resize;border:1px solid #fff;background:#7666eb;touch-action:none';
-    handle.addEventListener('pointerdown',event=>{if(!selected?.element)return;event.preventDefault();event.stopPropagation();const r=selected.element.getBoundingClientRect();drag={id:selected.uid,x:event.clientX,y:event.clientY,width:r.width,height:r.height};handle.setPointerCapture(event.pointerId);});
-    handle.addEventListener('pointermove',event=>{if(!drag)return;const width=Math.max(1,Math.round(drag.width+event.clientX-drag.x)),height=Math.max(1,Math.round(event.shiftKey?width*drag.height/drag.width:drag.height+event.clientY-drag.y));Object.assign(overlay.style,{width:width+'px',height:height+'px'});});
-    handle.addEventListener('pointerup',event=>{if(!drag)return;const value={id:drag.id,width:parseFloat(overlay.style.width),height:parseFloat(overlay.style.height)};drag=null;handle.releasePointerCapture(event.pointerId);highlight();emit('resize',value);});
-    handle.addEventListener('pointercancel',()=>{drag=null;highlight();});
-    handle.addEventListener('keydown',event=>{if(!selected?.element||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key))return;event.preventDefault();const r=selected.element.getBoundingClientRect(),delta=event.shiftKey?10:1;emit('resize',{id:selected.uid,width:Math.max(1,Math.round(r.width+({ArrowLeft:-delta,ArrowRight:delta}[event.key]??0))),height:Math.max(1,Math.round(r.height+({ArrowUp:-delta,ArrowDown:delta}[event.key]??0)))});});
-    overlay.append(handle);
-  }
-  function highlight(){if(!overlay||!selected?.element)return;const r=selected.element.getBoundingClientRect();Object.assign(overlay.style,{left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px'});}
-  function select(id){selected=resolve(id);if(!selected)throw new Error('Visual selection is no longer available');
-    if(globalThis.document){if(!overlay){overlay=document.createElement('div');overlay.setAttribute('role','group');overlay.setAttribute('aria-label','Design selection');overlay.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;border:2px solid #7666eb;box-sizing:border-box;background:#7666eb0d';document.body.append(overlay);resizeHandle();}
-      resizeObserver?.disconnect();if(globalThis.ResizeObserver){resizeObserver=new ResizeObserver(highlight);resizeObserver.observe(selected.element);}highlight();}
-    const result=inspect(id);emit('selected',result);return result;
-  }
-  function pointer(event){if(!picking)return;const path=event.composedPath?.()??[];const item=registry().filter(({c})=>path.includes(c.element)).sort((a,b)=>path.indexOf(a.c.element)-path.indexOf(b.c.element))[0];if(item){event.preventDefault();event.stopImmediatePropagation();if(event.type==='click')select(item.c.uid);}}
-  globalThis.document?.addEventListener('pointerdown',pointer,true);globalThis.document?.addEventListener('click',pointer,true);globalThis.addEventListener?.('scroll',highlight,true);
+  const surface=createDesignSurface({document:globalThis.document,resolve,entries:registry,inspect,onSelect:c=>{selected=c;},report:emit,revision:()=>revision,busy:()=>co.busy||reloading});
+  const select=(id,options)=>surface.select(id,options),highlight=()=>surface.refresh(false);
   function applyReload(plan,methods){
     if(co.busy)throw new Error('Finish or cancel active debug invocations before hot reload');
     if(!plan.compatible||plan.revision!==revision+1)throw new Error('Stale or incompatible hot reload');
@@ -122,10 +112,10 @@ export function createDevelopmentSession(JB,{debug={},report=()=>{},nativeBreaks
     configure({debug:plan.debug});revision=plan.revision;
     const warn=message=>emit('reload-warning',{message,revision});
     templates.finalize(warn);for(const t of environments)t.finalize();structure.finalize(warn);reloading=false;
-    if(selected?._disposed){selected=null;overlay?.remove();overlay=null;resizeObserver?.disconnect();}
-    emit('reloaded',{revision,properties:changes.length,methods:methods.length,environments:environmentChanges.length,added:structure.added,removed:structure.removed,panels:structure.groups});emit('tree',tree());highlight();return {revision};
+    surface.refresh();
+    emit('reloaded',{revision,properties:changes.length,methods:methods.length,environments:environmentChanges.length,added:structure.added,removed:structure.removed,panels:structure.groups});emit('tree',tree());surface.refresh();if(selected)emit('selected',inspect(selected.uid));highlight();return {revision};
   }
-  const api={binaryHit:(point,read)=>hitPoint(point,read),co,handler:(object,name)=>co.eventFunction(JB.method(object,name)),configure,hit,inspect,tree,select,applyReload,watchResults,
+  const api={surface,binaryHit:(point,read)=>hitPoint(point,read),co,handler:(object,name)=>co.eventFunction(JB.method(object,name)),configure,hit,inspect,tree,select,applyReload,watchResults,
     read(fn){try{return fn();}catch{return '[unavailable]';}},
     throwing(error,point){emit('debug-exception',{point,error:snapshot(error),message:error?.message??String(error),stack:error?.stack});if(!co.active&&breakOnThrow&&nativeBreaks){debugger;}return error;},
     get revision(){return revision;},
@@ -133,9 +123,9 @@ export function createDevelopmentSession(JB,{debug={},report=()=>{},nativeBreaks
     created(value,source){if(value?.uid){origins.set(value,{...source});emit('constructed',{id:value.uid,source});}return value;},
     binding(control,name,spec){let map=bindings.get(control);if(!map){map={};bindings.set(control,map);}map[name]=snapshot(spec);},
     breakNext(){breakNext=true;},
-    pick(value){picking=!!value;if(!picking){overlay?.remove();overlay=null;}return picking;},
-    refresh(){emit('tree',tree());if(selected&&!selected._disposed)emit('selected',inspect(selected.uid));},
-    dispose(){co.dispose();if(inputRoot){inputRoot.inert=inputInert;inputRoot=null;}disposed=true;lastLocals=null;selected=null;breakpoints=[];watches=[];points.clear();overlay?.remove();resizeObserver?.disconnect();globalThis.document?.removeEventListener('pointerdown',pointer,true);globalThis.document?.removeEventListener('click',pointer,true);globalThis.removeEventListener?.('scroll',highlight,true);if(JB.dev===api){JB.method=originalMethod;JB.eventAdd=originalAdd;JB.eventRemove=originalRemove;delete JB.dev;}}
+    pick(value){return surface.pick(value);},
+    refresh(){surface.refresh();emit('tree',tree());if(selected&&!selected._disposed)emit('selected',inspect(selected.uid));},
+    dispose(){co.dispose();if(inputRoot){inputRoot.inert=inputInert;inputRoot=null;}disposed=true;lastLocals=null;selected=null;breakpoints=[];watches=[];points.clear();surface.dispose();if(JB.dev===api){JB.method=originalMethod;JB.eventAdd=originalAdd;JB.eventRemove=originalRemove;delete JB.dev;}}
   };
   return api;
 }
