@@ -1,0 +1,89 @@
+diff --git a/packages/development/component-refactor.js b/packages/development/component-refactor.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..220d2875b1cf8a1abffa466a3044953fcca080b0
+--- /dev/null
++++ b/packages/development/component-refactor.js
+@@ -0,0 +1,60 @@
++import {parseXml} from '../compiler-core/xml.js';
++import {lexCSharp} from '../csharp-compiler/lexer.js';
++import {parseCSharp} from '../csharp-compiler/parser.js';
++import {eventNames,controlDefinitions} from '../avalonia-runtime/schema.js';
++import {sourcePath,sourceTransaction,snapshotFiles} from '../workspace/journal.js';
++const AVALONIA='https://github.com/avaloniaui',XAML='http://schemas.microsoft.com/winfx/2006/xaml';
++const layout=new Set('Name x:Name Margin Width Height MinWidth MinHeight MaxWidth MaxHeight HorizontalAlignment VerticalAlignment Grid.Row Grid.Column Grid.RowSpan Grid.ColumnSpan Canvas.Left Canvas.Top Canvas.Right Canvas.Bottom DockPanel.Dock'.split(' '));
++const tag=n=>n.tag?.split(':').at(-1),escape=s=>s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
++function xml(text,file){const p=parseXml(text,file);if(p.diagnostics.length)throw new Error('Refactoring requires valid XML: '+p.diagnostics[0].message);return p.root;}
++function elements(root){const result=[];const visit=(node,parent=null)=>{if(node.kind!=='element')return;result.push({node,parent});for(const c of node.children)visit(c,node);};visit(root);return result;}
++function identifier(value){if(!/^[A-Z][A-Za-z0-9_]*$/.test(value))throw new Error('Use a PascalCase component name containing letters, digits and underscores');return value;}
++/** Extract self-contained literal XAML without changing external namescope/handler dependencies.
++ * The candidate must additionally pass the normal project compiler before applying in Studio.
++ */
++export function extractComponent(input,file,offset,{name,namespace,path}={}){
++  const files=snapshotFiles(input),text=files[file];if(typeof text!=='string'||!/\.a?xaml$/i.test(file))throw new Error('Select editable XAML to extract');
++  identifier(name);const root=xml(text,file),all=elements(root),entry=all.find(e=>e.node.span.start===offset);
++  if(!entry?.parent||!Object.hasOwn(controlDefinitions,tag(entry.node))||entry.node.tag.includes(':'))throw new Error('Select a built-in child visual, not the document root or a custom component');
++  const owner=root.attributes['x:Class'];if(!owner)throw new Error('Component extraction requires an x:Class owner');
++  namespace??=owner.includes('.')?owner.slice(0,owner.lastIndexOf('.')):'Components';
++  if(!/^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*$/.test(namespace))throw new Error('Invalid C# namespace');
++  const className=namespace+'.'+name,folder=file.includes('/')?file.slice(0,file.lastIndexOf('/')+1):'';
++  path??=folder+'Components/'+name+'.axaml';sourcePath(path);if(!/\.axaml$/.test(path)||path===file)throw new Error('Use a new .axaml component path');
++  const codePath=path+'.cs';if(Object.keys(files).some(p=>[path.toLowerCase(),codePath.toLowerCase()].includes(p.toLowerCase())))throw new Error('Component files already exist');
++  const node=entry.node,sub=elements(node).map(e=>e.node),names=new Set(sub.map(n=>n.attributes.Name??n.attributes['x:Name']).filter(Boolean));
++  const ns={};for(let e=entry;e;e=all.find(p=>p.node===e.parent))for(const [key,value]of Object.entries(e.node.attributes))if((key==='xmlns'||key.startsWith('xmlns:'))&&!Object.hasOwn(ns,key))ns[key]=value;
++  if(ns.xmlns!==AVALONIA||ns['xmlns:x']!==XAML)throw new Error('Extraction requires the standard Avalonia and x namespaces');
++  for(const [p,t]of Object.entries(files)){
++    if(/\.cs$/i.test(p)){
++      const parsed=parseCSharp(t,p);if(!parsed.ast||parsed.diagnostics.some(d=>d.severity==='error'))throw new Error('Resolve C# syntax before namescope-changing refactoring');
++      if(parsed.ast.declarations.some(d=>d.fullName===className))throw new Error('Component type already exists');
++      for(const token of lexCSharp(t,p).tokens)if((token.kind==='id'&&names.has(token.value))||(['string','interpolated'].includes(token.kind)&&[...names].some(n=>new RegExp('\\b'+n+'\\b').test(token.value))))throw new Error('Named control is referenced from C#; extraction would change ownership');
++    }
++    if(/\.a?xaml$/i.test(p))for(const e of elements(xml(t,p))){
++      const n=e.node;
++      if(['Style','ControlTheme','ControlTemplate','DataTemplate','TreeDataTemplate'].includes(tag(n))||tag(n).endsWith('.Styles'))throw new Error('Styled/template workspaces require dependency-aware component extraction');
++      if(p===file&&n.span.start>=node.span.start&&n.span.end<=node.span.end)continue;
++      for(const [key,value]of Object.entries(n.attributes))if(value.startsWith('{')&&[...names].some(n=>new RegExp('\\b'+n+'\\b').test(value)))throw new Error('External XAML namescope reference would be broken');
++    }
++  }
++  for(const n of sub){
++    if(n.tag.includes(':')||tag(n).includes('.')||!Object.hasOwn(controlDefinitions,tag(n)))throw new Error('Only self-contained built-in visual trees can be extracted');
++    for(const [key,value]of Object.entries(n.attributes)){
++      if(eventNames.includes(key)||eventNames.includes(key.split('.').at(-1)))throw new Error('Move event handlers explicitly before extracting this component');
++      if(value.startsWith('{')&&!value.startsWith('{}')||key.startsWith('x:')&&!['x:Name'].includes(key)||['Classes','Theme','DataContext','Styles'].includes(key))throw new Error('Bindings, resources and ownership-sensitive metadata require explicit extraction');
++    }
++  }
++  let prefix='component',i=1;while(Object.hasOwn(ns,'xmlns:'+prefix)&&ns['xmlns:'+prefix]!=='using:'+namespace)prefix='component'+i++;
++  const moved=Object.entries(node.attributes).filter(([key])=>layout.has(key)),remove=moved.map(([key])=>node.attributeSpans[key]).sort((a,b)=>b.start-a.start);
++  let fragment=text.slice(node.span.start,node.span.end);for(const span of remove){const a=span.start-node.span.start,b=span.end-node.span.start;fragment=fragment.slice(0,a)+fragment.slice(b);}
++  const eol=text.includes('\r\n')?'\r\n':'\n',indent=/^\s*$/.test(text.slice(text.lastIndexOf('\n',offset)+1,offset))?text.slice(text.lastIndexOf('\n',offset)+1,offset):'';
++  const wrapper='<'+prefix+':'+name+(moved.length?' '+moved.map(([k,v])=>`${k}="${escape(v)}"`).join(' '):'')+' />';
++  let parent=text.slice(0,node.span.start)+wrapper+text.slice(node.span.end);
++  if(ns['xmlns:'+prefix]!=='using:'+namespace){const at=root.span.start+1+root.tag.length;parent=parent.slice(0,at)+` xmlns:${prefix}="using:${namespace}"`+parent.slice(at);}
++  const content=fragment.split(eol).map((line,j)=>'  '+(j&&line.startsWith(indent)?line.slice(indent.length):line)).join(eol);
++  const component='<UserControl '+Object.entries(ns).map(([k,v])=>`${k}="${escape(v)}"`).join(' ')+` x:Class="${className}">`+eol+content+eol+'</UserControl>'+eol;
++  const code=`using Avalonia.Controls;${eol}namespace ${namespace};${eol}public partial class ${name} : UserControl${eol}{${eol}    public ${name}() { InitializeComponent(); }${eol}}${eol}`;
++  xml(parent,file);xml(component,path);
++  return {...sourceTransaction([{path:file,before:text,after:parent},{path,before:null,after:component},{path:codePath,before:null,after:code}],'Extract '+className),focus:file,componentPath:path,className};
++}
+diff --git a/tests/component-refactor.test.js b/tests/component-refactor.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..075aafe0acb3423114168255c4f30f7bc646f67e
+--- /dev/null
++++ b/tests/component-refactor.test.js
+@@ -0,0 +1,17 @@
++import test from 'node:test';import assert from 'node:assert/strict';
++import {extractComponent} from '../packages/development/component-refactor.js';
++import {applySourceTransaction,WorkspaceJournal} from '../packages/workspace/journal.js';
++import {compileProject} from '../packages/project-system/index.js';
++import {createRuntime} from '../packages/avalonia-runtime/index.js';
++const x='<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Demo.View"><Grid><!--keep--><Border Name="Card" Grid.Row="1" Margin="12" Padding="8" Background="#f00"><StackPanel><TextBlock Text="Owned content"/></StackPanel></Border></Grid></UserControl>';
++const input=()=>({'View.axaml':x,'View.cs':'namespace Demo; public partial class View : UserControl { public View(){InitializeComponent();} }','Demo.csproj':'<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>'});
++const plan=f=>extractComponent(f,'View.axaml',f['View.axaml'].indexOf('<Border'),{name:'CardView'});
++test('extract creates a real XAML and CSharp component with only placement on the host',()=>{const f=input(),tx=plan(f);assert.equal(tx.changes.length,3);applySourceTransaction(f,tx);assert.match(f['View.axaml'],/<component:CardView Name="Card" Grid.Row="1" Margin="12" \/>/);assert.match(f['View.axaml'],/<!--keep-->/);assert.match(f['Components/CardView.axaml'],/Padding="8" Background="#f00"/);assert.doesNotMatch(f['Components/CardView.axaml'],/Margin="12"|Name="Card"/);const r=compileProject(f,{entryXaml:'View.axaml'});assert.equal(r.success,true,JSON.stringify(r.diagnostics));assert.equal(r.types.some(t=>t.name==='Demo.CardView'),true);});
++test('extracted component executes through release and resumable XAML construction',async()=>{for(const cooperative of [false,true]){const f=input();applySourceTransaction(f,plan(f));const r=compileProject(f,{entryXaml:'View.axaml',debug:cooperative,cooperativeDebug:cooperative});assert.equal(r.success,true,JSON.stringify(r.diagnostics));const JB=createRuntime();if(cooperative)JB.enableDevelopment({debug:r.debug,nativeBreaks:false});new Function('JB',r.code)(JB);const root=cooperative?await JB.dev.co.run(JB.createFromXamlSteps('Demo.View')).promise:JB.createFromXaml('Demo.View');assert.equal(root.Card.constructor.$fullName,'Demo.CardView');assert.equal(root.Card.Content.Content.Children.at(0).Text,'Owned content');root.Dispose();}});
++test('extraction and undo redo are one multi-file history entry',()=>{const f=input(),j=new WorkspaceJournal();j.reset(f);j.commit(f,plan(f));assert.equal(j.undoStack.length,1);j.apply(f,'undo');assert.deepEqual(f,input());j.apply(f,'redo');assert.ok(f['Components/CardView.axaml.cs']);});
++test('external CSharp namescope references prevent ownership-changing extraction',()=>{for(const suffix of ['public string Read(){return Card.Name;}','public void Read(){FindControl("Card");}','public string Read(){return $"{Card.Name}";}']){const f=input();f['View.cs']=f['View.cs'].replace(/}\s*$/,suffix+'}');assert.throws(()=>plan(f),/referenced from C#/);}});
++test('owner event handlers markup and global styles are not silently severed',()=>{for(const patch of [s=>s.replace('Padding="8"','PointerPressed="Handle"'),s=>s.replace('Owned content','{Binding Title}'),s=>s.replace('<!--keep-->','<Grid.Styles><Style Selector="TextBlock"/></Grid.Styles>')]){const f=input();f['View.axaml']=patch(x);assert.throws(()=>plan(f),/event|Bindings|Styled/);}});
++test('external ElementName and reference expressions block extraction',()=>{const f=input();f['View.axaml']=x.replace('</Grid>','<TextBlock Text="{Binding Name, ElementName=Card}"/></Grid>');assert.throws(()=>plan(f),/External XAML/);});
++test('component extraction validates collisions and source paths',()=>{let f=input();f['Components/CardView.axaml']='existing';assert.throws(()=>plan(f),/already exist/);f=input();f['Other.cs']='namespace Demo; public class CardView {}';assert.throws(()=>plan(f),/type already/);for(const name of ['class','../Bad','A-B','X;'])assert.throws(()=>extractComponent(input(),'View.axaml',x.indexOf('<Border'),{name}));assert.throws(()=>extractComponent(input(),'View.axaml',x.indexOf('<Border'),{name:'Safe',path:'../Safe.axaml'}));});
++test('CRLF original fragment and namespace collision are preserved',()=>{const f=input();f['View.axaml']=x.replace('x:Class=', 'xmlns:component="using:Other" x:Class=').replace('<StackPanel>','<StackPanel>\r\n  <!--inside-->\r\n').replace('</StackPanel>','\r\n</StackPanel>');const tx=plan(f);applySourceTransaction(f,tx);assert.match(f['View.axaml'],/component1:CardView/);assert.match(f['Components/CardView.axaml'],/\r\n/);assert.match(f['Components/CardView.axaml'],/<!--inside-->/);});
++test('root custom controls and stale locations are not extraction targets',()=>{const f=input();assert.throws(()=>extractComponent(f,'View.axaml',0,{name:'Bad'}),/child visual/);assert.throws(()=>extractComponent(f,'View.axaml',x.indexOf('<Border')+1,{name:'Bad'}),/child visual/);});

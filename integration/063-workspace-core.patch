@@ -1,0 +1,142 @@
+diff --git a/packages/workspace/diff.js b/packages/workspace/diff.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..fbf5165a4f184c3701d81c1d00abfaa900eb2129
+--- /dev/null
++++ b/packages/workspace/diff.js
+@@ -0,0 +1,20 @@
++/** Bounded line diff. Large changed blocks fall back to exact replace-all rows, not guessed matches. */
++export function lineDiff(before,after,{maxCells=500000,maxRows=2000,context=3}={}){
++  if(typeof before!=='string'||typeof after!=='string')throw new TypeError('Diff requires text');
++  for(const [n,min]of [[maxCells,1],[maxRows,1],[context,0]])if(!Number.isSafeInteger(n)||n<min)throw new RangeError('Invalid diff budget');
++  if(before.length+after.length>8000000)throw new RangeError('Diff source budget exceeded');
++  const a=before===''?[]:before.match(/[^\n]*\n|[^\n]+$/g),b=after===''?[]:after.match(/[^\n]*\n|[^\n]+$/g);let head=0,tail=0;
++  while(head<Math.min(a.length,b.length)&&a[head]===b[head])head++;
++  while(tail<Math.min(a.length,b.length)-head&&a[a.length-1-tail]===b[b.length-1-tail])tail++;
++  const aa=a.slice(head,a.length-tail),bb=b.slice(head,b.length-tail),n=aa.length,m=bb.length,rows=[];let old=1,next=1,truncated=false,coarse=(n+1)*(m+1)>maxCells;
++  const emit=(kind,text)=>{const row={kind,text,beforeLine:kind==='add'?null:old,afterLine:kind==='remove'?null:next};if(kind!=='add')old++;if(kind!=='remove')next++;if(rows.length<maxRows)rows.push(row);else truncated=true;};
++  if(head>context){rows.push({kind:'gap',text:(head-context)+' unchanged lines'});old=next=head-context+1;}
++  for(let i=Math.max(0,head-context);i<head;i++)emit('equal',a[i]);
++  if(!coarse){const dp=new Uint32Array((n+1)*(m+1)),at=(i,j)=>i*(m+1)+j;
++    for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)dp[at(i,j)]=aa[i]===bb[j]?dp[at(i+1,j+1)]+1:Math.max(dp[at(i+1,j)],dp[at(i,j+1)]);
++    let i=0,j=0;while(i<n||j<m){if(i<n&&j<m&&aa[i]===bb[j]){emit('equal',aa[i++]);j++;}else if(i<n&&(j===m||dp[at(i+1,j)]>=dp[at(i,j+1)]))emit('remove',aa[i++]);else emit('add',bb[j++]);}
++  }else{for(const line of aa)emit('remove',line);for(const line of bb)emit('add',line);}
++  for(let i=0;i<Math.min(context,tail);i++)emit('equal',a[a.length-tail+i]);
++  if(tail>context&&rows.length<maxRows)rows.push({kind:'gap',text:(tail-context)+' unchanged lines'});
++  return {rows,coarse,truncated,beforeLines:a.length,afterLines:b.length};
++}
+diff --git a/packages/workspace/journal.js b/packages/workspace/journal.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..7e846cc7bda25828020db010932f8b2a5cd128fc
+--- /dev/null
++++ b/packages/workspace/journal.js
+@@ -0,0 +1,87 @@
++/** Exact, bounded workspace transactions shared by source edits, designer edits and refactors.
++ * Source records are ordinary UTF-16 strings; null denotes an absent file, not empty text.
++ */
++const own=(o,k)=>Object.hasOwn(o,k), value=(o,k)=>own(o,k)?o[k]:null;
++export function sourcePath(path){
++  if(typeof path!=='string'||!path||path.length>1024||path.startsWith('/')||/[\\\x00-\x1f:]/.test(path)||path.split('/').some(p=>!p||p==='.'||p==='..'||['.git','__proto__','constructor','prototype'].includes(p)))throw new Error('Invalid relative source path');
++  return path;
++}
++export function snapshotFiles(files,{maxFiles=2000,maxChars=16000000}={}){
++  if(!files||typeof files!=='object'||Array.isArray(files))throw new TypeError('Expected a source file map');
++  const out=Object.create(null),entries=Object.entries(Object.getOwnPropertyDescriptors(files));let chars=0;
++  if(entries.length>maxFiles)throw new Error('Workspace file budget exceeded');
++  for(const [path,d]of entries){sourcePath(path);if(!own(d,'value')||typeof d.value!=='string')throw new Error('Sources must be data properties containing text');if((chars+=d.value.length)>maxChars||d.value.length>4000000)throw new Error('Workspace source budget exceeded');out[path]=d.value;}
++  return out;
++}
++export function workspaceChanges(before,after){
++  const paths=new Set([...Object.keys(before),...Object.keys(after)]),changes=[];
++  for(const path of [...paths].sort())if(value(before,path)!==value(after,path))changes.push({path,before:value(before,path),after:value(after,path)});
++  return changes;
++}
++export function sourceTransaction(changes,label='Edit workspace'){
++  if(!Array.isArray(changes)||changes.length>2000||typeof label!=='string'||label.length>240)throw new Error('Invalid source transaction');
++  const seen=new Set();let size=0;
++  const items=changes.map(c=>{
++    sourcePath(c.path);if(seen.has(c.path))throw new Error('Duplicate transaction path');seen.add(c.path);
++    for(const text of [c.before,c.after]){if(text!==null&&typeof text!=='string')throw new Error('Transaction preimages must be text or null');if(text!==null){size+=text.length;if(text.length>4000000)throw new Error('Transaction source budget exceeded');}}
++    return Object.freeze({path:c.path,before:c.before,after:c.after});
++  }).filter(c=>c.before!==c.after);
++  if(size>32000000)throw new Error('Source transaction budget exceeded');
++  return Object.freeze({label,changes:Object.freeze(items)});
++}
++/** All preimages, path collisions, source budgets and descriptors are checked before any write. */
++export function applySourceTransaction(files,transaction,direction='forward'){
++  if(!['forward','reverse'].includes(direction))throw new Error('Invalid transaction direction');
++  const tx=sourceTransaction(transaction.changes,transaction.label),old=snapshotFiles(files),next={...old},reverse=direction==='reverse';
++  for(const c of tx.changes){const expected=reverse?c.after:c.before,desired=reverse?c.before:c.after;if(value(old,c.path)!==expected)throw new Error('Source changed since transaction was prepared: '+c.path);if(desired===null)delete next[c.path];else next[c.path]=desired;}
++  snapshotFiles(next);
++  const identities=new Set();for(const p of Object.keys(next)){const key=p.toLowerCase();if(identities.has(key))throw new Error('Case-insensitive source path collision');identities.add(key);}
++  const descriptors=new Map();for(const c of tx.changes){const d=Object.getOwnPropertyDescriptor(files,c.path);if(d&&(!d.configurable||!d.writable)||!d&&!Object.isExtensible(files))throw new Error('Workspace source map is not writable');descriptors.set(c.path,d);}
++  try{for(const c of tx.changes){const text=reverse?c.before:c.after;if(text===null)delete files[c.path];else Object.defineProperty(files,c.path,{value:text,enumerable:true,writable:true,configurable:true});}}
++  catch(error){for(const [p,d]of descriptors){if(d)Object.defineProperty(files,p,d);else delete files[p];}throw error;}
++  return tx;
++}
++export class WorkspaceJournal{
++  constructor({maxHistoryBytes=16*1024*1024,maxEntries=100,maxCheckpoints=8,maxCheckpointChars=16000000}={}){
++    if(!Number.isSafeInteger(maxHistoryBytes)||maxHistoryBytes<0||!Number.isInteger(maxEntries)||maxEntries<1||maxEntries>10000||!Number.isInteger(maxCheckpoints)||maxCheckpoints<1||maxCheckpoints>100||!Number.isSafeInteger(maxCheckpointChars)||maxCheckpointChars<1)throw new Error('Invalid journal limits');
++    this.limits={maxHistoryBytes,maxEntries,maxCheckpoints,maxCheckpointChars};this.listeners=new Set();this.sequence=0;this.reset({});
++  }
++  reset(files,label='Opened workspace'){this.current=snapshotFiles(files);this.undoStack=[];this.redoStack=[];this.checkpoints=[];this.checkpoint(files,label);this.emit();}
++  subscribe(fn){this.listeners.add(fn);return ()=>this.listeners.delete(fn);}
++  emit(){for(const fn of this.listeners)try{fn(this.state());}catch{/* A UI listener cannot roll back a completed edit. */}}
++  state(){return {undo:this.undoStack.at(-1)?.label??null,redo:this.redoStack.at(-1)?.label??null,checkpoints:this.checkpoints.map(({id,label,time})=>({id,label,time})),revision:this.sequence};}
++  observe(files,label='Edit source',{group='',time=Date.now()}={}){
++    const next=snapshotFiles(files),changes=workspaceChanges(this.current,next);if(!changes.length)return null;
++    const tx=sourceTransaction(changes,label),last=this.undoStack.at(-1);
++    if(group==='insertText'&&last?.group===group&&time>=last.time&&time-last.time<500&&changes.length===1&&last.changes.length===1&&changes[0].path===last.changes[0].path&&changes[0].before===last.changes[0].after){this.undoStack.pop();this.push(sourceTransaction([{...changes[0],before:last.changes[0].before}],label),group,time);}
++    else this.push(tx,group,time);
++    this.current=next;this.emit();return tx;
++  }
++  push(tx,group='',time=Date.now()){
++    this.undoStack.push(Object.freeze({...tx,group,time}));this.redoStack=[];this.sequence++;
++    while(this.undoStack.length>this.limits.maxEntries)this.undoStack.shift();
++    let bytes=this.undoStack.reduce((n,t)=>n+t.changes.reduce((m,c)=>m+2*((c.before?.length??0)+(c.after?.length??0)),0),0);
++    while(bytes>this.limits.maxHistoryBytes&&this.undoStack.length){const t=this.undoStack.shift();bytes-=t.changes.reduce((n,c)=>n+2*((c.before?.length??0)+(c.after?.length??0)),0);}
++  }
++  commit(files,transaction){
++    this.observe(files,'External source edit');const tx=applySourceTransaction(files,transaction);if(!tx.changes.length)return tx;
++    this.current=snapshotFiles(files);this.push(tx);this.emit();return tx;
++  }
++  apply(files,direction){
++    if(!['undo','redo'].includes(direction))throw new Error('Invalid history direction');
++    if(workspaceChanges(this.current,snapshotFiles(files)).length)throw new Error('Unrecorded source changes; refusing stale undo');
++    const from=direction==='undo'?this.undoStack:this.redoStack,to=direction==='undo'?this.redoStack:this.undoStack,tx=from.at(-1);if(!tx)return null;
++    applySourceTransaction(files,tx,direction==='undo'?'reverse':'forward');from.pop();to.push(tx);this.current=snapshotFiles(files);this.sequence++;this.emit();return tx;
++  }
++  checkpoint(files,label='Checkpoint'){
++    if(typeof label!=='string'||!label.trim()||label.length>120)throw new Error('Use a checkpoint label up to 120 characters');
++    const source=snapshotFiles(files),size=Object.values(source).reduce((n,t)=>n+t.length,0);if(size>this.limits.maxCheckpointChars)throw new Error('Checkpoint budget exceeded');
++    const checkpoint={id:++this.sequence,label,time:Date.now(),source,size};this.checkpoints.push(checkpoint);
++    let chars=this.checkpoints.reduce((n,c)=>n+c.size,0);while(this.checkpoints.length>this.limits.maxCheckpoints||chars>this.limits.maxCheckpointChars){const removed=this.checkpoints.shift();chars-=removed.size;}
++    this.emit();return checkpoint.id;
++  }
++  changes(files,id=this.checkpoints[0]?.id){const c=this.checkpoints.find(c=>c.id===id);if(!c)throw new Error('Checkpoint is no longer retained');return workspaceChanges(c.source,snapshotFiles(files));}
++  restoreTransaction(files,id,paths=null){const all=this.changes(files,id),selected=paths?new Set(paths):null;return sourceTransaction(all.filter(c=>!selected||selected.has(c.path)).map(c=>({path:c.path,before:c.after,after:c.before})),'Restore checkpoint');}
++  exportChanges(files,id){return JSON.stringify({format:'jailbreak-source-changes-v1',...sourceTransaction(this.changes(files,id),'Import reviewed changes')},null,2);}
++  importChanges(files,json){if(typeof json!=='string'||json.length>64000000)throw new Error('Change-set budget exceeded');const data=JSON.parse(json);if(data.format!=='jailbreak-source-changes-v1')throw new Error('Unknown source change format');return this.commit(files,sourceTransaction(data.changes,data.label));}
++}
+diff --git a/tests/workspace-journal.test.js b/tests/workspace-journal.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..67bab62459d6f4671eda2cc36dc60af1cc285d2a
+--- /dev/null
++++ b/tests/workspace-journal.test.js
+@@ -0,0 +1,17 @@
++import test from 'node:test';import assert from 'node:assert/strict';
++import {WorkspaceJournal,sourceTransaction,applySourceTransaction,workspaceChanges,snapshotFiles} from '../packages/workspace/journal.js';
++import {lineDiff} from '../packages/workspace/diff.js';
++const tx=(changes,label='Edit')=>sourceTransaction(changes,label);
++test('multi-file edits validate every preimage before writing any file',()=>{const f={'A.cs':'old','B.cs':'changed'};assert.throws(()=>applySourceTransaction(f,tx([{path:'A.cs',before:'old',after:'new'},{path:'B.cs',before:'wrong',after:'bad'}])),/Source changed/);assert.deepEqual(f,{'A.cs':'old','B.cs':'changed'});});
++test('workspace transactions create remove and undo empty files without conflating absence',()=>{const f={'a.cs':''},j=new WorkspaceJournal();j.reset(f);j.commit(f,tx([{path:'a.cs',before:'',after:null},{path:'b.cs',before:null,after:''}]));assert.deepEqual(f,{'b.cs':''});j.apply(f,'undo');assert.deepEqual(f,{'a.cs':''});j.apply(f,'redo');assert.deepEqual(f,{'b.cs':''});});
++test('source designer and multi-file refactoring share exact undo chronology',()=>{const f={'a.cs':'A'},j=new WorkspaceJournal();j.reset(f);f['a.cs']='typed';j.observe(f,'Typing');j.commit(f,tx([{path:'a.cs',before:'typed',after:'design'}],'Designer'));j.commit(f,tx([{path:'a.cs',before:'design',after:'refactored'},{path:'b.cs',before:null,after:'component'}],'Extract'));j.apply(f,'undo');assert.equal(f['a.cs'],'design');j.apply(f,'undo');assert.equal(f['a.cs'],'typed');j.apply(f,'undo');assert.equal(f['a.cs'],'A');});
++test('checkpoint restore is undoable and rejects stale restore plans',()=>{const f={'A.cs':'a'},j=new WorkspaceJournal();j.reset(f);const id=j.state().checkpoints[0].id;f['A.cs']='b';j.observe(f);const restore=j.restoreTransaction(f,id);f['A.cs']='c';j.observe(f);assert.throws(()=>j.commit(f,restore),/Source changed/);j.commit(f,j.restoreTransaction(f,id));assert.equal(f['A.cs'],'a');j.apply(f,'undo');assert.equal(f['A.cs'],'c');});
++test('unrecorded edits cannot be overwritten by undo',()=>{const f={'a.cs':'a'},j=new WorkspaceJournal();j.reset(f);f['a.cs']='b';j.observe(f);f['a.cs']='unrecorded';assert.throws(()=>j.apply(f,'undo'),/Unrecorded/);assert.equal(f['a.cs'],'unrecorded');});
++test('history and checkpoint memory is bounded and journal reset isolates workspaces',()=>{const f={'a.cs':'a'},j=new WorkspaceJournal({maxEntries:2,maxHistoryBytes:30,maxCheckpoints:2,maxCheckpointChars:30});j.reset(f);for(let i=0;i<10;i++){f['a.cs']=String(i);j.observe(f);j.checkpoint(f,'C'+i);}assert.equal(j.undoStack.length,2);assert.equal(j.checkpoints.length,2);j.reset({'b.cs':'fresh'});assert.equal(j.state().undo,null);assert.equal(j.state().checkpoints.length,1);});
++test('typing groups only consecutive same-file insertions and cannot merge over another action',()=>{const f={'a.cs':'','b.cs':''},j=new WorkspaceJournal();j.reset(f);for(let i=1;i<=3;i++){f['a.cs']='x'.repeat(i);j.observe(f,'Type',{group:'insertText',time:100+i});}assert.equal(j.undoStack.length,1);f['b.cs']='y';j.observe(f,'Other');f['a.cs']='last';j.observe(f,'Type',{group:'insertText',time:110});assert.equal(j.undoStack.length,3);});
++test('new changes invalidate redo and imported change sets require exact original source',()=>{const f={'a.cs':'a'},j=new WorkspaceJournal();j.reset(f);f['a.cs']='b';j.observe(f);const data=j.exportChanges(f);j.apply(f,'undo');j.importChanges(f,data);assert.equal(f['a.cs'],'b');assert.throws(()=>j.importChanges(f,data),/Source changed/);j.apply(f,'undo');f['a.cs']='c';j.observe(f);assert.equal(j.state().redo,null);});
++test('path collision traversal prototype keys and accessors are rejected',()=>{for(const path of ['../a.cs','/a.cs','a/../b.cs','__proto__','a\\b.cs','a:b'])assert.throws(()=>tx([{path,before:null,after:'x'}]));const f={'A.cs':'a'};assert.throws(()=>applySourceTransaction(f,tx([{path:'a.cs',before:null,after:'b'}])),/collision/);let calls=0;assert.throws(()=>snapshotFiles({get x(){calls++;return 'bad';}}));assert.equal(calls,0);assert.throws(()=>tx([{path:'a',before:null,after:'1'},{path:'a',before:null,after:'2'}]));});
++test('non-writable maps fail preflight and do not partially add files',()=>{const f={};Object.defineProperty(f,'a.cs',{value:'a',enumerable:true});assert.throws(()=>applySourceTransaction(f,tx([{path:'b.cs',before:null,after:'b'},{path:'a.cs',before:'a',after:'c'}])),/not writable/);assert.equal(Object.hasOwn(f,'b.cs'),false);});
++test('observer exceptions do not corrupt a committed transaction',()=>{const f={'a':'a'},j=new WorkspaceJournal();j.reset(f);j.subscribe(()=>{throw new Error('UI failure');});j.commit(f,tx([{path:'a',before:'a',after:'b'}]));assert.equal(f.a,'b');j.apply(f,'undo');assert.equal(f.a,'a');});
++test('line diff preserves CRLF final newline and source line numbers',()=>{const d=lineDiff('a\r\nb\r\nc','a\r\nx\r\nc');assert.deepEqual(d.rows.filter(r=>r.kind!=='equal').map(r=>[r.kind,r.text]),[['remove','b\r\n'],['add','x\r\n']]);assert.equal(d.rows.at(-1).beforeLine,3);const n=lineDiff('a','a\n');assert.equal(n.rows[0].kind,'remove');});
++test('large diff changes degrade to exact replace block within rendering budget',()=>{const d=lineDiff('a\nb\nc','x\ny\nz',{maxCells:1,maxRows:2});assert.equal(d.coarse,true);assert.equal(d.truncated,true);assert.equal(d.rows.length,2);assert.deepEqual(workspaceChanges({'a':''},{}),[{path:'a',before:'',after:null}]);});

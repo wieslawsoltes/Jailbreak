@@ -15,7 +15,8 @@ console.log(`Built site/ with ${samples.length} source workspaces and ${Math.rou
 // Also publish a fully offline workbench. It requires no CDNs, imports or fetches.
 const worker=await bundleModules(site,'worker.js',{entryScript:true});
 const app=await bundleModules(site,'app.js',{entryScript:true});
-const assets={samples,runtime:await fs.readFile(path.join(site,'runtime.js'),'utf8'),worker};
+const languageWorker=await bundleModules(site,'language-worker.js',{entryScript:true});
+const assets={samples,runtime:await fs.readFile(path.join(site,'runtime.js'),'utf8'),worker,languageWorker};
 const css=await fs.readFile(path.join(site,'style.css'),'utf8');
 const moduleHtml=await fs.readFile(path.join(site,'index.html'),'utf8');
 await fs.writeFile(path.join(site,'index.module.html'),moduleHtml);
@@ -41,4 +42,3 @@ assets.binaryHtml=await fs.readFile(path.join(site,'binary/index.html'),'utf8');
 const offline=moduleHtml.replace('<link rel="stylesheet" href="./style.css">',()=>'<style>'+css+'</style>').replace('<script type="module" src="./app.js"></script>',()=>'<script>globalThis.__JailbreakAssets='+inlineAssetJson(assets)+';</script><script>'+app.replace(/<\/script/gi,'<\\/script')+'</script>');
 await fs.writeFile(path.join(site,'index.html'),offline);
 console.log('Built offline-capable index.html ('+Math.round(offline.length/1024)+' KiB).');
-
