@@ -1,0 +1,27 @@
+{
+  "format": "source-edit-parts-v1",
+  "base": "371b907e7c079197461df8cbe77d5da46f5f6746",
+  "sourceSha256": "ecf291a60c29eefa288037691ed7524428760e66c7abd810bd9d1f642f7529c7",
+  "parts": [
+    {"path":".delivery/desktop-20260910-01.json","sha256":"698eb6442c47b433bb5c097b30b6300c542623ba866cdf7afb52d97e33194681"},
+    {"path":".delivery/desktop-20260910-02.json","sha256":"a8d6e9280da5e54cc8940619d94da1b29e72f9f451c857d7a5d474535932020f"},
+    {"path":".delivery/desktop-20260910-03.json","sha256":"8865fca7734edbe106e1c734717e2d8537b651cdc2ee846f345e189da4534eb4"},
+    {"path":".delivery/desktop-20260910-04.json","sha256":"a478fc634e99ba3440468025c4d5fc9d6b1a2173c8f0e46dc32e9e03a416f146"},
+    {"path":".delivery/desktop-20260910-05.json","sha256":"985f6325f6124c34a4a60c3e99d5b534d9776c4daa8025b96434c5ae042761e1"},
+    {"path":".delivery/desktop-20260910-06.json","sha256":"f7727dad0e00a3a76e065f5e2ebc72430a1093a32ac8c3fcd0df676644519703"},
+    {"path":".delivery/desktop-20260910-07.json","sha256":"72bdc71478325d30da3d85445355dd6327eb815d364c1c9365c553ed523c0f89"},
+    {"path":".delivery/desktop-20260910-08.json","sha256":"7284e35eb5cd0d65e9675a74ba8aff711e0bb3693e125e0d5fa5614e6037b463"},
+    {"path":".delivery/desktop-20260910-09.json","sha256":"1586cba2bdfa851ae48465d2b61da0d1cae4ddff7aed6dc1d241e87866eff3bd"},
+    {"path":".delivery/desktop-20260910-10.json","sha256":"c460539e945de5ba8048e49dd7257f8dd09d7dc775cca1680d01e40475974cda"},
+    {"path":".delivery/desktop-20260910-11.json","sha256":"eb9ff47ce958738b46caa946676442f43301e6139b3be20feb81aec0f9d0cf27"},
+    {"path":".delivery/desktop-20260910-12.json","sha256":"9ae7a3a2c9c9f58363f36be48f775ff76f31ba06991a12a2b239a2eccf317f26"},
+    {"path":".delivery/desktop-20260910-13.json","sha256":"06d798161254acdbf60d8bc5d526ba302489cb7a1d0ff070e1a27e3385d73d44"},
+    {"path":".delivery/desktop-20260910-14.json","sha256":"8335da726b2e916c62cc6c7cbfac8b36fd1af2897c6f02d22e1c560e5dd9c136"},
+    {"path":".delivery/desktop-20260910-15.json","sha256":"4e93f6c666b530ff43def491cbbd661eb1d3a53f7a1836f016dc2accc06e3855"},
+    {"path":".delivery/desktop-20260910-16.json","sha256":"b33ab54d456c578825f7569721ea37c97ead67638791ed24988465bf417fad13"},
+    {"path":".delivery/desktop-20260910-17.json","sha256":"eca3fe6cf460938814de7503f0a56c68e22c325514b32fc03c5892865efb99d9"},
+    {"path":".delivery/desktop-20260910-18.json","sha256":"a5ef1b70d95c230f7a58679114e016b3cd275877892e07a0c6c5574be170fdce"},
+    {"path":".delivery/desktop-20260910-19.json","sha256":"d3e1696bc8a455c26218b6252514c772f4625067a30b8e21530183a4787e14ad"},
+    {"path":".delivery/desktop-20260910-20.json","sha256":"19fb6e8f1b4106f69c59e525ea613da1a6d86dba27f56de6bd69b4b58239a488"}
+  ]
+}
