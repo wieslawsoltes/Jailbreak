@@ -1,3 +1,4 @@
+import {editSelectionProperties} from './design-transactions.js';
 import {inspectSource,editProperty,editExpression,reparentControl,insertControl,removeControl,moveControl,duplicateControl,EditHistory,palette} from './designer.js';
 import {planReload,reloadScript} from './reload.js';
 import {mappedScript,updateGeneratedLocations} from './source-map.js';
@@ -50,6 +51,7 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
   const note=el('p','In-IDE stepping suspends compiled C# method continuations. Source constructors and XAML visual construction can also suspend. Accessors, native APIs and callbacks remain step-over regions. Native DevTools remains available for engine-wide JavaScript debugging.');note.className='dev-note';
   debuggerPanel.append(el('h3','C# / XAML / JavaScript debugger'),breakpointRow,logLabel,breakpointList,commandRow,watchRow,pauseState,frameList,controls,localRow,note,output);
   columns.append(hierarchy,properties,debuggerPanel);panel.append(style,header,status,columns);doc.querySelector('.main-area').append(panel);
+  let designSelection=[];
   let settings={enabled:false,hotReload:false,cooperativeDebug:false,nativeBreaks:true,breakOnThrow:false,breakpoints:[],watches:[]},history=new EditHistory(),selected=null,running=null,runningFiles=null,pending=null,revision=0,selecting=false;
   const tell=text=>status.textContent=text;
   const guarded=fn=>{try{return fn();}catch(error){tell(error.message);}};
@@ -66,7 +68,7 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
     if(!source||value.template){propertyList.append(el('p',value.template?'Template instance: inspect here; edit its template in source.':'No source mapping for this generated visual.'));return;}
     const files=getFiles();if(runningFiles?.[source.file]!==files[source.file]){propertyList.append(el('p','Source changed; build/restart before designer edits.'));return;}
     try{const model=inspectSource(files[source.file],source.file,source.offset);for(const [name,p]of Object.entries(model.properties)){
-      if(name==='Name'||name==='x:Name'||name==='x:Class')continue;const row=el('div');row.className='dev-property';const label=el('label',name),input=el('input');input.value=model.language==='csharp'&&p.editable?p.literal:p.value;input.disabled=!p.editable;input.title=p.binding?'Use Set binding/resource to edit this expression':'';input.setAttribute('aria-label','Design '+name);const apply=el('button','Apply');apply.type='button';apply.disabled=!p.editable;apply.onclick=()=>guarded(()=>sourceEdit((text,file,offset)=>editProperty(text,file,offset,name,input.value)));label.append(input);row.append(el('span',name),input,apply);propertyList.append(row);
+      if(name==='Name'||name==='x:Name'||name==='x:Class')continue;const row=el('div');row.className='dev-property';const label=el('label',name),input=el('input');input.value=model.language==='csharp'&&p.editable?p.literal:p.value;input.disabled=!p.editable;input.title=p.reason??(p.binding?'Use Set binding/resource to edit this expression':p.origin==='assignment'?'Final C# assignment · '+p.writes+' writes':'Literal source value');input.setAttribute('aria-label','Design '+name);const apply=el('button','Apply');apply.type='button';apply.disabled=!p.editable;apply.onclick=()=>guarded(()=>sourceEdit((text,file,offset)=>editProperty(text,file,offset,name,input.value)));label.append(input);row.append(el('span',name),input,apply);propertyList.append(row);
     }}catch(error){propertyList.append(el('p',error.message));}
   }
   function accept(next,sources){updateGeneratedLocations(next.code,next.debug);running=next;runningFiles={...sources};renderBreakpoints();}
@@ -84,6 +86,11 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
   addBreakpoint.onclick=()=>{const active=getActive(),value=Number(line.value);if(!active||!Number.isInteger(value)||value<1)return tell('Choose a source file and a positive line');settings.breakpoints.push({language:active==='jailbreak-app.js'?'javascript':undefined,file:active,line:value,condition:condition.value,hitCount:Number(hitCount.value)||0,log:logpoint.checked});sync();renderBreakpoints();tell('Breakpoint stored. Open browser DevTools for native pause and stepping.');};
   breakNext.onclick=()=>send('break-next');generated.onclick=showGenerated;watchButton.onclick=()=>{sync();if(pausedTask!=null)send('debug-frame',{taskId:pausedTask,frameId:pausedFrame,paths:settings.watches});else send('watch');};
   const api={button,panel,
+    designConfigure(settings){send('design-configure',{settings});},
+    setGeometry(values){send('design-set',{values});},
+    arrange(command){send('design-arrange',{command});},
+    selectVisual(id,additive=false){send('select',{id,additive});},
+    selection(){return designSelection.map(i=>({...i}));},
     subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},
     show(){panel.hidden=false;send('inspect');},
     state(){return {settings:api.options(),paused:pausedTasks.get(pausedTask)??null,frameId:pausedFrame,selected:selected?.source??null};},
@@ -108,10 +115,10 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
     breakpointBound(file,line){return !!(running?.debug?.sites?.some(p=>(!settings.cooperativeDebug||p.cooperative||settings.nativeBreaks)&&(file==='jailbreak-app.js'?p.generatedLine===line:p.file===file&&p.line===line))||running?.debug?.xamlSites?.some(p=>p.file===file&&p.line===line));},
     options(){return {...settings,breakpoints:settings.breakpoints.map(p=>({...p})),watches:[...settings.watches]};},
     compileOptions(){return {debug:settings.enabled,cooperativeDebug:settings.enabled&&settings.cooperativeDebug};},
-    set(value={}){settings={enabled:!!value.enabled,cooperativeDebug:!!value.cooperativeDebug,hotReload:!!value.hotReload,nativeBreaks:value.nativeBreaks!==false,breakOnThrow:!!value.breakOnThrow,breakpoints:Array.isArray(value.breakpoints)?value.breakpoints.slice(0,1000):[],watches:Array.isArray(value.watches)?value.watches.slice(0,50):[]};enabled.checked=settings.enabled;cooperative.checked=settings.cooperativeDebug;hot.checked=settings.hotReload;native.checked=settings.nativeBreaks;throwBreak.checked=settings.breakOnThrow;watches.value=settings.watches.join(', ');history=new EditHistory();running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();propertyList.replaceChildren();pausedTasks.clear();pausedTask=pausedFrame=null;debugButtons.forEach(b=>b.disabled=true);renderBreakpoints();publish('workspace-reset');},
+    set(value={}){settings={enabled:!!value.enabled,cooperativeDebug:!!value.cooperativeDebug,hotReload:!!value.hotReload,nativeBreaks:value.nativeBreaks!==false,breakOnThrow:!!value.breakOnThrow,breakpoints:Array.isArray(value.breakpoints)?value.breakpoints.slice(0,1000):[],watches:Array.isArray(value.watches)?value.watches.slice(0,50):[]};enabled.checked=settings.enabled;cooperative.checked=settings.cooperativeDebug;hot.checked=settings.hotReload;native.checked=settings.nativeBreaks;throwBreak.checked=settings.breakOnThrow;watches.value=settings.watches.join(', ');history=new EditHistory();running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();propertyList.replaceChildren();pausedTasks.clear();pausedTask=pausedFrame=null;debugButtons.forEach(b=>b.disabled=true);renderBreakpoints();designSelection=[];publish('workspace-reset');},
     running(next,sources){pausedTasks.clear();pausedTask=pausedFrame=null;pauseState.textContent='No suspended invocation';debugButtons.forEach(b=>b.disabled=true);pending=null;revision=0;accept(next,sources);tell(settings.enabled?'Development session running.':'Release preview running.');publish('session-starting');},
     failed(){tell(running?'Build failed; previous running app was preserved.':'Build failed.');},
-    stop(){running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();pausedTasks.clear();pausedTask=pausedFrame=null;frameList.replaceChildren();debugButtons.forEach(b=>b.disabled=true);pauseState.textContent='No suspended invocation';publish('session-stopped');},
+    stop(){running=null;runningFiles=null;pending=null;revision=0;selected=null;tree.replaceChildren();pausedTasks.clear();pausedTask=pausedFrame=null;frameList.replaceChildren();debugButtons.forEach(b=>b.disabled=true);pauseState.textContent='No suspended invocation';designSelection=[];publish('session-stopped');},
     tryReload(next,sources,forceRestart=false){if(forceRestart||!running||!settings.enabled||!settings.hotReload)return false;if(pending){tell('A reload is already pending; restart or retry after its result.');return true;}
       updateGeneratedLocations(next.code,next.debug);const plan=planReload(running,next);if(!plan.compatible){tell('Restart required: '+plan.reasons.join('; '));return true;}
       const script=reloadScript(plan,running,next,revision+1);pending={next,sources:{...sources}};send('reload',{script:mappedScript(script,next.debug,sources)});tell('Applying transactional hot reload…');return true;
@@ -120,7 +127,15 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
       if(event==='debug-paused'){showPause(payload);tell('Compiled execution suspended. Continue or step from this panel.');}
       else if(event==='debug-completed'||event==='debug-resumed'){pausedTasks.delete(payload.taskId);if(pausedTask===payload.taskId){pausedTask=pausedFrame=null;debugButtons.forEach(b=>b.disabled=true);pauseState.textContent=payload.status??'Running';const next=pausedTasks.values().next().value;if(next)showPause(next);}if(payload.error)output.textContent=JSON.stringify(payload.error,null,2);}
       else if(event==='debug-frame')output.textContent=JSON.stringify(payload,null,2);
-      else if(event==='tree'){tree.replaceChildren();const rows=new Map(payload.map(r=>[r.id,r]));for(const node of payload){let depth=0,parent=rows.get(node.parent);while(parent&&depth<20){depth++;parent=rows.get(parent.parent);}const button=el('button','  '.repeat(depth)+node.type+(node.name?' #'+node.name:''));button.type='button';button.dataset.visualId=node.id;button.setAttribute('role','treeitem');button.setAttribute('aria-selected',String(node.selected));button.onclick=()=>send('select',{id:node.id});tree.append(button);}}
+      else if(event==='tree'){tree.replaceChildren();const rows=new Map(payload.map(r=>[r.id,r]));for(const node of payload){let depth=0,parent=rows.get(node.parent);while(parent&&depth<20){depth++;parent=rows.get(parent.parent);}const button=el('button','  '.repeat(depth)+node.type+(node.name?' #'+node.name:''));button.type='button';button.dataset.visualId=node.id;button.setAttribute('role','treeitem');button.setAttribute('aria-selected',String(node.selected));button.onclick=e=>send('select',{id:node.id,additive:e.shiftKey||e.ctrlKey||e.metaKey});tree.append(button);}}
+      else if(event==='selection-changed'){
+        designSelection=payload.items??[];for(const button of tree.querySelectorAll('[data-visual-id]'))button.setAttribute('aria-selected',String(designSelection.some(i=>i.id===button.dataset.visualId)));
+      }
+      else if(event==='design-edit')guarded(()=>{
+        if(payload.revision!==revision||pending||pausedTasks.size)throw new Error('Design edit is stale or an execution/reload is suspended');
+        const files=getFiles();for(const item of designSelection)if(item.source&&files[item.source.file]!==runningFiles?.[item.source.file])throw new Error('Source differs from the running preview; rebuild before design edits');
+        const transaction=editSelectionProperties(files,designSelection,payload.edits);history.apply(files,transaction);applySource(transaction.file);selected=null;propertyList.replaceChildren();tell('Layout source updated as one undoable edit.');build();
+      })
       else if(event==='selected')renderSelection(payload);
       else if(event==='resize')guarded(()=>{if(payload.id!==selected?.id)throw new Error('Stale resize selection');sourceEdit((text,file,offset)=>{const first=editProperty(text,file,offset,'Width',String(payload.width)),second=editProperty(first.after,file,offset,'Height',String(payload.height));return {...second,before:text};});});
       else if(event==='reloaded'){revision=payload.revision;if(pending){accept(pending.next,pending.sources);pending=null;}tell(`Hot reload ${revision}: ${payload.properties} properties, ${payload.methods} methods, ${payload.environments??0} environments, ${payload.added??0} added / ${payload.removed??0} removed; application state retained.`);if(selected)send('select',{id:selected.id});}

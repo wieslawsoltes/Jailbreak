@@ -11,5 +11,6 @@
   "023-msil-await-cleanup.patch": "a7a70921411b323ae1ebc6866b367205b5214fc264c1d995ebafca562d1d2cdc",
   "030-imperative-designer.patch": "edf8ef3dc2cb3879854c18f2d40a10a8c8702f7d98e23f1465aa0381088b77e4",
   "031-design-surface.patch": "992944bb14cb2c0f8acfa4af18e8d80c73c6b729dd6e33712e4939bd4362250a",
-  "032-design-surface.patch": "e746709f814807e8af9aba338f0f33379529ec3656333e355e7a57a013713fdb"
+  "032-design-surface.patch": "e746709f814807e8af9aba338f0f33379529ec3656333e355e7a57a013713fdb",
+  "033-design-surface.patch": "44d1e4d40b40ef415b3a66a2bd49635246422759ba32af7986a1209a44743a7c"
 }
