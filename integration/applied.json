@@ -28,5 +28,6 @@
   "063-workspace-core.patch": "c39baf66ad9d2e19e6dfed56d15b802c1582634dc8a68d5f018edcb3283fe87d",
   "064-components-core.patch": "730eeaa877a6b814ea7ba0d77bdadc45e335998c6853414dfbc44422c583560f",
   "065-workspace-client.patch": "d997a64e98619e4dee3e609e87541241dedb7e2f6dc4ff00ef296150e568179d",
-  "066-workspace-wiring.patch": "458da8aa639d74c4e6d2cdb1cea81349749e74b1d55c2f56794973cc5a3ecc0f"
+  "066-workspace-wiring.patch": "458da8aa639d74c4e6d2cdb1cea81349749e74b1d55c2f56794973cc5a3ecc0f",
+  "067-workspace-gates.patch": "1602902a458dd1a16cbfbc9f51d3b30f5be905689348880f984840ad3aa7674a"
 }

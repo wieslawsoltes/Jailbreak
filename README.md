@@ -92,3 +92,7 @@ The Studio Designer now has logical-pixel artboards, zoom/rulers, multi-selectio
 snapping, alignment/distribution and undoable source edits. See [the canvas
 workflow and boundaries](docs/milestone-design-canvas.md) and [flow-ordered C#
 property editing](docs/milestone-imperative-designer.md).
+
+## Workspace review and component refactoring
+
+Studio now connects source/designer undo, checkpoint diffs and compiler-validated three-file UserControl extraction. See [workspace refactoring](docs/milestone-workspace-refactoring.md) and the [live Grid inspector](docs/milestone-grid-inspector.md). These are bounded supported workflows, not complete desktop IDE or ControlCatalog parity.

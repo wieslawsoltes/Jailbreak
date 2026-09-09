@@ -61,3 +61,7 @@ pending at reconciliation. [Grid inspector](milestone-grid-inspector.md) adds ac
 track/cell/span editing, source-preserving transactions, corrected default Grid
 placement and a separate Interact artboard tool. This advances layout editing and
 framework behavior without claiming full measure/arrange or ControlCatalog parity.
+
+## Source transactions and reusable components
+
+[Workspace review and component extraction](milestone-workspace-refactoring.md) share one bounded journal across editor/designer/refactor changes. Multi-file extraction uses real project evaluation before Apply, rejects ownership-sensitive references and requires explicit restart for a changed type/document set. This advances source-backed visual workflows without declaring arbitrary extraction, imperative C# round-tripping or full framework compatibility complete.

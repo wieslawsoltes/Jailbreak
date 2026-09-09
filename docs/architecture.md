@@ -33,3 +33,7 @@ The managed PE reader and IL text frontend feed a single validated exception-reg
 ## Core developer tooling
 
 `packages/development` separates source maps and safe watches, source-edit transactions, reload planning, per-preview inspection and the IDE client. Primary compilers produce debug sites and source identities only in development builds. The preview agent runs inside the opaque-origin frame; the IDE exchanges bounded serializable records and authenticated session commands. Compatible method/literal-property reloads keep original control instances. Native pause/step/live frames use browser DevTools; autonomous in-IDE stepping is a distinct mandatory remaining transport. See [core requirements](core-development-tools.md) and [delivered scope](milestone-development-tools.md).
+
+## Workspace transactions and refactoring
+
+`packages/workspace` is the source-authority layer for exact preimages, bounded shared undo, checkpoints and line diffs. `development/component-refactor.js` produces source-only multi-file plans. Studio validates candidates in a separate compiler worker and presents a review before journal application; the existing runtime/reload session remains independent. [Contracts and limitations](milestone-workspace-refactoring.md).
