@@ -1,3 +1,4 @@
 {
-  "001-resumable-xaml.patch": "baf9931092b17818ab069df0f07f7bee2ae2e8a03427b83a2aa5c8304b5ad1e3"
+  "001-resumable-xaml.patch": "baf9931092b17818ab069df0f07f7bee2ae2e8a03427b83a2aa5c8304b5ad1e3",
+  "002-workbench-libraries.patch": "146a3cece6997669c4e1f92b96df4a2a3ffb813a71eb52cff22a013eee36b085"
 }
