@@ -32,7 +32,7 @@ function patterns(value, fallback) {
   if (normalized.length > 16 || normalized.some(p => p.length > 256)) throw new RangeError('File-pattern budget exceeded');
   return normalized;
 }
-/** Wildcards *, ?, ** and **/; iterative matching avoids regex backtracking. */
+/** Glob wildcards use iterative matching rather than regex backtracking. */
 export function matchesFilePattern(name, pattern) {
   name = String(name).replace(/\\/g,'/'); pattern = String(pattern).replace(/\\/g,'/');
   if (name.length > 2048 || pattern.length > 256) throw new RangeError('File-pattern budget exceeded');
