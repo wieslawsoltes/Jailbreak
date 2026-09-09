@@ -21,6 +21,6 @@ export async function compileBinaryInputs(inputs,options={}){
       else throw new Error('Expected DLL/EXE, adjacent PDB or checksum-verified C# source');
     }
     for(const k of pdbs.keys())if(!assemblies.some(a=>key(a.path)===k))throw new Error('Symbol file has no adjacent assembly: '+k);
-    return await compileDebugAssemblies(assemblies.map(a=>({...a,pdb:a.pdb??pdbs.get(key(a.path)),sources})),options);
+    return await compileDebugAssemblies(assemblies.map(a=>({...a,pdb:a.pdb??pdbs.get(key(a.path)),sources:{...sources,...a.sources}})),options);
   }catch(error){return failure(error);}
 }

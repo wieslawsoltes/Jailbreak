@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="NativeLibrary.MainView">
+  <StackPanel Margin="28" Spacing="16">
+    <TextBlock Text="Windows PDB. Browser debugger." FontSize="26" FontWeight="Bold" />
+    <TextBlock Text="This library was built by the Windows Framework C# compiler. Its MSF7 PDB and checksummed original source feed the same Studio call stack and local editor as Portable PDBs." TextWrapping="Wrap" />
+    <Button Content="Call native-symbol library" Click="Calculate" />
+    <TextBlock x:Name="Result" Text="Ready" FontSize="22" />
+  </StackPanel>
+</UserControl>

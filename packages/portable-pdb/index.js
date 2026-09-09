@@ -1,10 +1,11 @@
+import {legacyMd5} from '../native-pdb/legacy-checksum.js';
 import {digest} from './hash.js';
 export {digest} from './hash.js';
 /** Portable PDB metadata reader. Source Link never causes network or filesystem access. */
 import {Reader,BinaryError,align,bytesOf} from '../managed-pe/reader.js';
 const utf8=new TextDecoder('utf-8',{fatal:true}),hex=b=>Array.from(b,x=>x.toString(16).padStart(2,'0')).join('');
 const fail=(message,at=0)=>{throw new BinaryError(message,at,'JB6501');};
-const shaGuid={'ff1816ec-aa5e-4d10-87f7-6f4963833460':'SHA-1','8829d00f-11b8-4213-878b-770e8597ac16':'SHA-256'};
+const shaGuid={'406ea660-64cf-4c82-b6f0-42d48172a799':'MD5','ff1816ec-aa5e-4d10-87f7-6f4963833460':'SHA-1','8829d00f-11b8-4213-878b-770e8597ac16':'SHA-256'};
 const embeddedKind='0e8a571b-6926-466e-b4ad-8ab04611f5fe';
 export function signedCompressed(reader){
   const start=reader.pos,raw=reader.compressed(),width=reader.pos-start,bits=width===1?6:width===2?13:28;
@@ -89,7 +90,7 @@ export async function pdbSources(pdb,{sources={},maxSourceBytes=4*1024*1024,maxT
     if(Object.hasOwn(sources,doc.name)){data=typeof sources[doc.name]==='string'?new TextEncoder().encode(sources[doc.name]):bytesOf(sources[doc.name]);}
     else if(doc.embedded){const r=new Reader(doc.embedded),size=r.u32(),content=r.slice(r.end-r.pos);data=size?await inflateBounded(content,size,maxSourceBytes):content;}
     if(!data)continue;if(data.length>maxSourceBytes||(total+=data.length)>maxTotalSourceBytes)fail('Source text budget exceeded');
-    const algorithm=shaGuid[doc.hashAlgorithm];if(!algorithm||!doc.hash)fail('Source requires a supported checksum');if(await digest(data,algorithm)!==doc.hash)fail('PDB document source checksum mismatch: '+doc.name);
+    const algorithm=shaGuid[doc.hashAlgorithm];if(!algorithm||!doc.hash)fail('Source requires a supported checksum');if((algorithm==='MD5'?legacyMd5(data):await digest(data,algorithm))!==doc.hash)fail('PDB document source checksum mismatch: '+doc.name);
     result[doc.name]=utf8.decode(data);
   }return result;
 }

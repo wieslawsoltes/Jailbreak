@@ -25,3 +25,13 @@ Per-milestone documents and actual test reports supply implementation status. Th
 [MSIL continuations](milestone-msil-continuations.md) extend the existing verified AOT emitter and Studio debugger to converted managed methods. Cross-library/source frames, evaluation stacks, scoped PDB locals, static initialization, cancellation and exception cleanup are exercised through SDK-built DLL/NuGet fixtures and browser integration. This advances the MSIL debugging target for the compiler's supported instruction/type/API profile. Arbitrary SDK-generated async state machines, full framework semantics and the complete unmodified ControlCatalog are not declared complete.
 
 Studio now exposes unsupported-symbol methods as read-only **[IL]** disassembly, never as reconstructed original C#. Existing verified original-source documents retain **[symbol]** labels. Source C# async callers can await before/after converted calls; that behavior is distinct from compiling an SDK async state machine from a DLL.
+
+## Windows managed-symbol integration
+
+[Native PDB integration](milestone-native-pdb.md) now validates MSF7/C13 managed
+symbols against the existing independent Windows compiler/CLR fixture. Native
+source/IL stepping, actual local mutation, sidecar source attachments, Studio and
+offline Binary Studio share the Portable PDB path. This closes the missing
+managed-Windows-PDB integration, not all native symbol formats. MSF2/C11, native
+machine-code symbols, legacy native embedded source and native async metadata
+remain outside the explicitly tested profile.

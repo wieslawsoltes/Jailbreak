@@ -14,7 +14,11 @@ export function readDebugDirectory(input,rva,size,mapRva,{maxBytes=16*1024*1024}
     if(kind===2&&minor===0x504d){
       if(data.u32()!==0x53445352)throw new BinaryError('Portable PDB needs RSDS CodeView record',pointer,'JB6502');
       const id=hex(data.slice(16))+hex(stamp),age=data.u32();if(age!==1)throw new BinaryError('Portable PDB CodeView age must be one',pointer,'JB6502');
-      const path=data.zeroString(8192);result.codeView.push({id,path});
+      const path=data.zeroString(8192);result.codeView.push({format:'portable-pdb',id,path});
+    }else if(kind===2){
+      if(data.u32()!==0x53445352)throw new BinaryError('Only RSDS Windows PDB identities are supported',pointer,'JB6502');
+      const guid=hex(data.slice(16)),age=data.u32(),path=data.zeroString(8192);if(!age)throw new BinaryError('Native CodeView age must be nonzero',pointer,'JB6502');
+      result.codeView.push({format:'native-pdb',id:guid+'-'+age,guid,age,path});
     }else if(kind===19){
       if(major!==1||minor!==0)throw new BinaryError('Unsupported PDB checksum record version',pointer,'JB6502');
       const algorithm=data.zeroString(64),hash=hex(data.slice(data.end-data.pos));
