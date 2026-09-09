@@ -1,0 +1,64 @@
+/* Desktop composition: a single document workspace and controller-owned tool windows. */
+body.desktop-ide{--desktop-bg:#1e1e1e;--desktop-panel:#252526;--desktop-tab:#2d2d30;--desktop-line:#424246;--desktop-hover:#35353b;--desktop-active:#47395e;--desktop-text:#ddd;--desktop-muted:#a3a3af;--desktop-accent:#bd9bea;display:flex;flex-direction:column;height:100dvh;min-height:0;overflow:hidden;background:var(--desktop-bg);color:var(--desktop-text);font:12px/1.4 'Segoe UI',system-ui,sans-serif}
+body.desktop-ide.light{color-scheme:light;--desktop-bg:#fff;--desktop-panel:#f3f3f3;--desktop-tab:#eeeef2;--desktop-line:#ceced5;--desktop-hover:#e5e5eb;--desktop-active:#e4d9f4;--desktop-text:#242428;--desktop-muted:#686875;--desktop-accent:#7651a6}
+.desktop-ide .topbar{height:34px;min-height:34px;padding:0 9px;gap:9px;background:var(--desktop-tab);border-bottom:1px solid var(--desktop-line)}
+.desktop-ide .brand{font-size:12px;gap:7px;min-width:112px}.desktop-ide .brand-mark{height:22px;width:22px;border-radius:3px}
+.desktop-ide .top-actions{gap:8px;font-size:10px}.desktop-ide .brand-divider,.desktop-ide .brand .workbench{display:none}
+.desktop-ide #wb-command{height:24px;border-radius:3px;min-width:175px;width:25%;max-width:360px;background:var(--desktop-bg);border:1px solid var(--desktop-line);font-size:11px}
+.desktop-ide .wb-menubar{display:flex;gap:1px;align-items:center}.desktop-ide .wb-menubar>button{font:12px inherit;padding:4px 7px;border:0;border-radius:2px}
+.desktop-ide .wb-menubar>button[aria-expanded=true]{background:var(--desktop-active)}
+.desktop-ide .studio-toolbar{height:37px;min-height:37px;display:flex;align-items:center;gap:6px;padding:0 8px;background:var(--desktop-panel);border-bottom:1px solid var(--desktop-line);white-space:nowrap;overflow-x:auto;scrollbar-width:thin}
+.desktop-ide .workspace-control{display:flex;align-items:center;gap:5px;max-width:230px;margin:0 7px 0 0;flex:0 1 auto}
+.desktop-ide .workspace-control select{max-width:170px;font-size:11px}.desktop-ide .branch-pill,.desktop-ide .project-symbol{display:none}
+.desktop-ide .studio-toolbar button,.desktop-ide .studio-toolbar select{border-radius:2px;font-size:11px;height:26px;padding:3px 7px}
+.desktop-ide .studio-toolbar #run{min-width:86px;background:#18764d;color:#fff;border:1px solid #218e61}
+.desktop-ide .studio-toolbar button:disabled{opacity:.42}.desktop-ide #desktop-layout-preset{max-width:145px;margin-left:auto}
+.desktop-ide #desktop-command-context{font-size:10px;color:var(--desktop-muted);padding:0 6px}
+.desktop-ide .workspace.desktop-workspace{display:grid;position:relative;grid-template-columns:0 minmax(0,0) 0 minmax(180px,1fr) 3px minmax(0,var(--dock-right,302px)) 0;grid-template-rows:minmax(0,1fr);flex:1;height:auto;min-height:0;overflow:hidden;background:var(--desktop-line)}
+.desktop-workspace[data-left=true]{grid-template-columns:0 minmax(0,var(--dock-left,242px)) 3px minmax(180px,1fr) 3px minmax(0,var(--dock-right,302px)) 0}
+.desktop-workspace[data-right=false]{--dock-right:0px!important}
+.desktop-workspace[data-right=false]>[data-resize=right]{width:0}
+.desktop-workspace[data-left-rail=true]{padding-left:25px}.desktop-workspace[data-right-rail=true]{padding-right:25px}
+.desktop-workspace>.dock-auto-rail.left{position:absolute;left:0;top:0;bottom:0;width:25px}.desktop-workspace>.dock-auto-rail.right{position:absolute;right:0;top:0;bottom:0;width:25px}
+.desktop-workspace>#dock-zone-left{grid-column:2;grid-row:1}.desktop-workspace>[data-resize=left]{grid-column:3;grid-row:1}
+.desktop-workspace>.desktop-main{grid-column:4;grid-row:1;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;background:var(--desktop-bg)}
+.desktop-workspace>[data-resize=right]{grid-column:5;grid-row:1}.desktop-workspace>.dock-right-stack{grid-column:6;grid-row:1}
+.desktop-documents{position:relative;flex:1;min-height:140px;min-width:0;display:flex;flex-direction:column;overflow:hidden;background:var(--desktop-bg)}
+.desktop-documents>#tabs{flex:0 0 29px;height:29px;background:var(--desktop-tab);border-bottom:1px solid var(--desktop-line);overflow-x:auto;white-space:nowrap}
+.desktop-documents>#tabs button{height:29px;padding:4px 11px;font-size:11px;border-radius:0}.desktop-documents>#tabs button.active{border-top:2px solid var(--desktop-accent);background:var(--desktop-bg);padding-top:2px}
+.desktop-documents>.work-area{display:flex;flex:1;min-height:0;min-width:0;overflow:hidden}.desktop-ide .editor-pane{display:flex;flex-direction:column;width:var(--dock-split,52%);min-width:0;min-height:0;border:0}
+.desktop-ide .preview-pane{flex:1;min-width:0;min-height:0;border:0}.desktop-ide .preview-toolbar{height:28px;min-height:28px;background:var(--desktop-panel);border-bottom:1px solid var(--desktop-line);font-size:10px}
+.desktop-ide .editor-path{height:24px;min-height:24px;background:var(--desktop-panel);font-size:10px;border-bottom:1px solid var(--desktop-line)}
+.desktop-ide .editor-wrap{flex:1;min-height:0}.desktop-ide #editor,.desktop-ide #highlight{line-height:21px;font-size:var(--studio-font-size,13px);font-family:Consolas,'Liberation Mono',ui-monospace,monospace}
+.desktop-ide .editor-footer{height:21px;min-height:21px;font-size:10px}.desktop-ide .preview-address{height:23px;min-height:23px;font-size:10px}
+.desktop-document-modes{height:29px;min-height:29px;display:flex;gap:8px;align-items:center;padding:0 7px;border-top:1px solid var(--desktop-line);background:var(--desktop-panel)}
+.desktop-document-modes #studio-perspectives{display:flex;align-items:center;gap:1px;padding:0;border:0;background:none}.desktop-document-modes button{height:24px;border:0;border-radius:2px;font-size:11px;padding:2px 9px}
+.desktop-document-modes button[aria-pressed=true],.desktop-document-modes button.active{background:var(--desktop-active)}
+.desktop-ide #studio-binary-host{position:absolute;inset:29px 0 29px;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--desktop-bg);z-index:2;padding:0;margin:0}
+.desktop-ide #studio-binary-host iframe{border:0;flex:1;width:100%;height:100%;min-height:0}.desktop-ide .studio-binary-heading{height:27px;min-height:27px;padding:4px 10px;font-size:11px;background:var(--desktop-panel)}
+.dock-zone{min-height:0;min-width:0;display:flex;flex-direction:column;overflow:hidden;background:var(--desktop-panel)}
+.dock-right-stack{display:grid;grid-template-rows:minmax(0,1fr);min-width:0;min-height:0;overflow:hidden}.dock-right-stack[data-split=true]{grid-template-rows:minmax(0,var(--dock-rightRatio,48%)) 3px minmax(0,1fr)}
+.dock-bottom-stack{display:grid;grid-template-columns:minmax(0,1fr);height:var(--dock-bottom,215px);max-height:55vh;min-height:100px;flex:none;overflow:hidden}.dock-bottom-stack[data-split=true]{grid-template-columns:minmax(0,var(--dock-bottomRatio,52%)) 3px minmax(0,1fr)}
+.dock-titlebar{height:27px;min-height:27px;display:flex;align-items:center;gap:5px;padding:0 4px 0 8px;background:var(--desktop-tab);border-bottom:1px solid var(--desktop-line);cursor:default;user-select:none;touch-action:none}
+.dock-titlebar>strong{font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:auto}.dock-title-actions{display:flex;align-items:center;gap:1px}
+.dock-titlebar button{padding:3px;width:21px;height:21px;display:flex;align-items:center;justify-content:center;border:0;border-radius:2px;background:none;color:var(--desktop-muted)}.dock-titlebar button:hover{background:var(--desktop-hover);color:var(--desktop-text)}
+.dock-content{flex:1;min-height:0;min-width:0;overflow:hidden;position:relative}.desktop-tool-view{height:100%;min-height:0;min-width:0;overflow:auto;box-sizing:border-box;padding:8px;scrollbar-width:thin;background:var(--desktop-panel)}
+.dock-tabs{display:flex;flex-wrap:nowrap;overflow:auto;scrollbar-width:thin;border-top:1px solid var(--desktop-line);background:var(--desktop-tab);height:27px;min-height:27px}
+.dock-tabs button{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:11px;padding:3px 9px;border:0;border-radius:0;border-bottom:2px solid transparent;background:none;color:var(--desktop-muted)}
+.dock-tabs [aria-selected=true]{background:var(--desktop-panel);border-bottom-color:var(--desktop-accent);color:var(--desktop-text)}
+.desktop-ide button:focus-visible,.desktop-ide input:focus-visible,.desktop-ide select:focus-visible,.desktop-ide [tabindex]:focus-visible{outline:1px solid var(--desktop-accent);outline-offset:-1px}
+.desktop-splitter{background:var(--desktop-line);flex:none;position:relative;z-index:3;touch-action:none;outline:none}.desktop-splitter.vertical{width:3px;cursor:col-resize}.desktop-splitter.horizontal{height:3px;cursor:row-resize}
+.desktop-splitter:hover,.desktop-splitter:focus-visible{background:var(--desktop-accent)}.desktop-ide.wb-resizing iframe,.desktop-ide.dock-dragging iframe{pointer-events:none}
+.dock-auto-rail{display:flex;flex-direction:column;gap:6px;background:var(--desktop-tab);padding:6px 0;z-index:4;overflow:auto}.dock-auto-tab{writing-mode:vertical-rl;text-orientation:mixed;font-size:11px;border:0;padding:8px 5px;background:none;display:flex;align-items:center;gap:5px;white-space:nowrap;color:var(--desktop-muted)}
+.dock-auto-tab[aria-expanded=true]{background:var(--desktop-active);color:var(--desktop-text)}
+.dock-flyout{position:absolute;top:0;bottom:0;width:min(340px,calc(100% - 35px));z-index:42;display:flex;flex-direction:column;background:var(--desktop-panel);border:1px solid var(--desktop-line);box-shadow:0 9px 25px #0005}.dock-flyout.left{left:25px}.dock-flyout.right{right:25px}.dock-flyout>.desktop-tool-view{flex:1;height:auto}
+.dock-floating{position:fixed;z-index:45;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--desktop-panel);border:1px solid var(--desktop-accent);box-shadow:0 12px 32px #0006;overflow:hidden}
+.dock-floating .dock-titlebar{background:var(--desktop-active)}.dock-float-resize{position:absolute;bottom:0;right:0;width:15px;height:15px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 50%,var(--desktop-muted) 52%,transparent 56%,transparent 65%,var(--desktop-muted) 67%,transparent 71%)}
+#dock-drop-overlay{position:absolute;inset:0;z-index:70;pointer-events:none;background:#17152122}.dock-drop-target{pointer-events:auto;position:absolute;font:11px system-ui;border:1px solid var(--desktop-accent);background:var(--desktop-active);color:var(--desktop-text);padding:15px 12px;min-width:85px;border-radius:4px;box-shadow:0 4px 12px #0005}
+.dock-drop-target.left{left:15px;top:40%}.dock-drop-target.right{right:15px;top:30%}.dock-drop-target.right-lower{right:15px;bottom:20%}.dock-drop-target.bottom{left:38%;bottom:15px}.dock-drop-target.bottom-right{right:24%;bottom:15px}.dock-drop-target.active,.dock-drop-hover{outline:2px solid var(--desktop-accent);outline-offset:-2px}
+.desktop-popup{position:fixed;z-index:1100;min-width:230px;max-width:min(440px,calc(100vw - 8px));max-height:calc(100dvh - 12px);overflow:auto;padding:4px;background:var(--desktop-panel);border:1px solid var(--desktop-line);box-shadow:0 5px 20px #0006;color:var(--desktop-text);font:12px/1.4 'Segoe UI',system-ui,sans-serif}
+.desktop-popup>button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;min-height:27px;padding:4px 9px;border:0;border-radius:2px;background:transparent;color:inherit;font:inherit;white-space:nowrap}
+.desktop-popup>button:hover,.desktop-popup>button:focus{background:var(--desktop-active);outline:none}.desktop-popup>button:disabled{opacity:.42;background:transparent}.desktop-popup .menu-check{width:14px;flex:none}.desktop-popup .menu-label{flex:1}.desktop-popup kbd,.desktop-popup .menu-arrow{margin-left:auto;color:var(--desktop-muted);font-size:11px}.desktop-popup .menu-empty{padding:10px;color:var(--desktop-muted)}
+.desktop-build-status{display:flex;align-items:center;gap:12px;height:20px;min-height:20px;padding:0 9px;background:var(--desktop-panel);border-top:1px solid var(--desktop-line);font-size:10px;overflow:hidden}.desktop-build-status #dev-status{padding:0;min-height:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--desktop-muted)}.desktop-build-status>label{margin-left:auto;display:flex;align-items:center;gap:3px;white-space:nowrap}
+.desktop-ide .statusbar{position:static;flex:none;height:23px;min-height:23px;background:#403255;font-size:10px;border:0}.desktop-ide.light .statusbar{background:#7651a6;color:white}
+.desktop-ide [hidden]{display:none!important}
