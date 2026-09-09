@@ -15,9 +15,9 @@ export function construction(text,file,offset){
   function visit(v){if(!v||typeof v!=='object')return;if(v.kind==='new')nodes.push(v);for(const x of Object.values(v)){if(Array.isArray(x))x.forEach(visit);else if(x&&typeof x==='object')visit(x);}}
   visit(parsed.ast);const node=nodes.find(n=>n.start===offset);
   if(!node)throw new Error('No C# construction at this source location');
-  return {node,tokens:parsed.tokens.filter(t=>t.start>=node.start&&t.end<=node.end&&t.kind!=='eof')};
+  return {node,parsed,tokens:parsed.tokens.filter(t=>t.start>=node.start&&t.end<=node.end&&t.kind!=='eof')};
 }
-function encode(value,kind){
+export function encodeLiteral(value,kind){
   if(kind==='number'){
     if(!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(String(value))||!Number.isFinite(Number(value)))throw new Error('Expected a finite numeric literal');
     return String(Number(value));
@@ -26,6 +26,11 @@ function encode(value,kind){
   if(kind==='char'){const text=String(value);if(text.length!==1)throw new Error('Expected one UTF-16 character');return "'"+JSON.stringify(text).slice(1,-1).replace(/'/g,"\\'")+"'";}
   if(kind==='string')return JSON.stringify(String(value)).replace(/</g,'\\u003c').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
   throw new Error('Property needs a typed source expression, not a designer literal');
+}
+export function propertyKind(property){return numeric.has(property)?'number':boolean.has(property)?'boolean':string.has(property)?'string':property==='PasswordChar'?'char':null;}
+export function validateProperty(node,property){
+  const type=node.type?.name.split('.').at(-1);
+  if(!Object.hasOwn(controlDefinitions,type)||!hasProperty(type,property)||eventNames.includes(property)||property==='Name'||!/^[A-Za-z_]\w*$/.test(property))throw new Error('Property is not a supported C# designer value');
 }
 /** Token edits preserve trivia, including comments between an initializer name and its value. */
 export function editInitializer(text,file,offset,property,value){
@@ -45,10 +50,10 @@ export function editInitializer(text,file,offset,property,value){
       if(after?.value===',')used.push(after);
       else if(tokens[start-1]?.value===',')used.push(tokens[start-1]);
       for(const t of used)edits.push([t.start,t.end,'']);
-    }else edits.push([member.value.start,member.value.end,encode(value,tokens.find(t=>t.start===member.value.start)?.kind==='char'?'char':typeof old.value)]);
+    }else edits.push([member.value.start,member.value.end,encodeLiteral(value,tokens.find(t=>t.start===member.value.start)?.kind==='char'?'char':typeof old.value)]);
   }else if(value!=null){
     const kind=numeric.has(property)?'number':boolean.has(property)?'boolean':string.has(property)?'string':property==='PasswordChar'?'char':null;
-    const addition=property+' = '+encode(value,kind);
+    const addition=property+' = '+encodeLiteral(value,kind);
     if(node.members==null)edits.push([node.end,node.end,' { '+addition+' }']);
     else {
       const close=tokens.at(-1);if(close?.value!=='}')throw new Error('Initializer delimiter is missing');

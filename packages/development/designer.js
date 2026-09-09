@@ -1,3 +1,4 @@
+import {inspectConstruction,editConstruction} from './imperative-designer.js';
 import {construction,editInitializer,literalValue} from './csharp-designer.js';
 import {parseMarkup} from '../xaml-compiler/index.js';
 import {liveValue} from './live-values.js';
@@ -14,8 +15,7 @@ function flatten(node,parent=null,result=[]){if(node?.kind==='element'){result.p
 function selected(text,file,offset){const {root}=xml(text,file),entry=flatten(root).find(e=>e.node.span.start===offset);if(!entry)throw new Error('Stale designer selection; refresh the visual tree');return {...entry,root};}
 export function inspectSource(text,file,offset){
   if(file.endsWith('.cs')){
-    const {node}=construction(text,file,offset);
-    return {type:node.type?.name,language:'csharp',properties:Object.fromEntries((node.members??[]).map(m=>{const literal=literalValue(m.value);return [m.name,{value:text.slice(m.value.start,m.value.end),editable:literal.editable,literal:literal.value}];}))};
+    return inspectConstruction(text,file,offset);
   }
   const {node}=selected(text,file,offset);return {type:localName(node.tag),language:'xaml',properties:Object.fromEntries(Object.entries(node.attributes).filter(([k])=>!k.startsWith('xmlns')).map(([k,v])=>[k,{value:v,editable:!v.startsWith('{')||v.startsWith('{}'),binding:v.startsWith('{')&&!v.startsWith('{}')}]))};
 }
@@ -23,7 +23,7 @@ export function inspectSource(text,file,offset){
 export function editProperty(text,file,offset,property,value){return writeProperty(text,file,offset,property,value,false);}
 function writeProperty(text,file,offset,property,value,expression){
   if(!/^[A-Za-z_][\w.:]*$/.test(property)||['__proto__','constructor','prototype'].includes(property)||property.startsWith('xmlns'))throw new Error('Invalid designer property');
-  if(file.endsWith('.cs'))return editInitializer(text,file,offset,property,value);
+  if(file.endsWith('.cs'))return editConstruction(text,file,offset,property,value);
   const {node}=selected(text,file,offset),type=localName(node.tag);
   if(!Object.hasOwn(controlDefinitions,type)||!hasProperty(type,property)||eventNames.includes(property)||property==='Name')throw new Error('Property is not a supported designer value');
   const old=node.attributes[property];if(!expression&&typeof old==='string'&&old.startsWith('{')&&!old.startsWith('{}'))throw new Error('Binding/resource expressions are protected; edit the expression in source');
@@ -43,7 +43,8 @@ export function insertControl(text,file,offset,type){
   const prefix=node.tag.includes(':')?node.tag.split(':')[0]+':':'';
   const content=type==='TextBlock'?' Text="New text"':type==='Button'?' Content="New button"':type==='TextBox'?' Text=""':type==='CheckBox'?' Content="New option"':'';
   const used=new Set(flatten(xml(text,file).root).map(e=>e.node.attributes.Name??e.node.attributes['x:Name']));let n=1;while(used.has(type+n))n++;
-  const child=`<${prefix}${type} Name="${type+n}"${content} />`;let next,selection;
+  const position=parentType==='Canvas'?' Canvas.Left="24" Canvas.Top="24" Width="140" Height="44"':'';
+  const child=`<${prefix}${type} Name="${type+n}"${content}${position} />`;let next,selection;
   if(text.slice(node.span.end-2,node.span.end)==='/>'){
     const start=node.span.end-2,added='>'+eol+childIndent+child+eol+indent+`</${node.tag}>`;
     selection=start+1+eol.length+childIndent.length;next=text.slice(0,start)+added+text.slice(node.span.end);
