@@ -69,7 +69,7 @@ function renderFiles(){
     }
     for(const {path}of node.files){
       const b=document.createElement('button');b.className='file-row'+(active===path&&!generated?' active':'');b.dataset.kind=kind(path);b.dataset.file=path;b.title=path;b.style.paddingLeft=(14+depth*12)+'px';
-      const i=document.createElement('span');i.className='file-icon';i.textContent=icon(path);const label=document.createElement('span');label.textContent=(!Object.hasOwn(files,path)?'[symbol] ':'')+path;
+      const i=document.createElement('span');i.className='file-icon';i.textContent=icon(path);const label=document.createElement('span');label.textContent=(!Object.hasOwn(files,path)?(lastBuild?.debug?.sites?.some(p=>p.file===path&&p.language==='msil')?'[IL] ':'[symbol] '):'')+path;
       b.append(i,label);b.onclick=()=>openFile(path);host.append(b);
     }
   }

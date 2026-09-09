@@ -1,6 +1,6 @@
 /** Same inputs as the independent C# oracle, evaluated through converted methods. */
-export function exceptionCases(C){
-  const cases=[
+export function exceptionInvocations(C){
+  return [
     ['divide',()=>C.SafeDivide(84,2)],['divide-zero',()=>C.SafeDivide(84,0)],
     ['catch-argument',()=>C.CatchOrder(0)],['catch-system',()=>C.CatchOrder(1)],['catch-base',()=>C.CatchOrder(2)],
     ['message',()=>C.Message()],['finally-return',()=>C.NestedFinally(2)],['finally-unhandled',()=>C.NestedFinally(0)],
@@ -18,9 +18,22 @@ export function exceptionCases(C){
     ['checked-double-nan',()=>C.CheckedDouble(NaN)],['checked-double-infinity',()=>C.CheckedDouble(Infinity)],
     ['catch-overflow',()=>C.CatchOverflow(2147483647,1)],['inner-message',()=>C.InnerMessage()]
   ];
-  return cases.map(([name,fn])=>{
+}
+export function exceptionCases(C){
+  return exceptionInvocations(C).map(([name,fn])=>{
     C.Reset();let value=null,exception=null;
     try{value=fn();if(typeof value==='bigint')value=String(value);}catch(error){exception=error.constructor.name;}
     return {name,value,exception,trace:C.Trace()};
   });
+}
+
+/** Execute the same case table with asynchronous debugger continuations. */
+export async function exceptionCasesAsync(C){
+  const results=[];
+  for(const [name,fn]of exceptionInvocations(C)){
+    await C.Reset();let value=null,exception=null;
+    try{value=await fn();if(typeof value==='bigint')value=String(value);}catch(error){exception=error.constructor.name;}
+    results.push({name,value,exception,trace:await C.Trace()});
+  }
+  return results;
 }
