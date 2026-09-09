@@ -1,0 +1,85 @@
+name: Commit recovered desktop implementation
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/commit-recovered-desktop.yml']
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: jailbreak-desktop-source-publication
+  cancel-in-progress: false
+jobs:
+  commit-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Recover all checksum-validated pending source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python scripts/finalize-desktop-source.py
+      - name: Apply exact accessible-menu and test-frame corrections
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          replacements={
+            'packages/workbench/menus.js':("b.disabled=!enabled(command);", "b.disabled=!enabled(command);b.setAttribute('aria-label',command.menuLabel??command.label.replace(/^[^:]+:\\s*/,''));"),
+            'tests/browser/test_desktop_commit.py':("frame = next(f for f in self.page.frames if f.frame_element().get_attribute('id') == 'preview')", "frame = self.page.locator('#preview').element_handle().content_frame()")
+          }
+          changed=[]
+          for name,(before,after) in replacements.items():
+            p=Path(name);text=p.read_text()
+            if after in text:continue
+            if text.count(before)!=1:raise RuntimeError('Unexpected correction preimage: '+name)
+            p.write_text(text.replace(before,after));changed.append(name)
+          if changed:
+            subprocess.run(['git','add','--',*changed],check=True)
+            subprocess.run(['git','commit','-m','fix(ide): expose stable menu labels and target the actual preview frame'],check=True)
+          PY
+      - name: Verify source tests and build before publication
+        run: |
+          mkdir -p test-results
+          set -o pipefail
+          npm test 2>&1 | tee test-results/recovered-unit.log
+          npm run gate 2>&1 | tee test-results/recovered-gate.log
+          npm run build 2>&1 | tee test-results/recovered-build.log
+          npm run check 2>&1 | tee test-results/recovered-check.log
+      - name: Retain source even when a verification step fails
+        if: always()
+        run: |
+          mkdir -p test-results/recovered-source
+          git archive --format=tar.gz HEAD > test-results/recovered-source/source.tar.gz
+          git rev-parse HEAD > test-results/recovered-source/commit.txt
+          git rev-parse HEAD^{tree} > test-results/recovered-source/tree.txt
+          git status --porcelain > test-results/recovered-source/worktree.txt
+          sha256sum test-results/recovered-source/source.tar.gz > test-results/recovered-source/source.sha256
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: recovered-desktop-source-and-checks
+          path: test-results
+          retention-days: 14
+      - name: Publish the recovered implementation without force
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor origin/main HEAD
+          git push origin HEAD:main
+      - name: Invoke the full independent browser CLR and Pages gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run toolchain.yml --ref main
