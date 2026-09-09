@@ -8,5 +8,16 @@
       "tests/language-service.test.js"
     ],
     "baseline": "d12b3f2c4490c1c1584c5660d4a71407af335329"
+  },
+  "bdbb37390aa33f3c2d8a04471d45c4d872ede230": {
+    "sha256": "bdc414a15ff1994580370e5beab897c953ca2455902adefcf322bf395c0d047a",
+    "status": "integrated",
+    "files": [
+      "apps/ide/studio.css",
+      "packages/workbench/editor-history.js",
+      "packages/workbench/language-tools.js",
+      "packages/workbench/studio.js"
+    ],
+    "baseline": "774553a512b653d9075dad260c3f00eb2f06fb14"
   }
 }

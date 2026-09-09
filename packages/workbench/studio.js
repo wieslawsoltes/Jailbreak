@@ -1,3 +1,5 @@
+import {installEditorHistory} from './editor-history.js';
+import {createLanguageTools} from './language-tools.js';
 import {createDesignCanvas} from './design-canvas.js';
 import {element, action, icon, tabKeys} from './studio-ui.js';
 import {studioPreferences, diagnosticMatches, indentSource} from './studio-model.js';
@@ -13,6 +15,8 @@ export function createStudio({document: doc = globalThis.document, development, 
   const persistState = () => {if (!initializing) persist();};
   let prefs = studioPreferences(), ready = false, waitingPick = false, binary = null, diagnosticItems = [], disposed = false;
   const off = [];
+  const sourceHistory=installEditorHistory({document:doc,active,documents,notify});
+  const sourceTools=createLanguageTools({document:doc,documents,active,open,notify,history:sourceHistory});
   doc.body.classList.add('vs-studio');
   doc.title = 'Jailbreak Studio — C# · XAML · JavaScript';
   doc.querySelector('.brand strong').textContent = 'Jailbreak';
@@ -206,8 +210,8 @@ export function createStudio({document: doc = globalThis.document, development, 
   showTools('all', false);setPerspective('split', {save: false, enable: false});activateBottom('problems', false);syncSession();initializing = false;
   return {
     options: () => ({...prefs,design:designer.options()}),
-    restore(value) {prefs = studioPreferences(value);designer.restore(value?.design);showTools(prefs.tools, false);setPerspective(prefs.perspective, {save: false, enable: false});activateBottom(prefs.bottom, false);propertySearch.value = '';fontSize.value=String(prefs.fontSize);doc.body.style.setProperty('--studio-font-size',prefs.fontSize+'px');debug.refresh();},
-    render() {debug.refresh();},
+    restore(value) {sourceHistory.reset();sourceTools.reset();prefs = studioPreferences(value);designer.restore(value?.design);showTools(prefs.tools, false);setPerspective(prefs.perspective, {save: false, enable: false});activateBottom(prefs.bottom, false);propertySearch.value = '';fontSize.value=String(prefs.fontSize);doc.body.style.setProperty('--studio-font-size',prefs.fontSize+'px');debug.refresh();},
+    render() {sourceTools.changed();debug.refresh();},
     diagnostics(items) {diagnosticItems = items;filterDiagnostics();if (items.some(d => d.severity === 'error')) activateBottom('problems');},
     status(kind) {
       if (kind === 'building') {liveBadge.textContent = 'Building…';liveBadge.dataset.state = 'building';}
@@ -216,6 +220,6 @@ export function createStudio({document: doc = globalThis.document, development, 
       else if (kind === 'error') {liveBadge.textContent = 'Runtime error';liveBadge.dataset.state = 'error';}
       syncSession();
     },
-    dispose() {if (disposed) return;disposed = true;designer.dispose();unsubscribe();debug.dispose();propertyObserver.disconnect();off.forEach(fn => fn());doc.removeEventListener('keydown', keys, true);editor.removeEventListener('keydown', indent, true);binary?.remove();fileDialog.remove();toolbar.remove();}
+    dispose() {if (disposed) return;disposed = true;sourceHistory.dispose();sourceTools.dispose();designer.dispose();unsubscribe();debug.dispose();propertyObserver.disconnect();off.forEach(fn => fn());doc.removeEventListener('keydown', keys, true);editor.removeEventListener('keydown', indent, true);binary?.remove();fileDialog.remove();toolbar.remove();}
   };
 }
