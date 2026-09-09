@@ -51,7 +51,7 @@ export class Control extends StyledObject {
   addChild(child){this.Children.Add(child);}
   FindControl(name){if(this._nameScope)return this._nameScope.get(name)??null;const scope=this.scope?.names;if(scope?.has(name))return scope.get(name);if(this.Name===name)return this;for(const child of this.visualChildren){const found=child.FindControl(name);if(found)return found;}return null;}
   FindName(name){return this.FindControl(name);}
-  InitializeComponent(){if(!Control.xamlLoader)throw new Error('XAML loader is not installed');Control.xamlLoader(this);}
+  InitializeComponent(){if(!Control.xamlLoader)throw new Error('XAML loader is not installed');(this.constructor.$xamlLoader??Control.xamlLoader)(this);}
   ApplyTemplate(){applyControlTheme(this);return applyControlTemplate(this);}
   OnApplyTemplate(args){}
   FindTemplateChild(name){return this._templateInstance?.names.get(name)??null;}

@@ -100,13 +100,14 @@ export function compileCSharp(input, options={}) {
         const args=e.args.map(a=>expr(a,ctx));
         if(e.callee.kind==='member'){
           const m=e.callee,name=m.name,obj=expr(m.object,ctx);
-          if(name==='Load'&&flatName(m.object)?.endsWith('AvaloniaXamlLoader'))return `JB.loadXaml(${args[0]??'this'})`;
+          if(name==='Load'&&flatName(m.object)?.endsWith('AvaloniaXamlLoader'))return ctx.cooperative?`(yield* JB.loadXamlSteps(${args[0]??'this'}))`:`JB.loadXaml(${args[0]??'this'})`;
           if(name==='FindControl'||name==='FindName')return `${obj}.${name}(${args.join(',')})`;
           if(name==='GetType')return `JB.getType(${obj})`;
           if(stringMethods.has(name))return `JB.invoke(${obj},${escapeJs(name)},[${args.join(',')}],${!!m.optional})`;
           if(linqMethods.has(name)&&flatName(m.object)!=='Enumerable'&&!resolve(flatName(m.object)??'')&&!resolve(infer(m.object,ctx)??''))return `JB.Enumerable.${name}(${obj}${args.length?','+args.join(','):''})`;
         }
         if(ctx.cooperative){
+          if(e.callee.kind==='identifier'&&e.callee.name==='InitializeComponent'&&!ctx.members.has('InitializeComponent')||e.callee.kind==='member'&&e.callee.name==='InitializeComponent'&&e.callee.object.kind==='identifier'&&e.callee.object.name==='this'&&!ctx.members.has('InitializeComponent'))return `(yield* JB.loadXamlSteps(this,${escapeJs(options.xamlNames?.[current.fullName]?current.fullName:null)}))`;
           if(e.callee.kind==='member')return `(yield* $co.applyReference($co.reference(${expr(e.callee.object,ctx)},${escapeJs(e.callee.name)},${!!e.callee.optional}),(function*(){return [${args.join(',')}];}).call(this)))`;
           return `(yield* $co.call(${expr(e.callee,ctx)},[${args.join(',')}]))`;
         }
@@ -138,7 +139,7 @@ export function compileCSharp(input, options={}) {
         if(!t&&!e.members?.length){report('JB2206','Target-typed new requires a declared target type',e);return 'null';}
         if(!t&&e.members?.length)return `({${e.members.map(m=>`${escapeJs(m.name)}:${expr(m.value,ctx)}`).join(',')}})`;
         if(t.rank){if(e.length)return `JB.newArray(${expr(e.length,ctx)},${defaultValue({...t,rank:0})})`;return `[${(e.items??[]).map(a=>expr(a,ctx)).join(',')}]`;}
-        let code=`new ${typeRef(t,e)}(${e.args.map(a=>expr(a,ctx)).join(',')})`;
+        let code=ctx.cooperative?`(yield* $co.construct(${typeRef(t,e)},[${e.args.map(a=>expr(a,ctx)).join(',')}]))`:`new ${typeRef(t,e)}(${e.args.map(a=>expr(a,ctx)).join(',')})`;
         if(e.members?.length)code=`Object.assign(${code},{${e.members.map(m=>`${escapeJs(m.name)}:${expr(m.value,ctx)}`).join(',')}})`;
         if(e.items?.length)code=`JB.initializeCollection(${code},[${e.items.map(a=>a.kind==='initializerPair'?`[${a.items.map(x=>expr(x,ctx)).join(',')}]`:expr(a,ctx)).join(',')}])`;
         return options.debug?`(JB.dev?JB.dev.created(${code},${escapeJs({...currentSource.location(e.start),language:'csharp'})}):${code})`:code;
@@ -259,7 +260,32 @@ export function compileCSharp(input, options={}) {
       }
       if(group.length>1){const m=group[0],stat=m.mods.includes('static');body.push(`${stat?'static ':''}${m.name}(...args) { switch(args.length) { ${group.map(x=>`case ${x.parameters.length}: return this.${x.name}$${x.parameters.length}(...args);`).join(' ')} default: throw new JB.ArgumentException('No overload matches argument count'); } }`);}
     }
-    chunks.push(`class ${js} extends ${base} {\n${body.join('\n')}\n}\nJB.defineType(${escapeJs(decl.fullName)}, ${js});${continuations.length?'\nJB.dev?.co.register('+js+',['+continuations.join(',')+']);':''}`);
+    // Constructor factories allocate through the native base with the final prototype.
+    // They preserve the release backend's field/constructor order, without running
+    // a source constructor twice or making constructors return promises.
+    let constructorFactory='';
+    if(options.debug&&options.cooperativeDebug){
+      const initializers=[];
+      for(const m of decl.members){
+        currentSource=m.source??decl.source;debugMethod='.ctor';
+        if(m.mods.includes('static')||m.mods.includes('const'))continue;
+        const ctx=context({cooperative:true});
+        if(m.kind==='field')initializers.push(`this.${m.name}=${m.init?expr(m.init,ctx,m.type):defaultValue(m.type)};`);
+        if(m.kind==='event')initializers.push(`this.${m.name}=new JB.Event();`);
+        if(m.kind==='property'&&(m.get?.kind==='auto'||m.set?.kind==='auto'))initializers.push(`this.__${m.name}=${m.init?expr(m.init,ctx,m.type):defaultValue(m.type)};`);
+      }
+      const alternatives=ctorBody.length?ctorBody:[{m:null,ctx:context(),min:0,max:0}];
+      const cases=alternatives.map(c=>{
+        currentSource=c.m?.source??decl.source;debugMethod='.ctor';
+        const ctx={...clone(c.ctx),cooperative:true},params=(c.m?.parameters??[]).map(p=>(p.rest?'...':'')+p.name+(p.value?' = '+expr(p.value,ctx):'')).join(',');
+        if(c.m?.initializer?.target==='this')report('JB2261','Delegating constructor requires constructor-chain lowering',c.m);
+        const baseArgs=c.m?.initializer?.args.map(a=>expr(a,ctx)).join(',')??'';
+        const ctor=c.m?stmt(c.m.body,ctx):(options.xamlNames?.[decl.fullName]?`{yield* JB.loadXamlSteps(this,${escapeJs(decl.fullName)});}`:'{}');
+        return `if($args.length>=${c.min}&&$args.length<=${c.max===Infinity?'Infinity':c.max}){const [${params}]=$args;const $frame=$co.enter(${escapeJs(decl.fullName+'.ctor')});let $self,$complete=false;try{$self=yield* $co.construct(${base},[${baseArgs}],$newTarget);yield* (function*(){${initializers.join('')} ${ctor}}).call($self);$complete=true;return $self;}finally{try{if(!$complete)$self?.Dispose?.();}finally{$co.leave($frame);}}}`;
+      });
+      constructorFactory=`\nJB.dev?.co.registerConstructor(${js},function*($co,$args,$newTarget){${cases.join('')}throw new JB.ArgumentException('No constructor matches argument count');});`;
+    }
+    chunks.push(`class ${js} extends ${base} {\n${body.join('\n')}\n}\nJB.defineType(${escapeJs(decl.fullName)}, ${js});${continuations.length?'\nJB.dev?.co.register('+js+',['+continuations.join(',')+']);':''}${constructorFactory}`);
   }
   const cleanShape=(node,key='')=>{
     if(Array.isArray(node))return node.map(x=>cleanShape(x));

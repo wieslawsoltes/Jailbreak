@@ -23,7 +23,11 @@ export function createXamlRuntime(api, types, documents) {
   const visualBody=node=>node.children.flatMap(n=>n.kind==='property'&&n.property==='Content'?n.children:[n]).find(n=>n.kind==='control');
   function newScope(scope,extra={}){return {names:new Map(),owner:scope.owner,pending:[],created:[],exportNames:false,templatedParent:null,...extra};}
   function finish(scope){for(let i=0;i<scope.pending.length;i++)scope.pending[i]();scope.pending=[];}
-  function safely(scope,fn){try{return fn();}catch(error){for(const child of scope.created??[])child.Dispose();throw error;}}
+  function cleanup(scope){for(const child of [...(scope.created??[])].reverse())try{child.Dispose();}catch{}scope.pending=[];}
+  function safely(scope,fn){try{return fn();}catch(error){cleanup(scope);throw error;}}
+  function drain(iterator){let step;do{step=iterator.next();}while(!step.done);return step.value;}
+  function build(node,parent,scope,existing=null){return drain(buildSteps(node,parent,scope,existing));}
+  function property(target,node,scope){return drain(propertySteps(target,node,scope));}
   function dictionary(node,parent,scope,existing=null){
     const result=existing??new ResourceDictionary(),host={Resources:result,parent};
     for(const child of node.children.filter(n=>n.kind!=='text')){
@@ -80,29 +84,32 @@ export function createXamlRuntime(api, types, documents) {
     if(node.type==='RowDefinitions'||node.type==='ColumnDefinitions')return node.children.filter(n=>n.kind!=='text').map(n=>build(n,parent,scope)).join(',');
     throw new Error('JB3005: Runtime object '+node.type+' is not implemented');
   }
-  function property(target,node,scope){
+  function* propertySteps(target,node,scope){
     const p=node.property,children=node.children.filter(n=>n.kind!=='text');
     if(p==='Resources'){
       if(children.length===1&&children[0].type==='ResourceDictionary')dictionary(children[0],target,scope,target.Resources);
       else dictionary({children},target,scope,target.Resources);
-    }else if(p==='Styles'){for(const child of children){const style=build(child,target,scope);target.Styles.push(...(Array.isArray(style)?style:[style]));}}
-    else if(p==='Children'||p==='Items'){for(const child of children)target.Children.Add(build(child,target,scope));}
-    else if(p==='RowDefinitions'||p==='ColumnDefinitions')set(target,p,children.map(n=>build(n,target,scope)).join(','));
+    }else if(p==='Styles'){for(const child of children){const style=yield* buildSteps(child,target,scope);target.Styles.push(...(Array.isArray(style)?style:[style]));}}
+    else if(p==='Children'||p==='Items'){for(const child of children)target.Children.Add(yield* buildSteps(child,target,scope));}
+    else if(p==='RowDefinitions'||p==='ColumnDefinitions'){const values=[];for(const n of children)values.push(yield* buildSteps(n,target,scope));set(target,p,values.join(','));}
     else if(p==='Inlines')set(target,'Text',node.children.map(n=>n.kind==='text'?n.text:n.attributes?.Text??n.children?.filter(c=>c.kind==='text').map(c=>c.text).join('')??'').join(''));
-    else {if(children.length>1)throw new Error('Property '+p+' requires a single value');set(target,p,children.length?build(children[0],target,scope):node.children.map(n=>n.text??'').join(' '));}
+    else {if(children.length>1)throw new Error('Property '+p+' requires a single value');set(target,p,children.length?(yield* buildSteps(children[0],target,scope)):node.children.map(n=>n.text??'').join(' '));}
   }
-  function build(node,parent,scope,existing=null){
+  function* buildSteps(node,parent,scope,existing=null){
     if(node.kind==='text')return node.text;if(node.kind==='object')return object(node,parent,scope);
     const Type=resolveType(node.type);if(typeof Type!=='function')throw new Error('JB3006: Type '+node.type+' is not registered');
-    const target=existing??new Type();if(target instanceof Control){if(!existing)scope.created.push(target);target.parent=parent instanceof Control?parent:null;target._resourceParent=parent;target._nameScope=scope.names;target._xamlScope=scope;if(scope.templatedParent)target.TemplatedParent=scope.templatedParent;}
+    const frame=scope.co?.enter('XAML '+node.type);let target;
+    try{
+    if(scope.co&&node.source)yield {kind:'checkpoint',point:{...node.source,cooperative:true,phase:'construct'},locals:()=>({parent,owner:scope.owner})};
+    target=existing??(scope.co?(yield* scope.co.construct(Type,[])):new Type());if(target instanceof Control){if(!existing)scope.created.push(target);target.parent=parent instanceof Control?parent:null;target._resourceParent=parent;target._nameScope=scope.names;target._xamlScope=scope;if(scope.templatedParent)target.TemplatedParent=scope.templatedParent;}
     if(node.source)api.dev?.register(target,node.source);
     const name=node.attributes.Name;if(name){scope.names.set(name,target);if(scope.exportNames)scope.owner[name]=target;}
-    for(const child of node.children)if(child.kind==='property'&&['Resources','Styles'].includes(child.property))property(target,child,scope);
+    for(const child of node.children)if(child.kind==='property'&&['Resources','Styles'].includes(child.property))yield* propertySteps(target,child,scope);
     for(const [name,value]of Object.entries(node.attributes))attr(target,name,value,scope);
-    for(const child of node.children)if(child.kind==='property'&&!['Resources','Styles'].includes(child.property))property(target,child,scope);
+    for(const child of node.children)if(child.kind==='property'&&!['Resources','Styles'].includes(child.property))yield* propertySteps(target,child,scope);
     const children=node.children.filter(n=>n.kind!=='property');
     if(children.every(n=>n.kind==='text')&&children.length)set(target,['TextBlock','Run'].includes(target.type)?'Text':'Content',children.map(n=>n.text).join(' '));
-    else for(const child of children){const value=build(child,target,scope);if(target instanceof Control){
+    else for(const child of children){const value=yield* buildSteps(child,target,scope);if(target instanceof Control){
       if(['Button','ToggleButton','ContentControl','ContentPresenter','UserControl','Window','ScrollViewer','TabItem','Expander','GroupBox','ContentPage','Border'].includes(target.type)&&children.length===1)set(target,'Content',value);
       else target.Children.Add(value);
     }else throw new Error('Object has no content collection');}
@@ -110,11 +117,35 @@ export function createXamlRuntime(api, types, documents) {
       if(!target.Theme){const found=findResource(Type,target);if(found.found&&found.value?.kind==='controlTheme')target.SetValue('Theme',found.value,80);}
     });
     return target;
+    }finally{if(frame)scope.co.leave(frame);}
   }
   function loadXaml(instance,id=null){
     id??=instance.constructor.$fullName??instance.$type;const ir=documents.get(id);if(!ir)throw new Error('JB3007: XAML '+id+' was not registered');
     if(instance._xamlLoaded===ir)return instance;const scope={names:new Map(),owner:instance,pending:[],created:[],exportNames:true,templatedParent:null};
     safely(scope,()=>{build(ir.root,null,scope,instance);finish(scope);});instance._xamlLoaded=ir;return instance;
+  }
+  /** Consume exactly the same traversal as loadXaml, pausing before each visual.
+   * Only fresh instances may be cooperatively hydrated; cancellation owns/disposes
+   * the partially built root, never a previously running app.
+   */
+  function* loadXamlSteps(instance,id=null){
+    const co=api.dev?.co;if(!co)return loadXaml(instance,id);
+    id??=instance.constructor.$fullName??instance.$type;const ir=documents.get(id);
+    if(!ir)throw new Error('JB3007: XAML '+id+' was not registered');
+    if(instance._xamlLoaded===ir)return instance;
+    if(instance._xamlLoaded||instance.Children?.Count||instance.Content instanceof Control)throw new Error('Resumable hydration requires a fresh instance');
+    const scope={names:new Map(),owner:instance,pending:[],created:[],exportNames:true,templatedParent:null,co},before=new Map();let complete=false;
+    // Names are exported while constructing so later statements resolve them. On
+    // failure/cancellation restore all prior descriptors, including absent fields.
+    const visit=n=>{if(n.attributes?.Name&&!before.has(n.attributes.Name))before.set(n.attributes.Name,Object.getOwnPropertyDescriptor(instance,n.attributes.Name));for(const c of n.children??[])visit(c);};visit(ir.root);
+    try{yield* buildSteps(ir.root,null,scope,instance);finish(scope);instance._xamlLoaded=ir;complete=true;return instance;}
+    finally{if(!complete){cleanup(scope);for(const [name,descriptor]of before){if(descriptor)Object.defineProperty(instance,name,descriptor);else delete instance[name];}scope.names.clear();try{instance.Dispose();}catch{}}}
+  }
+  function* createFromXamlSteps(id){
+    const ir=documents.get(id);if(!ir)throw new Error('XAML '+id+' was not registered');
+    const Type=resolveType(ir.className??ir.root.type),co=api.dev?.co;
+    const instance=co?(yield* co.construct(Type,[])):new Type();
+    if(instance._xamlLoaded!==ir)yield* loadXamlSteps(instance,id);return instance;
   }
   function createFromXaml(id){const ir=documents.get(id);if(!ir)throw new Error('XAML '+id+' was not registered');const Type=resolveType(ir.className??ir.root.type);const instance=new Type();if(instance._xamlLoaded!==ir)loadXaml(instance,id);return instance;}
   // Stage a builtin subtree without exporting names or mounting DOM nodes.
@@ -146,5 +177,5 @@ export function createXamlRuntime(api, types, documents) {
     const next=value?build(value,target,staging):null;finish(staging);
     return {apply(){target.SetValue(propertyName,next);},rollback(){},finalize(){}};
   }
-  return {loadXaml,createFromXaml,applicationResources,resolveType,prepareXamlFragment,prepareXamlAttribute,refreshXamlSubscriptions,prepareXamlEnvironment};
+  return {loadXaml,loadXamlSteps,createFromXaml,createFromXamlSteps,applicationResources,resolveType,prepareXamlFragment,prepareXamlAttribute,refreshXamlSubscriptions,prepareXamlEnvironment};
 }

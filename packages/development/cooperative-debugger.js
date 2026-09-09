@@ -1,7 +1,7 @@
 import {snapshot,readWatch} from './watch.js';
 /** Runs compiled generator continuations, not an AST/IL interpreter. Native APIs are step-over regions. */
 export function createCooperativeDebugger({point,breakpoint=()=>false,breakOnThrow=()=>false,report=()=>{},quantum=1000,maxSteps=1000000,maxFrames=512,maxTasks=32}={}){
-  const methods=new WeakMap(),bound=new WeakMap(),handlers=new WeakMap(),tasks=new Map();
+  const constructors=new WeakMap(),methods=new WeakMap(),bound=new WeakMap(),handlers=new WeakMap(),tasks=new Map();
   let current=null,nextTask=1,nextFrame=1,disposed=false;
   if(!Number.isSafeInteger(quantum)||quantum<1||!Number.isSafeInteger(maxSteps)||maxSteps<1||!Number.isSafeInteger(maxFrames)||maxFrames<1||!Number.isSafeInteger(maxTasks)||maxTasks<1)throw new RangeError('Debugger budgets must be positive integers');
   const emit=(event,payload)=>{if(!disposed)try{report(event,payload);}catch{}};
@@ -116,6 +116,9 @@ export function createCooperativeDebugger({point,breakpoint=()=>false,breakOnThr
     f.setters[name](value);emit('debug-paused',paused(task));
   }
   const api={register,invoke,call,start,eventFunction,command,inspectFrame,setLocal,
+    run(iterator,options={}){if(!iterator||typeof iterator.next!=='function'||typeof iterator.return!=='function')throw new TypeError('Expected a compiled continuation');return launch(iterator,options);},
+    registerConstructor(Type,factory){if(typeof Type!=='function'||typeof factory!=='function')throw new TypeError('Invalid constructor continuation');constructors.set(Type,factory);},
+    *construct(Type,args=[],newTarget=Type){const factory=constructors.get(Type);if(factory)return yield* factory(api,args,newTarget);return Reflect.construct(Type,args,newTarget);},
     read(fn){try{return fn();}catch{return '[unavailable]';}},
     reference(object,name,optional=false){if(optional&&object==null)return null;if(object==null)throw new TypeError('Cannot call a method on null');return {object,name,method:object[name]};},
     *applyReference(ref,args){if(!ref)return undefined;return yield* invoke(ref.object,ref.name,yield* args,false,ref.method);},

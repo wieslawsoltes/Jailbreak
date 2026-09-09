@@ -1,3 +1,4 @@
+import {bootCooperative} from '../development/construction.js';
 import { createDevelopmentSession } from '../development/runtime.js';
 import { createBinaryRuntime } from '../msil-runtime/index.js';
 import { TemplateAppliedEventArgs } from './templates.js';
@@ -38,12 +39,13 @@ export function createRuntime() {
     runtimeCss,flushLayout,types,documents};
   api.enableDevelopment=options=>{api.dev?.dispose();api.dev=createDevelopmentSession(api,options);api.binary.setDebugger((point,read)=>api.dev?.binaryHit(point,read));return api.dev;};
   api.binary=createBinaryRuntime({log:(...args)=>api.Console?.WriteLine?.(...args)});
-  api.defineType=(name,type)=>{if(types.has(name))throw new Error(`Duplicate runtime type '${name}'`);types.set(name,type);if(typeof type==='function')Object.defineProperty(type,'$fullName',{value:name,configurable:true});return type;};
+  api.defineType=(name,type)=>{if(types.has(name))throw new Error(`Duplicate runtime type '${name}'`);types.set(name,type);if(typeof type==='function')Object.defineProperties(type,{$fullName:{value:name,configurable:true},$xamlLoader:{value:instance=>api.loadXaml(instance),configurable:true}});return type;};
   for(const [name,type]of Object.entries(controls))types.set(name,type);
   api.registerXaml=(id,ir)=>{if(ir.version!==1)throw new Error('Unsupported XAML IR version');documents.set(id,ir);};
   Object.assign(api,createXamlRuntime(api,types,documents));
   api.AvaloniaXamlLoader={Load:api.loadXaml};
   api.ApplicationLifetime={MainWindow:null};
+  api.bootCooperative=(manifest,host)=>bootCooperative(api,manifest,host);
   api.boot=(manifest,host=globalThis.document?.body)=>{
     if(!host)throw new Error('A browser DOM host is required');
     const style=document.createElement('style');style.textContent=runtimeCss;host.append(style);

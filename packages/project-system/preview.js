@@ -6,7 +6,7 @@ function inline(text){return text.replace(/<\/script/gi,'<\\/script');}
 export function previewDocument(result,runtime,{channel='',title='Jailbreak application',development=null,sources={}}={}){
   if(development&&result.debug)updateGeneratedLocations(result.code,result.debug);
   const bridge=`const channel=${JSON.stringify(channel)};const report=(kind,message)=>parent.postMessage({jailbreak:true,channel,kind,message},'*');addEventListener('error',e=>report('error',e.message));addEventListener('unhandledrejection',e=>report('error',String(e.reason?.message??e.reason)));const log=console.log.bind(console);console.log=(...a)=>{log(...a);report('log',a.map(String).join(' '));};`;
-  let boot=`try{${development?developmentBridge(development,result.debug):''}Jailbreak.onRendererStatus=s=>report('renderer',s);globalThis.appHandle=${executable(result)};report('ready','Application is running');}catch(e){report('error',e.stack??e.message);document.getElementById('error').textContent=e.stack??e.message;}`;
+  let boot=`try{${development?developmentBridge(development,result.debug):''}Jailbreak.onRendererStatus=s=>report('renderer',s);globalThis.appHandle=${executable(result)};if(appHandle.ready)appHandle.ready.then(h=>{if(!h.cancelled)report('ready','Application is running');else report('log','Application construction cancelled');}).catch(e=>{report('error',e.stack??e.message);document.getElementById('error').textContent=e.stack??e.message;});else report('ready','Application is running');}catch(e){report('error',e.stack??e.message);document.getElementById('error').textContent=e.stack??e.message;}`;
   if(development&&result.debug){
     boot=mappedScript('\n'+boot,result.debug,sources);
   }
