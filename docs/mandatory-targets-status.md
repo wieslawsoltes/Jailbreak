@@ -1,6 +1,6 @@
 # Mandatory targets: current status and acceptance
 
-> Audit input: [`9b73d1167983`](https://github.com/wieslawsoltes/Jailbreak/tree/9b73d1167983076687cf078a3992144e4a18794a); documentation reconciled 2026-09-10T11:23:03+00:00. This is a source/evidence snapshot, not a declaration of full product completion.
+> Audit input: [`92cfb4ddc1f3`](https://github.com/wieslawsoltes/Jailbreak/tree/92cfb4ddc1f35e1ae3fa9093d7ed04a041d75d4c); documentation reconciled 2026-09-10T11:42:51+00:00. This is a source/evidence snapshot, not a declaration of full product completion.
 
 The canonical contract is [requirements.md](requirements.md); the source-grounded status is [current-status.md](current-status.md); implementation/test paths are in [requirements-traceability.md](requirements-traceability.md). This replaces recovery-era assumptions with an exact audit snapshot.
 
