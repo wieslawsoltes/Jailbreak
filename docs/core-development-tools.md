@@ -1,6 +1,6 @@
 # Mandatory core development tools contract
 
-> Audit input: [`9b73d1167983`](https://github.com/wieslawsoltes/Jailbreak/tree/9b73d1167983076687cf078a3992144e4a18794a); documentation reconciled 2026-09-10T11:23:03+00:00. This is a source/evidence snapshot, not a declaration of full product completion.
+> Audit input: [`92cfb4ddc1f3`](https://github.com/wieslawsoltes/Jailbreak/tree/92cfb4ddc1f35e1ae3fa9093d7ed04a041d75d4c); documentation reconciled 2026-09-10T11:42:51+00:00. This is a source/evidence snapshot, not a declaration of full product completion.
 
 Debugging, visual design, source identity, hot reload and lifecycle cleanup are mandatory parts of every compiler/runtime/control increment. They are not optional plugins to add after compatibility work. The [full requirements](requirements.md) preserve the requested end state; the [current status](current-status.md) identifies implemented profiles and actual evidence.
 
