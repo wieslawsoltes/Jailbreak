@@ -1,6 +1,6 @@
 # Current implementation and evidence status
 
-> Audit input: [`9b73d1167983`](https://github.com/wieslawsoltes/Jailbreak/tree/9b73d1167983076687cf078a3992144e4a18794a); documentation reconciled 2026-09-10T11:23:03+00:00. This is a source/evidence snapshot, not a declaration of full product completion.
+> Audit input: [`92cfb4ddc1f3`](https://github.com/wieslawsoltes/Jailbreak/tree/92cfb4ddc1f35e1ae3fa9093d7ed04a041d75d4c); documentation reconciled 2026-09-10T11:42:51+00:00. This is a source/evidence snapshot, not a declaration of full product completion.
 
 **The requested full solution is not declared complete.** The project has implemented and tested profiles; their scope must be read alongside the outstanding whole-application requirements. This document supersedes contradictory conversational publication reports and milestone-era exclusions. It does not make a new runtime compatibility claim from file names alone.
 
@@ -10,9 +10,9 @@ The implementation/gate input manifest is [source-inventory.json](audit/source-i
 
 | Canonical workflow run | Head | Status | Conclusion |
 | --- | --- | --- | --- |
-| No exact-SHA canonical result available to this audit | — | Not established | Do not infer a pass |
+| [34472689673](https://github.com/wieslawsoltes/Jailbreak/actions/runs/34472689673) | `92cfb4ddc1f3` | in_progress | not concluded |
 
-The latest successful canonical ancestor observed was [`1572fa187207`](https://github.com/wieslawsoltes/Jailbreak/commit/1572fa18720737f91f5e0a0651b4bf870aa01034), [run 34467875477](https://github.com/wieslawsoltes/Jailbreak/actions/runs/34467875477). 3 implementation or gate paths changed after that successful ancestor; its pass must not be represented as verification of the changed revision. See the exact path list in the evidence record.
+The latest successful canonical ancestor observed was [`1572fa187207`](https://github.com/wieslawsoltes/Jailbreak/commit/1572fa18720737f91f5e0a0651b4bf870aa01034), [run 34467875477](https://github.com/wieslawsoltes/Jailbreak/actions/runs/34467875477). 5 implementation or gate paths changed after that successful ancestor; its pass must not be represented as verification of the changed revision. See the exact path list in the evidence record.
 
 ## Capability status by acceptance group
 

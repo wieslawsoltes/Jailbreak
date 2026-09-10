@@ -1,7 +1,7 @@
 {
   "format": "jailbreak-documentation-audit-v1",
-  "source_baseline": "9b73d1167983076687cf078a3992144e4a18794a",
-  "audited_at": "2026-09-10T11:23:03+00:00",
+  "source_baseline": "92cfb4ddc1f35e1ae3fa9093d7ed04a041d75d4c",
+  "audited_at": "2026-09-10T11:42:51+00:00",
   "requirement_count": 138,
   "group_count": 13,
   "evidence": {
@@ -419,7 +419,20 @@
     "requestedLibrary.fullControlCatalogPassed": false
   },
   "hosted_ci": {
-    "exact_baseline_runs": [],
+    "exact_baseline_runs": [
+      {
+        "id": 34472689673,
+        "name": "Toolchain verification and Pages",
+        "head_sha": "92cfb4ddc1f35e1ae3fa9093d7ed04a041d75d4c",
+        "path": ".github/workflows/toolchain.yml",
+        "event": "push",
+        "status": "in_progress",
+        "conclusion": null,
+        "html_url": "https://github.com/wieslawsoltes/Jailbreak/actions/runs/34472689673",
+        "created_at": "2026-09-10T11:42:12Z",
+        "updated_at": "2026-09-10T11:42:17Z"
+      }
+    ],
     "most_recent_successful_ancestor": {
       "id": 34467875477,
       "name": "Toolchain verification and Pages",
@@ -435,6 +448,8 @@
     "implementation_or_gate_changes_since_successful_ancestor": [
       ".github/workflows/toolchain.yml",
       "scripts/harden-documentation-audit-20260910.py",
+      "scripts/run-browser-gates.py",
+      "tests/automation/test_browser_evidence.py",
       "tests/automation/test_documentation_audit.py"
     ],
     "exact_query_error": null,
@@ -447,8 +462,8 @@
         "npm",
         "test"
       ],
-      "source_sha": "9b73d1167983076687cf078a3992144e4a18794a",
-      "started_at": "2026-09-10T11:22:53.368682+00:00",
+      "source_sha": "92cfb4ddc1f35e1ae3fa9093d7ed04a041d75d4c",
+      "started_at": "2026-09-10T11:42:43.671236+00:00",
       "exit_code": 0,
       "summary": {
         "tests": 474,
@@ -466,8 +481,8 @@
         "run",
         "gate"
       ],
-      "source_sha": "9b73d1167983076687cf078a3992144e4a18794a",
-      "started_at": "2026-09-10T11:22:56.612521+00:00",
+      "source_sha": "92cfb4ddc1f35e1ae3fa9093d7ed04a041d75d4c",
+      "started_at": "2026-09-10T11:42:46.519585+00:00",
       "exit_code": 0,
       "summary": {},
       "log_file": "jailbreak-docs-examples.log"
@@ -479,8 +494,8 @@
         "run",
         "build"
       ],
-      "source_sha": "9b73d1167983076687cf078a3992144e4a18794a",
-      "started_at": "2026-09-10T11:22:57.180772+00:00",
+      "source_sha": "92cfb4ddc1f35e1ae3fa9093d7ed04a041d75d4c",
+      "started_at": "2026-09-10T11:42:46.982353+00:00",
       "exit_code": 0,
       "summary": {},
       "log_file": "jailbreak-docs-build.log"
@@ -492,8 +507,8 @@
         "run",
         "check"
       ],
-      "source_sha": "9b73d1167983076687cf078a3992144e4a18794a",
-      "started_at": "2026-09-10T11:22:58.557000+00:00",
+      "source_sha": "92cfb4ddc1f35e1ae3fa9093d7ed04a041d75d4c",
+      "started_at": "2026-09-10T11:42:47.596109+00:00",
       "exit_code": 0,
       "summary": {},
       "log_file": "jailbreak-docs-syntax.log"

@@ -1,5 +1,5 @@
 {
-  "baseline": "9b73d1167983076687cf078a3992144e4a18794a",
+  "baseline": "92cfb4ddc1f35e1ae3fa9093d7ed04a041d75d4c",
   "algorithm": "sha256",
   "implementation_and_gate_files": {
     ".github/workflows/commit-recovered-desktop.yml": "1cd3cc1b0dd4c7d2b947fedce4a3c02220e306ee55c1b2632391fd9617a71884",
@@ -18,7 +18,7 @@
     ".github/workflows/reconcile-desktop-20260909.yml": "ce7b2b34693886c0d6b98905c29fa048b1674e5c13c9da830dda3d0a7a2c400d",
     ".github/workflows/reference-fixture.yml": "6fae724b05330b4a074c0f5aafc10814e9e96096e289f968049f33aa9b686c24",
     ".github/workflows/source-snapshot.yml": "c01d9345d9f333cec2922ec41b74f5a3f0a15d0489447fe664ebe5746c43cfc9",
-    ".github/workflows/toolchain.yml": "79a8eacf3de0fefc961a0c9b0b6187b73e22ad991e5a0530cff93a38de053138",
+    ".github/workflows/toolchain.yml": "d5b1dacd073ddc3fe439e381976a23ea241e1ae7ce8a5213453b7a90a35843bd",
     ".github/workflows/verify-workspace-change-library.yml": "86a708fb7a1e214f2e171965afa0232e2942b06c3d16242fc9e6944b9e5e9f2d",
     "apps/binary/app.js": "102452b89262e0b7d80dc3e72d24fe5be9183abff2f7ed8f878f3cf13f13376b",
     "apps/binary/index.html": "3b3de31e8d16d3c0dac5275a49aeda4620472f9512efb6ec655408b851fd5f66",
@@ -183,9 +183,11 @@
     "scripts/harden-documentation-audit-20260910.py": "66f88d7ffedd246aab79dbcc808e71916826af485c164ce18fe3f1e0982c3313",
     "scripts/html-assets.mjs": "649618e24a6f2f3906f63de2ec36f7afac290b97ed715e9ac0fca1f882e29712",
     "scripts/reconcile-desktop-work.mjs": "e8b016c58f436661385cdf2569401cd860802b489160ff823bbabd131efcc29c",
+    "scripts/run-browser-gates.py": "5b73cba1c1b091a900c88d51386889ceda1379a1e7a1c422c48431717cd335ff",
     "scripts/serve.mjs": "4f25ad8415aa2d679425d09006be80a57a90ac705b214035b9f77c4c4b8efc09",
     "scripts/verify-exceptions-clr.mjs": "f7c2a68192ea7884b4c1bd31085af22d81aac41de11bd5d8c827d7b32763c29a",
     "scripts/verify-msil-clr.mjs": "b738cfbe5f9efc55d276afd99feb3154aa7da6f106b54d75dcfa7295fafc9cc5",
+    "tests/automation/test_browser_evidence.py": "d1bc7d14917dd127eac8a0557c662cfe89503436c4bce898ad14e35cca30b5e6",
     "tests/automation/test_documentation_audit.py": "f091fa3d3a1582ca351476dad97dc3d4909c915e9f64397da346f6eb39fe269f",
     "tests/browser/desktop_ui.py": "a116c5dd63bec514e0c7b072d943bd0a1963cf52cccd6e4b7dde59bcab1085e0",
     "tests/browser/profile-inspector.html": "509a182211a92d404d9016369032251f23a6a30ef53e3fc505dfb6808c309191",
@@ -273,6 +275,6 @@
     "tests/workspace-journal.test.js": "ffe8d21afc6b4bd35d5fdecfb71b9416ea1a3cf2f37cc2c92a92fcf4917d78db",
     "tests/xaml-continuations.test.js": "482c72302b0c85c6573971487bb9bdbb96f93dd5fd342f650a0f7180210ca394"
   },
-  "aggregate_sha256": "20527a00faf4f68ea687bd21cca070cfd087256dcaa05572fb4bcd4efc8aaafd",
+  "aggregate_sha256": "29a2632cc921ae98daa368c0bea9f2476c78e5d58fa3578d5bb3dbda987be4f6",
   "note": "Committed implementation and verification inputs, not proof that every API or requirement is complete. Documentation and transport blobs are not runtime implementations."
 }

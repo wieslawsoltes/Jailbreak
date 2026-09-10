@@ -1,6 +1,6 @@
 # Work implemented and retained in the repository
 
-> Audit input: [`9b73d1167983`](https://github.com/wieslawsoltes/Jailbreak/tree/9b73d1167983076687cf078a3992144e4a18794a); documentation reconciled 2026-09-10T11:23:03+00:00. This is a source/evidence snapshot, not a declaration of full product completion.
+> Audit input: [`92cfb4ddc1f3`](https://github.com/wieslawsoltes/Jailbreak/tree/92cfb4ddc1f35e1ae3fa9093d7ed04a041d75d4c); documentation reconciled 2026-09-10T11:42:51+00:00. This is a source/evidence snapshot, not a declaration of full product completion.
 
 This record identifies implementation families present in the audited checkout. Its profiles are deliberately narrower than the [full requirements](requirements.md). Test counts in older milestones remain historical. The exact current CI/local-run evidence is in [current status](current-status.md), not inferred from prior chat summaries.
 
@@ -88,6 +88,12 @@ These are actual first-parent commit records, not a reconstructed narrative. A c
 
 | Commit | Date | Recorded subject |
 | --- | --- | --- |
+| [`92cfb4d`](https://github.com/wieslawsoltes/Jailbreak/commit/92cfb4d) | 2026-09-10 | test(ci): retain revision-bound browser results and complete failure logs |
+| [`bc231dc`](https://github.com/wieslawsoltes/Jailbreak/commit/bc231dc) | 2026-09-10 | docs(history): reconcile superseded milestones examples and documentation navigation |
+| [`4b9d6c5`](https://github.com/wieslawsoltes/Jailbreak/commit/4b9d6c5) | 2026-09-10 | docs(roadmap): retain full mandatory backlog and explicit completion gates |
+| [`b084326`](https://github.com/wieslawsoltes/Jailbreak/commit/b084326) | 2026-09-10 | docs(guides): align architecture APIs IDE and verification with current implementation |
+| [`ac6628c`](https://github.com/wieslawsoltes/Jailbreak/commit/ac6628c) | 2026-09-10 | docs(status): reconcile implemented profiles with exact source and CI evidence |
+| [`473c848`](https://github.com/wieslawsoltes/Jailbreak/commit/473c848) | 2026-09-10 | docs(requirements): define full solution acceptance and mandatory development tooling |
 | [`9b73d11`](https://github.com/wieslawsoltes/Jailbreak/commit/9b73d11) | 2026-09-10 | fix(docs): repair auditor Python literals and apply validated idempotent link corrections |
 | [`97348fd`](https://github.com/wieslawsoltes/Jailbreak/commit/97348fd) | 2026-09-10 | fix(ci): prevent detached Git maintenance from racing test cleanup |
 | [`7210886`](https://github.com/wieslawsoltes/Jailbreak/commit/7210886) | 2026-09-10 | test(ci): exercise documentation recovery generation and publication safeguards |
@@ -162,9 +168,3 @@ These are actual first-parent commit records, not a reconstructed narrative. A c
 | [`73d6637`](https://github.com/wieslawsoltes/Jailbreak/commit/73d6637) | 2026-09-09 | fix(debugger): preserve pending initializer waits when cancelling active IL cleanup |
 | [`3d68e2f`](https://github.com/wieslawsoltes/Jailbreak/commit/3d68e2f) | 2026-09-09 | build: deliver regression-tested cancellation of suspended IL cleanup dependencies |
 | [`5e4b5a7`](https://github.com/wieslawsoltes/Jailbreak/commit/5e4b5a7) | 2026-09-09 | docs(msil): document integrated DLL stepping cancellation APIs and exact remaining targets |
-| [`1ca014a`](https://github.com/wieslawsoltes/Jailbreak/commit/1ca014a) | 2026-09-09 | test(msil): verify cooperative DLL NuGet and Studio execution against CLR and browser gates |
-| [`9dce99a`](https://github.com/wieslawsoltes/Jailbreak/commit/9dce99a) | 2026-09-09 | feat(ide): step through DLL and NuGet calls in Studio and offline binary runners |
-| [`ad20ff1`](https://github.com/wieslawsoltes/Jailbreak/commit/ad20ff1) | 2026-09-09 | feat(msil): emit cooperative continuations from the shared verified instruction backend |
-| [`27f2ace`](https://github.com/wieslawsoltes/Jailbreak/commit/27f2ace) | 2026-09-09 | feat(runtime): preserve binary frames initialization budgets and cleanup across debugger suspension |
-| [`5e6b597`](https://github.com/wieslawsoltes/Jailbreak/commit/5e6b597) | 2026-09-09 | build(msil): deliver verified cooperative runtime compiler and Studio integration |
-| [`6561b19`](https://github.com/wieslawsoltes/Jailbreak/commit/6561b19) | 2026-09-09 | feat(msil): add reusable continuation dispatch and explicitly labeled IL debug sources |
