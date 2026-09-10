@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/harden-documentation-audit-20260910.py'
+      - 'tests/automation/**'
       - 'scripts/reconcile-documentation-20260910.py'
       - 'docs/audit/requirements-contract-20260910.json'
       - '.github/workflows/documentation-reconciliation-20260910.yml'

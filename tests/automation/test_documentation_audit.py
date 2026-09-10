@@ -45,6 +45,10 @@ def checkout():
             shutil.copy2(ROOT / name, root / name)
         command(root, sys.executable, HARDENER)
         command(root, 'git', 'init', '-q')
+        # Do not let detached Git maintenance race TemporaryDirectory cleanup.
+        for key, value in [('gc.auto', '0'), ('maintenance.auto', 'false'),
+                           ('gc.autoDetach', 'false'), ('maintenance.autoDetach', 'false')]:
+            command(root, 'git', 'config', '--local', key, value)
         command(root, 'git', 'config', 'user.name', 'Documentation test')
         command(root, 'git', 'config', 'user.email', 'test@localhost')
         command(root, 'git', 'add', '-f', '.')
@@ -61,6 +65,12 @@ def checkout():
 
 
 class DocumentationAuditTests(unittest.TestCase):
+    def test_temporary_repositories_disable_detached_maintenance(self):
+        with checkout() as (root, _):
+            for key, value in [('gc.auto', '0'), ('maintenance.auto', 'false'),
+                               ('gc.autoDetach', 'false'), ('maintenance.autoDetach', 'false')]:
+                self.assertEqual(command(root, 'git', 'config', '--local', '--get', key).stdout.strip(), value)
+
     def test_recovery_repairs_both_apostrophes_and_is_idempotent(self):
         with checkout() as (root, _):
             path = root / AUDITOR
