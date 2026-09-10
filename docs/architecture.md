@@ -1,39 +1,70 @@
-# Architecture
+# Architecture and canonical execution paths
 
-Jailbreak separates source loading, project evaluation, language compilation, runtime adaptation and the editor. The primary modules are native ES modules under `packages/`. The pre-existing secondary toolchain remains under `browser/packages/`.
+> Audit input: [`9b73d1167983`](https://github.com/wieslawsoltes/Jailbreak/tree/9b73d1167983076687cf078a3992144e4a18794a); documentation reconciled 2026-09-10T11:23:03+00:00. This is a source/evidence snapshot, not a declaration of full product completion.
 
-The shared `build-profile` layer converts workspace text into evaluated project records and selected/preprocessed sources. Its evaluator has no DOM, network, SDK or task dependency. Its inspector is a separate optional DOM module. Both public C# and project compilation APIs use this shared layer.
+```text
+Solution / project / source / assets
+  -> project evaluation -> C# parser/binder/lowering -> JavaScript
+                       -> XAML compiler -> construction/resource metadata
 
-The XAML frontends construct structural XML/XAML object graphs and validate the supported type/property surface. C# frontends tokenize source, parse syntax trees, link partial declarations and emit JavaScript through their existing backends. Runtime adapters are explicit; the output does not embed the compilers or a .NET runtime.
+IL text ---------------------------+
+DLL / EXE -> PE/CLI metadata -> IL verifier -> JavaScript method bodies
+NuGet -> validated executable assets+
+PDB / embedded symbols / approved restoration -> verified source/IL metadata
 
-Primary generated scripts register against `JB`; secondary scripts register against `R`. Each runtime creates its own type/definition registries, observable state, resource/binding machinery and controls. HTML supplies ordinary input/control rendering and accessibility behavior. WebGPU is an optional reusable primitive surface, not the renderer for every DOM control.
+Generated code + shared managed operations + Avalonia/browser UI runtime
+  -> HTML / SVG / explicitly implemented WebGPU rendering paths
+  -> isolated application preview or standalone browser export
 
-Editors run compilation in cancellable workers. Application previews run in script-only sandboxed iframes, separate from the editor's origin. Build/export packages trusted runtime module text with generated application code and a restrictive preview policy. See [security.md](security.md).
+Development metadata / continuations / source edit transactions
+  -> debugger, designer, reload planner and operational desktop tool windows
+```
 
-## Extension rule
+## Canonical versus preserved prototype APIs
 
-Add a focused parser/semantic/runtime implementation and positive/negative tests for a new construct; do not silence diagnostics just to increase a parsing count. Preserve distinct gates for source integrity, parse/compile success, runtime construction, interactive behavior and rendering parity. Add new unchanged ControlCatalog fixtures with upstream provenance and executable assertions.
+The primary source workbench uses the project-system/C# backend and XAML compiler. The verified MSIL route is `msil-compiler/verified.js`; asynchronous symbol preparation is layered through `msil-compiler/debug.js`. Source/binary linkage is in `binary-project`. Earlier compact APIs or secondary frontends remain separate where present; their existence does not make them interchangeable with verified entrypoints. See [actual exported APIs](api-reference.md) and [binary entrypoints](binary-entrypoints.md).
 
-See [build profiles](milestone-build-profiles.md) for the implemented evaluation pipeline and [browser-toolchain.md](browser-toolchain.md) for the secondary runtime's earlier detailed design. The milestone guide supersedes the earlier project/preprocessor limitations in that document.
+## Runtime and rendering boundaries
 
-## Managed binaries and packages
+Managed exceptions, numerics, type/member resolution, source and converted libraries share explicit runtime contracts. UI controls own properties, events, bindings, namescopes and lifecycle. Normal and resumable construction use shared traversal where implemented. The rendering backend must be identified per feature: native SVG geometry/brush/mask output is not WebGPU tessellation. Browser layout support is not automatically full Avalonia measure/arrange compatibility.
 
-The binary input path is `PE/CLI bytes or IL text → verified stack/control-flow IR → emitted JavaScript method functions`. NuGet adds bounded local archive/manifest/dependency selection and feeds selected implementation DLLs into that path. It does not restore packages or execute build tasks.
+## Development tooling
 
-`compiler-core/managed-types.js` and `dotnet-runtime` are shared across the binary backend and existing source/runtime layers. C# syntax parsing remains separate: pretending IL is a C# syntax tree would lose control-flow and evaluation-stack semantics. `binary-project` passes converted full type names to the C# resolver, registers binaries first and exposes their wrappers through the existing `JB` type registry. Source UI applications and converted library methods then execute together.
+The compilers emit source identity and optional continuation/debug metadata. Debugger sessions own tasks/frames and support native-engine or cooperative execution without mixing them. Designer libraries inspect/edit source with preimage checks. Reload libraries plan compatible method/property/tree/environment changes and preserve or roll back owned state. The workbench is a client: moving docked views must not clone their controllers, and switching source/binary perspectives must not merge runtime state.
 
-Binary Studio is a client of those libraries, not another compiler. Both it and the primary source IDE build in workers and invoke application methods only in isolated previews. HTML exports contain emitted functions/runtime, not PE parsers or compilation workers.
+## Trust boundaries
 
-See [binary milestone](milestone-msil-nuget.md), [binary design](binary-compilation-design.md), and the [integrated roadmap](roadmap.md). Further generic/package/framework expansion belongs in these layers with new conformance gates.
+Imported source, IL, DLLs, packages and symbols are inputs, not permission to execute in the IDE origin or fetch arbitrary URLs. Preview CSP/sandbox and authenticated messages are distinct protections. Explicit symbol restoration runs in a trusted tool context with separate origin approval and bounded downloads; verified original source remains read-only debugger attachment data. See [security](security-and-trust.md).
 
-## Exception and checked-arithmetic layer
+## Actual reusable package inventory
 
-The managed PE reader and IL text frontend feed a single validated exception-region model. `msil-compiler/exception-regions.js` checks protected control-flow transitions; `msil-runtime/exception-frame.js` manages per-call unwind continuations used by emitted JavaScript. Ordinary methods keep their original non-EH path. Shared `dotnet-runtime/exceptions.js` constructors permit source C# to catch binary errors; `checked.js` provides exact overflow checks. No IL decoder is introduced into the runtime. See [exception milestone](milestone-exceptions.md) for supported catch types, verifier limits, browser examples and the 35-case CLR gate.
+The inventory is generated from the checkout; it describes organization, not completeness.
 
-## Core developer tooling
+| Package | JavaScript files | Entrypoint/source |
+| --- | --- | --- |
+| `avalonia-runtime` | 16 | [packages/avalonia-runtime/index.js](../packages/avalonia-runtime/index.js) |
+| `binary-project` | 2 | [packages/binary-project/index.js](../packages/binary-project/index.js) |
+| `build-profile` | 6 | [packages/build-profile/index.js](../packages/build-profile/index.js) |
+| `compiler-core` | 3 | [packages/compiler-core/index.js](../packages/compiler-core/index.js) |
+| `csharp-compiler` | 5 | [packages/csharp-compiler/index.js](../packages/csharp-compiler/index.js) |
+| `development` | 22 | [packages/development/binary-preview.js](../packages/development/binary-preview.js) |
+| `dotnet-runtime` | 3 | [packages/dotnet-runtime/index.js](../packages/dotnet-runtime/index.js) |
+| `il-runtime` | 1 | [packages/il-runtime/index.js](../packages/il-runtime/index.js) |
+| `language-service` | 1 | [packages/language-service/index.js](../packages/language-service/index.js) |
+| `managed-pe` | 9 | [packages/managed-pe/index.js](../packages/managed-pe/index.js) |
+| `msil-compiler` | 13 | [packages/msil-compiler/index.js](../packages/msil-compiler/index.js) |
+| `msil-runtime` | 5 | [packages/msil-runtime/index.js](../packages/msil-runtime/index.js) |
+| `native-pdb` | 3 | [packages/native-pdb/index.js](../packages/native-pdb/index.js) |
+| `nuget` | 2 | [packages/nuget/index.js](../packages/nuget/index.js) |
+| `portable-pdb` | 3 | [packages/portable-pdb/index.js](../packages/portable-pdb/index.js) |
+| `project-system` | 3 | [packages/project-system/index.js](../packages/project-system/index.js) |
+| `renderer` | 1 | [packages/renderer/index.js](../packages/renderer/index.js) |
+| `symbol-restoration` | 3 | [packages/symbol-restoration/index.js](../packages/symbol-restoration/index.js) |
+| `workbench` | 26 | [packages/workbench/binary-client.js](../packages/workbench/binary-client.js) |
+| `workspace` | 2 | [packages/workspace/diff.js](../packages/workspace/diff.js) |
+| `workspace-changes` | 1 | [packages/workspace-changes/index.js](../packages/workspace-changes/index.js) |
+| `xaml-compiler` | 2 | [packages/xaml-compiler/index.js](../packages/xaml-compiler/index.js) |
 
-`packages/development` separates source maps and safe watches, source-edit transactions, reload planning, per-preview inspection and the IDE client. Primary compilers produce debug sites and source identities only in development builds. The preview agent runs inside the opaque-origin frame; the IDE exchanges bounded serializable records and authenticated session commands. Compatible method/literal-property reloads keep original control instances. Native pause/step/live frames use browser DevTools; autonomous in-IDE stepping is a distinct mandatory remaining transport. See [core requirements](core-development-tools.md) and [delivered scope](milestone-development-tools.md).
+## Extension obligations
 
-## Workspace transactions and refactoring
-
-`packages/workspace` is the source-authority layer for exact preimages, bounded shared undo, checkpoints and line diffs. `development/component-refactor.js` produces source-only multi-file plans. Studio validates candidates in a separate compiler worker and presents a review before journal application; the existing runtime/reload session remains independent. [Contracts and limitations](milestone-workspace-refactoring.md).
+Add semantics in the canonical parser/binder/verifier/runtime layer, not a sample-specific patch. A new capability must include positive/negative tests, source locations, debugger behavior, designer editability and reload/disposal impact. Update the versioned requirement mapping and strict upstream acceptance gates in the same change.

@@ -1,22 +1,11 @@
-# Binary API entry points
+# Binary compiler entrypoints and route selection
 
-The integrated Binary Studio, CLI, NuGet bridge, primary C#/XAML workbench, and CLR-oracle tests use these public entry points:
+> Audit input: [`9b73d1167983`](https://github.com/wieslawsoltes/Jailbreak/tree/9b73d1167983076687cf078a3992144e4a18794a); documentation reconciled 2026-09-10T11:23:03+00:00. This is a source/evidence snapshot, not a declaration of full product completion.
 
-| API | Module |
-| --- | --- |
-| `compileIL`, `compileAssembly`, `compileAssemblies` | `packages/msil-compiler/verified.js` |
-| Structured-signature `readAssembly` | `packages/managed-pe/structured.js` |
-| `createBinaryRuntime` | `packages/msil-runtime/index.js` |
-| `inspectNuget`, `convertNuget`, `convertNugetPackages` | `packages/nuget/index.js` |
-| Source plus binary compilation | `packages/binary-project/index.js` |
-| Portable workspace binary records | `packages/binary-project/workspace.js` |
+Use the verified MSIL pipeline for whole-assembly checking and JavaScript emission; use the debug wrapper for PDB/source preparation before that same emission. Use binary-project for C#/XAML linkage and workspace records, NuGet for package validation/asset selection, and the matching MSIL runtime for execution. Preserved compact prototypes are not a substitute for this route.
 
-During integration, concurrent commits had introduced a compact binary model at `managed-pe/index.js`, `msil-compiler/index.js`, and `il-runtime/index.js`. Those files and their helper modules were preserved unchanged. The verified structured-signature pipeline has separate entry points rather than overwriting work in progress or silently exchanging incompatible assembly models. Its helper modules are `metadata-schema.js`, `instruction-set.js`, and `verification.js`.
+See the exact [module/export index](api-reference.md). IL text, loose managed binaries and packages have different input validation. Unsupported IL, metadata or executable dependencies stop output; a PDB reader cannot make an unsupported DLL executable.
 
-The two binary models are **not interchangeable**. Use the verified APIs above for the tested DLL/NuGet/UI route. Existing callers of the compact entry points retain their previous API. Consolidating the model adapters is follow-up work; there is no claim that this milestone already unified every compiler frontend. Tests, examples, exports, and documentation snippets for the integrated route consistently import `verified.js`.
+Native-engine `debug` and cooperative-debug instrumentation are separate modes. Both must retain the ordinary supported semantics and share exception/type/lifetime rules with source callers. SDK-generated async-state-machine IL remains a separate acceptance requirement from source async support.
 
-C# syntax parsing is not reused to parse IL. The reuse occurs in source diagnostics/serialization, managed type helpers, numeric/string/array runtime operations, external-type registration, and the existing UI/project pipeline. Converted methods are emitted as JavaScript functions and basic-block control flow, not executed by decoding opcodes at runtime.
-
-Source batches were checksum-verified before materialization and kept as granular, ordinary source commits. The integration map only relocates the colliding new binary entry points and updates their imports; existing modified source files retain original-content checks. This transport machinery is not part of the shipped compiler or application runtime.
-
-See [the MSIL/NuGet milestone](milestone-msil-nuget.md), [architecture](architecture.md), and [roadmap](roadmap.md) for the wider design and supported subset. Full CLR, NuGet restore, binary Avalonia, and unmodified ControlCatalog compatibility remain separate targets.
+Verified original source is read-only debugger data; symbol-free methods expose labeled IL. Explicit symbol restoration cannot silently introduce source compilation replacements or execute package/native tasks. Standalone exports must carry the generated runtime/assets they need, with development source disclosure made explicit.
