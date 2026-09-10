@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - 'scripts/harden-documentation-audit-20260910.py'
+      - 'scripts/reconcile-documentation-20260910.py'
+      - 'docs/audit/requirements-contract-20260910.json'
+      - '.github/workflows/documentation-reconciliation-20260910.yml'
       - '.github/workflows/documentation-audit-hardening-20260910.yml'
 permissions:
   contents: write
@@ -26,6 +29,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Regression-test the complete documentation pipeline in isolated repositories
+        run: python -m unittest discover -s tests/automation -p 'test_*.py' -v
       - name: Apply narrowly scoped documentation-tool corrections
         id: corrected
         shell: bash
@@ -38,7 +43,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -- scripts/reconcile-documentation-20260910.py
           if ! git diff --cached --quiet; then
-            git commit -m 'docs(audit): preserve current index links and make historical reconciliation idempotent'
+            git commit -m 'fix(docs): repair auditor Python literals and apply validated idempotent link corrections'
             git push origin HEAD:main
           fi
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"

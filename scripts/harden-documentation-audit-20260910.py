@@ -8,6 +8,14 @@ path = root / 'scripts/reconcile-documentation-20260910.py'
 source = path.read_text(encoding='utf-8')
 changes = [
     (
+        "library's symbol file",
+        "library\\'s symbol file"
+    ),
+    (
+        "entrypoint's supported profile",
+        "entrypoint\\'s supported profile"
+    ),
+    (
         "path.startswith(('tests/fixtures/', 'third_party/', 'third-party/', 'vendor/', 'upstream/'))",
         "path.startswith(('tests/fixtures/', 'third_party/', 'third-party/', 'vendor/', 'upstream/', '.github/ISSUE_TEMPLATE/', '.github/PULL_REQUEST_TEMPLATE/'))"
     ),
