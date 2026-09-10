@@ -1,104 +1,145 @@
-"""Materialize readable, hash-checked source edits as ordinary Git commits.
+"""Materialize the preserved desktop work as ordinary, checksum-verified commits.
 
-Transport only; it is not imported by Jailbreak compilers or browser applications.
-All files in all stages are validated before the first write. Source positions
-are Unicode code points (the same indexing used by Python's diff generator).
+The manifest and every part are already in this repository. No downloads, eval,
+remote code execution or force push. Unexpected originals stop publication.
 """
 import hashlib
+import itertools
 import json
 import pathlib
+import re
 import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-MANIFEST = ROOT / '.delivery/desktop-20260910.json'
-RECEIPT = ROOT / '.delivery/desktop-20260910-applied.json'
+MANIFEST = '.delivery/desktop-20260910.json'
+RECEIPT = '.delivery/applied-desktop.json'
+# Reviewed partial standalone implementations on main, before composition was wired.
+REPLACEMENTS = {
+    'packages/workbench/symbols.js': '97b5895056849502f60252432d1d217b5abd96e86038f1296fdfd28ea2542614',
+    'apps/ide/desktop.css': '6c16f14ab6c17f7c5df7adc43e39f5fec02bae4ea70ccbe2271ec7bc0c128113',
+    'apps/ide/desktop-tools.css': 'bfc563fd40f9076fa41a0c0635cbf99bb26e439dda7ddd4591bda1057a0e0893',
+    'apps/ide/desktop-responsive.css': 'dbe21aecdaaf53734a3d36a8d2ed191ba5af3e9f888e066fb81d8a026113bdb2',
+}
+
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
 
+
+def git(*args):
+    p = subprocess.run(['git', *args], cwd=ROOT, check=True,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    return p.stdout.strip()
+
+
 def target(name):
     p = pathlib.PurePosixPath(name)
-    if (not name or p.is_absolute() or '..' in p.parts or '\\' in name or
-            (name != 'README.md' and p.parts[0] not in {'apps','packages','tests','docs','scripts'})):
-        raise ValueError('Invalid source path: ' + name)
-    result = ROOT.joinpath(*p.parts)
-    if result.is_symlink() or not result.resolve().is_relative_to(ROOT):
-        raise ValueError('Source path escapes repository: ' + name)
-    if p.parts[0] == 'scripts' and name not in {'scripts/build.mjs','scripts/bundle.mjs'}:
-        raise ValueError('Unapproved build entry point')
-    return result
+    if (p.is_absolute() or '..' in p.parts or '\\' in name or
+        (name != 'README.md' and (not p.parts or p.parts[0] not in
+         {'apps', 'packages', 'tests', 'docs', 'scripts'}))):
+        raise ValueError('Unapproved source path: ' + name)
+    path = ROOT.joinpath(*p.parts)
+    if path.is_symlink() or not path.resolve().is_relative_to(ROOT):
+        raise ValueError('Source path escapes the repository')
+    return path
 
-raw = MANIFEST.read_bytes()
-if len(raw) > 2_000_000:
-    raise ValueError('Source delivery byte budget exceeded')
-digest = sha(raw)
-if RECEIPT.exists():
-    if json.loads(RECEIPT.read_text()).get('sha256') != digest:
-        raise ValueError('Applied source delivery cannot be replaced')
-    print('Source delivery already applied')
-    raise SystemExit(0)
-spec = json.loads(raw)
-if spec.get('format') != 'source-edit-parts-v1' or not 1 <= len(spec['parts']) <= 32:
-    raise ValueError('Unsupported source delivery')
-stages = []
-for index, part in enumerate(spec['parts'], 1):
-    expected = f'.delivery/desktop-20260910-{index:02}.json'
-    if part['path'] != expected or (ROOT / expected).is_symlink():
-        raise ValueError('Invalid source part path')
-    data = (ROOT / expected).read_bytes()
-    if len(data) > 1_000_000 or sha(data) != part['sha256']:
-        raise ValueError('Source part checksum mismatch: ' + expected)
-    for message, name, change in json.loads(data):
-        if not stages or stages[-1]['message'] != message:
-            stages.append({'message':message, 'files':{}})
-        if name in stages[-1]['files']:
-            raise ValueError('Duplicate source file')
-        stages[-1]['files'][name] = change
-manifest = {'format':'source-edits-v1', 'base':spec['base'], 'stages':stages}
-canonical = (json.dumps(manifest, ensure_ascii=False, separators=(',',':')) + '\n').encode('utf-8')
-if sha(canonical) != spec['sourceSha256'] or not 1 <= len(stages) <= 8:
-    raise ValueError('Reassembled source metadata checksum mismatch')
-pending, touched = [], set()
-for stage in manifest['stages']:
-    if not isinstance(stage['message'], str) or not 1 <= len(stage['message']) <= 200:
-        raise ValueError('Invalid source commit message')
-    files = {}
-    for name, change in stage['files'].items():
-        if name in touched or len(touched) >= 200:
-            raise ValueError('Duplicate path or source file budget exceeded')
-        touched.add(name)
-        dest = target(name)
-        original = dest.read_bytes() if dest.exists() else None
-        if (None if original is None else sha(original)) != change['before']:
-            raise ValueError('Concurrent original-source change: ' + name)
-        if 'content' in change:
-            text = change['content']
-        else:
-            if original is None:
-                raise ValueError('Cannot edit a missing file')
-            text = original.decode('utf-8')
-            end_prior = 0
-            for start, end, replacement in change['edits']:
-                if type(start) is not int or type(end) is not int or not isinstance(replacement,str):
-                    raise ValueError('Invalid source edit')
-                if start < end_prior or end < start or end > len(text):
-                    raise ValueError('Overlapping or out-of-range source edit')
-                end_prior = end
-            for start, end, replacement in reversed(change['edits']):
-                text = text[:start] + replacement + text[end:]
-        if not isinstance(text,str) or len(text) > 1_000_000 or sha(text.encode('utf-8')) != change['after']:
-            raise ValueError('Source result checksum mismatch: ' + name)
-        files[name] = text
-    pending.append((stage['message'],files))
 
-for message, files in pending:
-    for name, text in files.items():
-        dest = target(name)
-        dest.parent.mkdir(parents=True,exist_ok=True)
-        dest.write_bytes(text.encode('utf-8'))
-    subprocess.run(['git','add','--',*files],cwd=ROOT,check=True)
-    subprocess.run(['git','commit','-m',message],cwd=ROOT,check=True)
-RECEIPT.write_text(json.dumps({'sha256':digest,'files':len(touched)},indent=2)+'\n')
-subprocess.run(['git','add','--',str(RECEIPT.relative_to(ROOT))],cwd=ROOT,check=True)
-subprocess.run(['git','commit','-m','build: record verified desktop source materialization'],cwd=ROOT,check=True)
-print('Source files applied:',len(touched))
+def edited(original, patch):
+    source = original.decode('utf-8')
+    last = 0
+    for start, end, value in patch['edits']:
+        if type(start) is not int or type(end) is not int or not isinstance(value, str):
+            raise ValueError('Malformed edit')
+        if start < last or end < start:
+            raise ValueError('Overlapping edit')
+        last = end
+    for encoding in ('unicode', 'utf-16-le'):
+        value = source if encoding == 'unicode' else source.encode(encoding)
+        scale = 1 if encoding == 'unicode' else 2
+        if any(end * scale > len(value) for _, end, _ in patch['edits']):
+            continue
+        for start, end, replacement in reversed(patch['edits']):
+            if encoding != 'unicode':
+                replacement = replacement.encode(encoding)
+            value = value[:start * scale] + replacement + value[end * scale:]
+        data = value.encode('utf-8') if encoding == 'unicode' else value.decode(encoding).encode('utf-8')
+        if sha(data) == patch['after']:
+            return data
+    raise ValueError('Result checksum mismatch')
+
+
+def main():
+    if git('status', '--porcelain'):
+        raise RuntimeError('Start from a clean checkout; never discard pending local work')
+    raw = (ROOT / MANIFEST).read_bytes()
+    if (ROOT / RECEIPT).exists():
+        if json.loads((ROOT / RECEIPT).read_text())['manifestSha256'] != sha(raw):
+            raise ValueError('Already-applied source manifest changed')
+        print('Desktop source already materialized; nothing overwritten')
+        return
+    manifest = json.loads(raw)
+    if manifest['format'] != 'source-edit-parts-v1' or len(manifest['parts']) > 100:
+        raise ValueError('Invalid desktop source manifest')
+    records = []
+    for part in manifest['parts']:
+        if not re.fullmatch(r'\.delivery/desktop-20260910-\d{2}\.json', part['path']):
+            raise ValueError('Invalid manifest part path')
+        data = (ROOT / part['path']).read_bytes()
+        if len(data) > 1_000_000 or sha(data) != part['sha256']:
+            raise ValueError('Manifest part checksum mismatch: ' + part['path'])
+        records.extend(json.loads(data))
+    if len(records) > 200:
+        raise ValueError('Source record limit exceeded')
+    overlay, groups = {}, []
+    for message, group in itertools.groupby(records, key=lambda r: r[0]):
+        if not isinstance(message, str) or len(message) > 200:
+            raise ValueError('Invalid commit message')
+        changes = {}
+        for _, name, patch in group:
+            path = target(name)
+            if not re.fullmatch('[a-f0-9]{64}', patch['after']):
+                raise ValueError('Invalid source result checksum')
+            original = overlay.get(name, path.read_bytes() if path.exists() else b'')
+            current = sha(original)
+            if current == patch['after']:
+                continue
+            if patch['before'] is None:
+                if original and current != REPLACEMENTS.get(name):
+                    raise ValueError('Concurrent source replacement: ' + name)
+                data = patch['content'].encode('utf-8')
+            else:
+                if current != patch['before']:
+                    raise ValueError('Concurrent source edit: ' + name)
+                data = edited(original, patch)
+            if len(data) > 1_000_000 or sha(data) != patch['after']:
+                raise ValueError('Invalid resulting source: ' + name)
+            overlay[name] = changes[name] = data
+        groups.append((message, changes))
+    # The entire recovery passes preimage/result validation before the first write.
+    for message, changes in groups:
+        if not changes:
+            continue
+        for name, data in changes.items():
+            path = target(name)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        git('add', '--', *changes)
+        git('commit', '-m', message)
+    patch = ROOT / '.delivery/desktop-ci-fixes.patch'
+    expected = (ROOT / '.delivery/desktop-ci-fixes.sha256').read_text().strip()
+    if sha(patch.read_bytes()) != expected:
+        raise ValueError('CI-fix source checksum mismatch')
+    git('apply', '--check', '--unidiff-zero', '--index', str(patch))
+    git('apply', '--unidiff-zero', '--index', str(patch))
+    git('commit', '-m', 'fix(ide): preserve Grid edits and verify desktop menu and symbol workflows')
+    receipt = {'manifestSha256': sha(raw), 'records': len(records),
+               'fixesSha256': expected, 'files': {name: sha(target(name).read_bytes()) for name in overlay}}
+    (ROOT / RECEIPT).write_text(json.dumps(receipt, indent=2) + '\n')
+    git('add', '--', RECEIPT)
+    git('commit', '-m', 'build: record committed desktop recovery and validated source identities')
+    print(json.dumps({'head': git('rev-parse', 'HEAD'), 'records': len(records),
+                      'uncommitted': git('status', '--porcelain')}, indent=2))
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,72 @@
+diff --git a/packages/workbench/menus.js b/packages/workbench/menus.js
+--- a/packages/workbench/menus.js
++++ b/packages/workbench/menus.js
+@@ -16 +16 @@
+-      const b=el('button',undefined,{type:'button',role:command.checked?'menuitemcheckbox':'menuitem'});b.disabled=!enabled(command);
++      const b=el('button',undefined,{type:'button',role:command.checked?'menuitemcheckbox':'menuitem'});b.disabled=!enabled(command);b.setAttribute('aria-label',command.menuLabel??command.label.replace(/^[^:]+:\s*/,''));
+diff --git a/packages/workbench/grid-tools.js b/packages/workbench/grid-tools.js
+--- a/packages/workbench/grid-tools.js
++++ b/packages/workbench/grid-tools.js
+@@ -10 +10 @@
+-  let model=null,disposed=false;
++  let model=null,disposed=false,sourceIdentity=null;
+@@ -15,3 +15,11 @@
+-    if(disposed)return;body.replaceChildren();model=null;
+-    try{const source=development.sourceForSelection();if(!source){root.hidden=true;return;}model=inspectGrid(source.text,source.file,source.offset);root.hidden=false;}
+-    catch(error){root.hidden=true;return;}
++    if(disposed)return;
++    try{
++      const source=development.sourceForSelection();
++      if(!source){root.hidden=true;model=null;sourceIdentity=null;return;}
++      // Selection snapshots can arrive more than once after a reload. Do not
++      // replace focused inputs (and lose typed values) for an identical source.
++      if(sourceIdentity&&sourceIdentity.file===source.file&&sourceIdentity.offset===source.offset&&sourceIdentity.text===source.text){root.hidden=false;return;}
++      model=inspectGrid(source.text,source.file,source.offset);
++      sourceIdentity={file:source.file,offset:source.offset,text:source.text};
++      root.hidden=false;body.replaceChildren();
++    }catch(error){root.hidden=true;model=null;sourceIdentity=null;return;}
+@@ -45 +53 @@
+-  const unsubscribe=development.subscribe(({event})=>{if(['selected','reloaded'].includes(event))refresh();else if(['workspace-reset','session-starting','session-stopped'].includes(event)){root.hidden=true;model=null;}});
++  const unsubscribe=development.subscribe(({event})=>{if(['selected','reloaded'].includes(event))refresh();else if(['workspace-reset','session-starting','session-stopped'].includes(event)){root.hidden=true;model=null;sourceIdentity=null;}});
+diff --git a/tests/browser/test_grid_tools.py b/tests/browser/test_grid_tools.py
+--- a/tests/browser/test_grid_tools.py
++++ b/tests/browser/test_grid_tools.py
+@@ -41 +41,6 @@
+-        self.select('Input');fill(self.page,'#grid-row-gap','20');fill(self.page,'#grid-column-gap','10');click(self.page,'#grid-apply-gaps')
++        self.select('Input');fill(self.page,'#grid-row-gap','20');fill(self.page,'#grid-column-gap','10')
++        # A repeated selection response must not reset partially entered values.
++        self.select('Input')
++        expect(self.page.locator('#grid-row-gap')).to_have_value('20')
++        expect(self.page.locator('#grid-column-gap')).to_have_value('10')
++        click(self.page,'#grid-apply-gaps')
+diff --git a/tests/browser/test_desktop_commit.py b/tests/browser/test_desktop_commit.py
+--- a/tests/browser/test_desktop_commit.py
++++ b/tests/browser/test_desktop_commit.py
+@@ -2,0 +3 @@
++import os
+@@ -20 +21 @@
+-        cls.browser = cls.playwright.chromium.launch(headless=True)
++        cls.browser = cls.playwright.chromium.launch(headless=True,**({'executable_path':os.environ['CHROMIUM_EXECUTABLE']} if os.environ.get('CHROMIUM_EXECUTABLE') else {}))
+@@ -129 +130 @@
+-        self.page.locator('#studio-perspectives').get_by_role('button', name='Designer', exact=True).click()
++        self.page.locator('#studio-perspectives').get_by_role('tab', name='Designer', exact=True).click()
+@@ -134 +135 @@
+-        frame = next(f for f in self.page.frames if f.frame_element().get_attribute('id') == 'preview')
++        frame = self.page.locator('#preview').element_handle().content_frame()
+@@ -148 +149 @@
+-        self.page.locator('#studio-perspectives').get_by_role('button', name='Binary Studio', exact=True).click()
++        self.page.locator('#studio-perspectives').get_by_role('tab', name='Binary Studio', exact=True).click()
+@@ -154 +155 @@
+-        self.page.locator('#studio-perspectives').get_by_role('button', name='Split', exact=True).click()
++        self.page.locator('#studio-perspectives').get_by_role('tab', name='Split', exact=True).click()
+@@ -171 +172 @@
+-        self.page.click('#symbols-refresh')
++        self.page.select_option('#symbols-library', 'library.binary.json')
+@@ -174 +175 @@
+-        self.page.click('#symbols-plan')
++        self.page.click('#symbols-inspect')
+@@ -179 +180,3 @@
+-        expect(self.page.locator('#symbols-status')).to_contain_text('Attached verified native-pdb', timeout=30000)
++        expect(self.page.locator('#symbols-status')).to_contain_text('Verified 1 original', timeout=30000)
++        self.page.click('#symbols-attach')
++        expect(self.page.locator('#symbols-status')).to_contain_text('Verified symbols attached', timeout=30000)
