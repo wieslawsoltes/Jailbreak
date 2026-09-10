@@ -1,3 +1,4 @@
+from desktop_ui import click,fill,check,uncheck,select_option,command,show_tool,select_control,reveal,close_settings,set_local
 """Exception/checked-arithmetic behavior through uploaded SDK binaries and source UI."""
 from pathlib import Path
 import base64, functools, http.server, json, os, threading, unittest
@@ -41,8 +42,8 @@ class ExceptionBrowserTests(unittest.TestCase):
         expect(self.page.locator('#runtime-state')).to_have_text('Ready', timeout=30000)
 
     def call(self, name, args, expected):
-        self.page.select_option('#method', label='Recovery::' + name)
-        self.page.fill('#args', json.dumps(args)); self.page.click('#invoke')
+        select_option(self.page,'#method', label='Recovery::' + name)
+        fill(self.page,'#args', json.dumps(args)); click(self.page,'#invoke')
         expect(self.page.locator('#result')).to_have_text(expected)
 
     def upload(self, name):
@@ -52,7 +53,7 @@ class ExceptionBrowserTests(unittest.TestCase):
         expect(self.page.locator('#runtime-state')).to_have_text('Ready', timeout=30000)
 
     def test_exception_il_runs_cleanup_and_il_errors_block_export(self):
-        self.studio(); self.page.select_option('#sample', 'exception')
+        self.studio(); select_option(self.page,'#sample', 'exception')
         expect(self.page.locator('#method')).to_contain_text('CleanupOrder', timeout=30000)
         expect(self.page.locator('#invoke')).to_be_enabled()
         self.call('CleanupOrder', [], '123'); self.call('SafeDivide', [84, 0], '-1')
@@ -60,7 +61,7 @@ class ExceptionBrowserTests(unittest.TestCase):
         expect(self.page.locator('#listing')).to_contain_text('handlerOffset')
         self.page.click('[data-tab="il"]')
         source = self.page.locator('#il').input_value().replace('endfinally', 'ret', 1)
-        self.page.fill('#il', source); self.page.click('#compile')
+        fill(self.page,'#il', source); click(self.page,'#compile')
         expect(self.page.locator('#status')).to_have_text('Conversion failed', timeout=30000)
         expect(self.page.locator('#invoke')).to_be_disabled(); expect(self.page.locator('#export')).to_be_disabled()
         self.assertEqual(self.errors, [])
@@ -71,13 +72,13 @@ class ExceptionBrowserTests(unittest.TestCase):
         self.call('CatchOrder', [1], '20'); self.call('RethrowIdentity', [], 'true')
         self.call('FinallyWins', [], '12'); self.call('NestedCatchInFinally', [0], '789')
         self.call('InnerMessage', [], '"inner"'); self.call('CatchNull', [], '42')
-        self.page.select_option('#method', label='Recovery::CheckedAdd'); self.page.fill('#args', '[2147483647,1]'); self.page.click('#invoke')
+        select_option(self.page,'#method', label='Recovery::CheckedAdd'); fill(self.page,'#args', '[2147483647,1]'); click(self.page,'#invoke')
         expect(self.page.locator('#result')).to_contain_text('OverflowException')
         self.call('CheckedAdd', [40, 2], '42')
         self.assertEqual(self.errors, [])
 
     def test_exception_nuget_example_compiles_and_retains_metadata(self):
-        self.studio(); self.page.select_option('#sample', 'exceptionNuget')
+        self.studio(); select_option(self.page,'#sample', 'exceptionNuget')
         expect(self.page.locator('#method')).to_contain_text('CatchFinally', timeout=30000)
         expect(self.page.locator('#runtime-state')).to_have_text('Ready', timeout=30000)
         self.call('CatchFinally', [0], '-4'); self.call('Trace', [], '12345')
@@ -89,7 +90,7 @@ class ExceptionBrowserTests(unittest.TestCase):
     def test_exception_dll_export_runs_without_network(self):
         self.studio(); self.upload('Jailbreak.ExceptionExamples.dll')
         with self.page.expect_download() as pending:
-            self.page.click('#export')
+            click(self.page,'#export')
         app = self.browser.new_page(); requests = []
         app.on('request', lambda r: requests.append(r.url))
         try:
@@ -107,7 +108,7 @@ class ExceptionBrowserTests(unittest.TestCase):
     def test_csharp_catches_dll_overflow_and_runs_finally_in_ide_and_export(self):
         self.navigate('index.html')
         self.page.wait_for_selector('#samples option[value="ExceptionLibrary"]', state='attached')
-        self.page.select_option('#samples', 'ExceptionLibrary')
+        select_option(self.page,'#samples', 'ExceptionLibrary')
         preview = self.page.frame_locator('#preview')
         expect(preview.get_by_role('button', name='Recover inside DLL')).to_be_visible(timeout=30000)
         preview.get_by_role('button', name='Recover inside DLL').click()
@@ -118,7 +119,7 @@ class ExceptionBrowserTests(unittest.TestCase):
         preview.get_by_role('button', name='Run nested cleanup').click()
         expect(preview.get_by_text('Nested result: -4; cleanup order: 12345', exact=True)).to_be_visible()
         with self.page.expect_download() as pending:
-            self.page.click('#export')
+            click(self.page,'#export')
         app = self.browser.new_page(); requests = []
         app.on('request', lambda r: requests.append(r.url))
         try:

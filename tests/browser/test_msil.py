@@ -1,3 +1,4 @@
+from desktop_ui import click,fill,check,uncheck,select_option,command,show_tool,select_control,reveal,close_settings,set_local
 """Actual DLL/nupkg loading, AOT execution, C# reuse and offline export gates."""
 from pathlib import Path
 import base64, functools, http.server, json, os, threading, unittest
@@ -30,10 +31,10 @@ class BinaryTests(unittest.TestCase):
     def studio(self):
         self.navigate();expect(self.page.locator('#runtime-state')).to_have_text('Ready',timeout=30000)
     def choose(self,label,args,ctor=None):
-        self.page.select_option('#method',label=label);self.page.fill('#args',json.dumps(args))
-        if ctor is not None:self.page.fill('#constructor',json.dumps(ctor))
+        select_option(self.page,'#method',label=label);fill(self.page,'#args',json.dumps(args))
+        if ctor is not None:fill(self.page,'#constructor',json.dumps(ctor))
     def invoke(self,expected):
-        self.page.click('#invoke');expect(self.page.locator('#result')).to_have_text(expected)
+        click(self.page,'#invoke');expect(self.page.locator('#result')).to_have_text(expected)
     def upload(self,name):
         self.page.set_input_files('#file',{'name':name,'mimeType':'application/octet-stream','buffer':base64.b64decode(self.fixture['files'][name]['base64'])})
         expect(self.page.locator('#method option').filter(has_text='Calculator::Factorial')).to_have_count(1,timeout=30000)
@@ -41,14 +42,14 @@ class BinaryTests(unittest.TestCase):
     def test_editable_il_changes_real_emitted_behavior_and_failures_block_run(self):
         self.studio();self.invoke('42')
         source=self.page.locator('#il').input_value().replace('add','sub',1)
-        self.page.fill('#il',source);expect(self.page.locator('#invoke')).to_be_disabled()
-        self.page.click('#compile');expect(self.page.locator('#invoke')).to_be_enabled(timeout=30000);self.invoke('38')
-        self.page.fill('#il',source.replace('sub','calli',1));self.page.click('#compile')
+        fill(self.page,'#il',source);expect(self.page.locator('#invoke')).to_be_disabled()
+        click(self.page,'#compile');expect(self.page.locator('#invoke')).to_be_enabled(timeout=30000);self.invoke('38')
+        fill(self.page,'#il',source.replace('sub','calli',1));click(self.page,'#compile')
         expect(self.page.locator('#status')).to_have_text('Conversion failed',timeout=30000)
         expect(self.page.locator('#invoke')).to_be_disabled();expect(self.page.locator('#export')).to_be_disabled()
         self.assertEqual(self.errors,[])
     def test_loop_il_compiles_and_returns_clr_style_integer(self):
-        self.studio();self.page.select_option('#sample','loop')
+        self.studio();select_option(self.page,'#sample','loop')
         expect(self.page.locator('#method')).to_contain_text('SumTo',timeout=30000)
         expect(self.page.locator('#invoke')).to_be_enabled();self.choose('Calculator::SumTo',[100]);self.invoke('5050')
     def test_real_dll_upload_calls_recursion_arrays_and_instance_state(self):
@@ -64,14 +65,14 @@ class BinaryTests(unittest.TestCase):
         self.page.click('[data-tab="package"]')
         expect(self.page.locator('#listing')).to_contain_text('Jailbreak.BinaryExamples')
         expect(self.page.locator('#listing')).to_contain_text('net8.0')
-        self.page.fill('#framework','net9.0');self.page.click('#compile')
+        fill(self.page,'#framework','net9.0');click(self.page,'#compile')
         expect(self.page.locator('#status')).to_have_text('Conversion failed',timeout=30000)
         expect(self.page.locator('#invoke')).to_be_disabled()
     def test_dll_export_is_self_contained_and_origin_isolated(self):
         self.studio();self.upload('Jailbreak.BinaryExamples.dll')
         self.assertEqual(self.page.locator('#preview').get_attribute('sandbox'),'allow-scripts')
         self.assertEqual(self.page.frames[-1].evaluate('() => {try {return parent.document===document;} catch {return "isolated";}}'),'isolated')
-        with self.page.expect_download() as pending:self.page.click('#export')
+        with self.page.expect_download() as pending:click(self.page,'#export')
         exported=Path(pending.value.path()).read_text();app=self.browser.new_page();requests=[]
         app.on('request',lambda r:requests.append(r.url))
         try:
@@ -85,23 +86,23 @@ class BinaryTests(unittest.TestCase):
         expect(self.page.locator('#diagnostics')).to_contain_text('JB6');expect(self.page.locator('#invoke')).to_be_disabled()
     def test_existing_csharp_xaml_workbench_calls_converted_dll_and_exports(self):
         self.navigate('index.html');self.page.wait_for_selector('#samples option[value="BinaryLibrary"]',state='attached')
-        self.page.select_option('#samples','BinaryLibrary');p=self.page.frame_locator('#preview')
+        select_option(self.page,'#samples','BinaryLibrary');p=self.page.frame_locator('#preview')
         expect(p.get_by_text('Hello, C# and MSIL together',exact=True)).to_be_visible(timeout=30000)
         p.get_by_role('button',name='Call converted DLL').click();expect(p.get_by_text('DLL counter: 42; sum: 5050',exact=True)).to_be_visible()
-        with self.page.expect_download() as pending:self.page.click('#export')
+        with self.page.expect_download() as pending:click(self.page,'#export')
         app=self.browser.new_page()
         try:
             app.set_content(Path(pending.value.path()).read_text(),wait_until='load')
             app.get_by_role('button',name='Call converted DLL').click()
             expect(app.get_by_text('DLL counter: 42; sum: 5050',exact=True)).to_be_visible()
         finally:app.close()
-        with self.page.expect_download() as pending:self.page.click('#save-workspace')
+        with self.page.expect_download() as pending:click(self.page,'#save-workspace')
         data=json.loads(Path(pending.value.path()).read_text());record=json.loads(data['files']['library.binary.json'])
         self.assertEqual(record['format'],'jailbreak-binary-v1');self.assertEqual(base64.b64decode(record['base64']),base64.b64decode(self.fixture['files']['Jailbreak.BinaryExamples.dll']['base64']))
         self.assertEqual(self.errors,[])
     def test_existing_workbench_converts_package_before_compiling_source(self):
         self.navigate('index.html');self.page.wait_for_selector('#samples option[value="NugetLibrary"]',state='attached')
-        self.page.select_option('#samples','NugetLibrary');p=self.page.frame_locator('#preview')
+        select_option(self.page,'#samples','NugetLibrary');p=self.page.frame_locator('#preview')
         expect(p.get_by_text('Hello, C# and MSIL together',exact=True)).to_be_visible(timeout=30000)
         p.get_by_role('textbox').fill('NuGet');p.get_by_role('button',name='Call converted DLL').click()
         expect(p.get_by_text('Hello, NuGet',exact=True)).to_be_visible()

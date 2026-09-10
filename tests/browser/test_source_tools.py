@@ -1,3 +1,4 @@
+from desktop_ui import click,fill,check,uncheck,select_option,command,show_tool,select_control,reveal,close_settings,set_local
 """Source-assistance commands use the compiler index and the real editable workspace."""
 import unittest
 import test_development as baseline
@@ -27,7 +28,7 @@ class SourceToolsTests(unittest.TestCase):
         self.page.screenshot(path=str(baseline.ROOT/'test-results'/'source-completion.png'),full_page=True)
         self.page.locator('#source-completion-list [role=option]').filter(has=self.page.locator('strong',has_text='Text')).first.click()
         self.assertIn('CounterLabel.Text =',self.page.locator('#editor').input_value())
-        self.page.click('#run')
+        click(self.page,'#run')
         expect(self.page.locator('#preview-state')).to_contain_text('Running',timeout=30000)
         self.preview.get_by_role('button',name='Increment',exact=True).click()
         expect(self.preview.get_by_text('Count: 1',exact=True)).to_be_visible()
@@ -52,7 +53,7 @@ class SourceToolsTests(unittest.TestCase):
         expect(self.page.locator('#source-peek-list')).to_contain_text('MainView.axaml.cs:')
         self.page.locator('#source-peek-list button').filter(has_text='MainView.axaml:').click()
         expect(self.page.locator('#source-peek-code mark')).to_have_text('Increment')
-        self.page.click('#source-peek-open')
+        click(self.page,'#source-peek-open')
         expect(self.page.locator('#current-path')).to_have_text('MainView.axaml')
         self.assertEqual(self.errors,[])
 
@@ -67,28 +68,28 @@ class SourceToolsTests(unittest.TestCase):
     def test_rename_previews_bound_spans_changes_execution_and_is_undoable(self):
         changed=self.helper();self.page.keyboard.press('F2')
         expect(self.page.locator('#source-rename-dialog')).to_be_visible()
-        self.page.fill('#source-rename-input','increment')
-        self.page.click('#source-rename-check')
+        fill(self.page,'#source-rename-input','increment')
+        click(self.page,'#source-rename-check')
         expect(self.page.locator('#source-rename-message')).to_contain_text('3 bound locations')
         expect(self.page.locator('#source-rename-preview')).to_contain_text('delta → increment')
         self.page.screenshot(path=str(baseline.ROOT/'test-results'/'source-rename-preview.png'),full_page=True)
-        self.page.click('#source-rename-apply')
+        click(self.page,'#source-rename-apply')
         self.assertIn('int increment = seed + 1; return increment + increment;',self.page.locator('#editor').input_value())
         self.page.keyboard.press('Control+z')
         self.assertEqual(self.page.locator('#editor').input_value(),changed)
         self.page.keyboard.press('Control+y')
         self.assertIn('return increment + increment;',self.page.locator('#editor').input_value())
-        self.page.click('#run')
+        click(self.page,'#run')
         expect(self.page.locator('#preview-state')).to_contain_text('Running',timeout=30000)
         self.preview.get_by_role('button',name='Increment',exact=True).click()
         expect(self.preview.get_by_text('Count: 6',exact=True)).to_be_visible()
         self.assertEqual(self.errors,[])
 
     def test_rename_collision_leaves_source_unchanged(self):
-        changed=self.helper();self.page.keyboard.press('F2');self.page.fill('#source-rename-input','seed');self.page.click('#source-rename-check')
+        changed=self.helper();self.page.keyboard.press('F2');fill(self.page,'#source-rename-input','seed');click(self.page,'#source-rename-check')
         expect(self.page.locator('#source-rename-message')).to_contain_text('collides')
         expect(self.page.locator('#source-rename-apply')).to_be_disabled()
-        self.page.click('#source-rename-cancel')
+        click(self.page,'#source-rename-cancel')
         self.assertEqual(self.page.locator('#editor').input_value(),changed)
 
     def test_incomplete_xaml_attribute_completion_keeps_live_app_until_build(self):
@@ -99,20 +100,20 @@ class SourceToolsTests(unittest.TestCase):
         self.page.locator('#source-completion-list [role=option]').filter(has=self.page.locator('strong',has_text='FontSize')).click()
         self.page.keyboard.type('28')
         self.assertIn('FontSize="28"',self.page.locator('#editor').input_value())
-        self.page.click('#run');expect(self.page.locator('#preview-state')).to_contain_text('Running',timeout=30000)
+        click(self.page,'#run');expect(self.page.locator('#preview-state')).to_contain_text('Running',timeout=30000)
         expect(self.preview.get_by_text('Design. Debug. Reload.',exact=True)).to_be_visible()
 
     def test_constructor_chain_can_step_into_xaml_and_finish_once(self):
         text=self.source('MainView.axaml.cs')
         self.page.locator('#editor').fill(text.replace('public MainView()','public MainView() : this(1) { count += 4; }\n    public MainView(int initial)'))
-        self.page.select_option('#studio-session-mode','cooperative')
+        select_option(self.page,'#studio-session-mode','cooperative')
         expect(self.page.locator('#preview-state')).to_contain_text('Running',timeout=30000)
         self.caret('InitializeComponent();')
-        self.page.keyboard.press('F9');self.page.click('#studio-debug-restart')
+        self.page.keyboard.press('F9');click(self.page,'#studio-debug-restart')
         expect(self.page.locator('#studio-session-badge')).to_have_text('Paused',timeout=30000)
         self.page.keyboard.press('F11')
-        self.page.click('#studio-tab-stack');expect(self.page.locator('#studio-stack')).to_contain_text('XAML UserControl')
-        self.page.click('#studio-tab-breakpoints');self.page.click('#studio-clear-breakpoints');self.page.keyboard.press('F5')
+        show_tool(self.page,'stack');expect(self.page.locator('#studio-stack')).to_contain_text('XAML UserControl')
+        show_tool(self.page,'breakpoints');click(self.page,'#studio-clear-breakpoints');self.page.keyboard.press('F5')
         expect(self.preview.get_by_role('button',name='Increment',exact=True)).to_be_visible(timeout=30000)
         self.preview.get_by_role('button',name='Increment',exact=True).click()
         expect(self.preview.get_by_text('Count: 5',exact=True)).to_be_visible()

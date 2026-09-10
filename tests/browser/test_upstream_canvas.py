@@ -1,3 +1,4 @@
+from desktop_ui import click,fill,check,uncheck,select_option,command,show_tool,select_control,reveal,close_settings,set_local
 """Unchanged pinned CanvasPage rendered by its compiled source, with pixel checks."""
 import unittest,base64,json
 from pathlib import Path
@@ -10,7 +11,7 @@ class UpstreamCanvasTests(unittest.TestCase):
     tearDown=baseline.DevelopmentTests.tearDown
     def setUp(self):
         baseline.DevelopmentTests.setUp(self)
-        self.page.select_option('#samples','UpstreamCanvas');self.preview=self.page.frame_locator('#preview')
+        select_option(self.page,'#samples','UpstreamCanvas');self.preview=self.page.frame_locator('#preview')
         expect(self.preview.locator('.jb-Canvas svg')).to_have_count(8,timeout=30000)
     def test_original_mask_colors_geometry_and_polylines_are_rendered(self):
         canvas=self.preview.locator('.jb-Canvas');svg=canvas.locator('svg')
@@ -34,13 +35,13 @@ class UpstreamCanvasTests(unittest.TestCase):
         self.assertEqual(result['pos'],['17px','','23px','']);self.assertEqual(result['defs'],1);self.assertEqual(result['gradients'],1)
         self.assertIsNone(result['mask']);self.assertTrue(result['retained']);self.assertEqual(self.errors,[])
     def test_original_page_exports_offline_and_remains_source_debuggable(self):
-        self.page.select_option('#studio-session-mode','cooperative')
+        select_option(self.page,'#studio-session-mode','cooperative')
         expect(self.preview.locator('.jb-Canvas svg')).to_have_count(8,timeout=30000)
-        self.page.click('#studio-view-design');self.page.click('#design-fit')
+        click(self.page,'#studio-view-design');click(self.page,'#design-fit')
         expect(self.page.locator('#dev-tree')).to_contain_text('Polyline')
-        self.page.locator('#dev-tree button').filter(has_text='Polyline').click()
+        select_control(self.page,'Polyline')
         expect(self.page.get_by_label('Design Points',exact=True)).to_have_value('0,0 65,0 78,-26 91,39 104,-39 117,13 130,0 195,0')
-        with self.page.expect_download() as d:self.page.click('#export')
+        with self.page.expect_download() as d:click(self.page,'#export')
         page=self.browser.new_page();requests=[];page.on('request',lambda r:requests.append(r.url))
         try:
             page.set_content(Path(d.value.path()).read_text(),wait_until='load');expect(page.locator('.jb-Canvas svg')).to_have_count(8)

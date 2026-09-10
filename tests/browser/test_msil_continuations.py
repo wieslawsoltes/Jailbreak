@@ -1,3 +1,4 @@
+from desktop_ui import click,fill,check,uncheck,select_option,command,show_tool,select_control,reveal,close_settings,set_local
 """Real emitted DLL continuations in Studio and the offline Binary Studio runner."""
 import base64, json, unittest
 from pathlib import Path
@@ -14,7 +15,7 @@ class MsilContinuationTests(unittest.TestCase):
     choose=baseline.BinaryTests.choose
 
     def binary_debug(self):
-        self.studio();self.page.check('#cooperative-debug')
+        self.studio();check(self.page,'#cooperative-debug')
         runner=self.page.frame_locator('#preview')
         expect(runner.locator('#binary-debugger')).to_be_visible(timeout=30000)
         expect(self.page.locator('#invoke')).to_be_enabled(timeout=30000)
@@ -22,12 +23,12 @@ class MsilContinuationTests(unittest.TestCase):
 
     def test_binary_instruction_steps_stack_and_offline_export(self):
         runner=self.binary_debug();runner.locator('#binary-debug-entry').check()
-        self.page.click('#invoke');expect(runner.locator('#binary-debug-state')).to_have_text('Paused')
+        click(self.page,'#invoke');expect(runner.locator('#binary-debug-state')).to_have_text('Paused')
         runner.locator('#binary-debug-into').click()
         expect(runner.locator('#binary-debug-values')).to_contain_text('$evaluationStack')
         expect(runner.locator('#binary-debug-values')).to_contain_text('40')
         runner.locator('#binary-debug-continue').click();expect(self.page.locator('#result')).to_have_text('42')
-        with self.page.expect_download() as download:self.page.click('#export')
+        with self.page.expect_download() as download:click(self.page,'#export')
         html=Path(download.value.path()).read_text();app=self.browser.new_page();requests=[]
         app.on('request',lambda r:requests.append(r.url))
         try:
@@ -45,7 +46,7 @@ class MsilContinuationTests(unittest.TestCase):
         expect(self.page.locator('#invoke')).to_be_enabled(timeout=30000)
         runner=self.page.frame_locator('#preview');expect(runner.locator('#binary-debug-listing')).to_have_value(f['source'])
         runner.locator('#binary-debug-line').fill('10');runner.locator('#binary-debug-breakpoint').click()
-        self.choose('Calculations::Sum',[4]);self.page.click('#invoke')
+        self.choose('Calculations::Sum',[4]);click(self.page,'#invoke')
         expect(runner.locator('#binary-debug-state')).to_have_text('Paused')
         expect(runner.locator('#binary-debug-values')).to_contain_text('"total": 0')
         runner.locator('#binary-debug-local').fill('total');runner.locator('#binary-debug-value').fill('40');runner.locator('#binary-debug-set-local').click()
@@ -53,21 +54,22 @@ class MsilContinuationTests(unittest.TestCase):
         expect(self.page.locator('#result')).to_have_text('46');self.assertEqual(self.errors,[])
 
     def test_cancel_binary_call_and_reject_wrong_channel(self):
-        runner=self.binary_debug();runner.locator('#binary-debug-entry').check();self.page.click('#invoke')
+        runner=self.binary_debug();runner.locator('#binary-debug-entry').check();click(self.page,'#invoke')
         expect(runner.locator('#binary-debug-state')).to_have_text('Paused')
         self.page.frames[-1].evaluate("window.postMessage({kind:'debug-command',channel:'wrong',taskId:1,action:'continue'},'*')")
         expect(runner.locator('#binary-debug-state')).to_have_text('Paused')
         runner.locator('#binary-debug-cancel').click();expect(runner.locator('#binary-debug-state')).to_have_text('cancelled')
         expect(runner.locator('#result')).to_have_text('Cancelled')
-        runner.locator('#binary-debug-entry').uncheck();self.page.click('#invoke');expect(self.page.locator('#result')).to_have_text('42')
+        runner.locator('#binary-debug-entry').uncheck();click(self.page,'#invoke');expect(self.page.locator('#result')).to_have_text('42')
         self.assertEqual(self.errors,[])
 
     def test_studio_steps_source_to_dll_and_back_with_shared_debug_windows(self):
         self.navigate('index.html');self.page.wait_for_selector('#samples option[value="PdbLibrary"]',state='attached')
-        self.page.select_option('#samples','PdbLibrary')
+        select_option(self.page,'#samples','PdbLibrary')
         expect(self.page.frame_locator('#preview').get_by_role('button',name='Call library Sum')).to_be_visible(timeout=30000)
-        self.page.select_option('#studio-session-mode','cooperative')
+        select_option(self.page,'#studio-session-mode','cooperative')
         expect(self.page.locator('#preview-state')).to_contain_text('Running',timeout=30000)
+        show_tool(self.page,'solution')
         self.page.locator('#files button').filter(has_text='[symbol]').filter(has_text='Calculations.cs').click()
         source=self.page.locator('#editor').input_value();offset=source.index('total += i')
         self.page.locator('#editor').evaluate('(e,n)=>{e.focus();e.setSelectionRange(n,n);}',offset);self.page.keyboard.press('F9')
@@ -77,10 +79,10 @@ class MsilContinuationTests(unittest.TestCase):
         expect(self.page.locator('#studio-execution-line')).to_be_visible()
         self.assertTrue(self.page.locator('#editor').evaluate('e=>e.readOnly'))
         self.page.locator('#studio-locals').get_by_role('button',name='Edit total',exact=True).click()
-        self.page.fill('#studio-local-input','100');self.page.click('#studio-local-apply')
-        self.page.click('#studio-tab-stack');expect(self.page.locator('#studio-stack')).to_contain_text('PdbExamples.Calculations.Sum')
+        fill(self.page,'#studio-local-input','100');click(self.page,'#studio-local-apply')
+        show_tool(self.page,'stack');expect(self.page.locator('#studio-stack')).to_contain_text('PdbExamples.Calculations.Sum')
         expect(self.page.locator('#studio-stack')).to_contain_text('PdbLibrary.MainView.Calculate')
-        self.page.click('#studio-tab-breakpoints');self.page.click('#studio-clear-breakpoints')
+        show_tool(self.page,'breakpoints');click(self.page,'#studio-clear-breakpoints')
         self.page.keyboard.press('Shift+F11')
         expect(self.page.locator('#current-path')).to_have_text('MainView.axaml.cs')
         self.page.keyboard.press('F5')
@@ -89,10 +91,11 @@ class MsilContinuationTests(unittest.TestCase):
 
     def test_studio_symbol_free_dll_documents_are_labeled_il(self):
         self.navigate('index.html');self.page.wait_for_selector('#samples option[value="BinaryLibrary"]',state='attached')
-        self.page.select_option('#samples','BinaryLibrary')
+        select_option(self.page,'#samples','BinaryLibrary')
         expect(self.page.frame_locator('#preview').get_by_role('button',name='Call converted DLL')).to_be_visible(timeout=30000)
-        self.page.select_option('#studio-session-mode','cooperative')
+        select_option(self.page,'#studio-session-mode','cooperative')
         expect(self.page.locator('#preview-state')).to_contain_text('Running',timeout=30000)
+        show_tool(self.page,'solution')
         item=self.page.locator('#files button').filter(has_text='[IL]').first;expect(item).to_be_visible();item.click()
         self.assertTrue(self.page.locator('#editor').evaluate('e=>e.readOnly'))
         self.assertTrue(self.page.locator('#editor').input_value().startswith('IL_'))

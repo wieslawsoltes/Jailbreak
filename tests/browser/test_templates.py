@@ -1,3 +1,4 @@
+from desktop_ui import click,fill,check,uncheck,select_option,command,show_tool,select_control,reveal,close_settings,set_local
 """Browser gates for real template/resource pipelines and unchanged ProgressBarPage."""
 from pathlib import Path
 import functools,http.server,os,threading,unittest
@@ -19,8 +20,8 @@ class TemplateTests(unittest.TestCase):
     def setUp(self):
         self.page=self.browser.new_page(viewport={'width':1440,'height':1000});self.errors=[]
         self.page.on('pageerror',lambda e:self.errors.append(str(e)))
-        (self.page.set_content((Path(os.environ['JAILBREAK_SITE'])/'index.html').read_text(),wait_until='load') if os.environ.get('JAILBREAK_INLINE_TEST') else self.page.goto(self.url));self.page.wait_for_selector('#samples option[value="Templates"]',state='attached')
-        self.page.select_option('#samples','Templates');expect(self.page.frame_locator('#preview').get_by_text('First card: 0',exact=True)).to_be_visible(timeout=30000)
+        (self.page.set_content((Path(os.environ.get('JAILBREAK_SITE',ROOT/'site'))/'index.html').read_text(),wait_until='load') if os.environ.get('JAILBREAK_INLINE_TEST') else self.page.goto(self.url));self.page.wait_for_selector('#samples option[value="Templates"]',state='attached')
+        select_option(self.page,'#samples','Templates');expect(self.page.frame_locator('#preview').get_by_text('First card: 0',exact=True)).to_be_visible(timeout=30000)
     def tearDown(self):
         self.page.screenshot(path=str(ROOT/'test-results'/f'{self._testMethodName}.png'),full_page=True);self.page.close()
     def preview(self):return self.page.frame_locator('#preview')
@@ -63,7 +64,7 @@ class TemplateTests(unittest.TestCase):
         self.preview().get_by_role('button',name='Restore styled template').click()
         expect(self.preview().get_by_text('Borrowed content',exact=True)).to_be_visible()
     def test_offline_export_keeps_templates_and_linked_resources(self):
-        with self.page.expect_download() as pending:self.page.click('#export')
+        with self.page.expect_download() as pending:click(self.page,'#export')
         app=self.browser.new_page()
         try:
             app.set_content(Path(pending.value.path()).read_text(),wait_until='load')
@@ -71,7 +72,7 @@ class TemplateTests(unittest.TestCase):
             app.get_by_role('button',name='Replace first template').click();expect(app.locator('[data-name="FirstCard"] [data-name="PART_Label"]')).to_be_visible()
         finally:app.close()
     def test_original_progressbar_page_range_text_indeterminate_and_orientation(self):
-        self.page.select_option('#samples','UpstreamProgressBar');p=self.preview()
+        select_option(self.page,'#samples','UpstreamProgressBar');p=self.preview()
         bars=p.get_by_role('progressbar');expect(bars).to_have_count(5,timeout=30000)
         expect(bars.nth(0)).to_have_attribute('aria-valuenow','40');expect(bars.nth(1)).to_have_attribute('aria-orientation','vertical')
         for i in (2,3,4):self.assertEqual(bars.nth(i).locator('progress').evaluate('(e)=>e.value'),0.5)

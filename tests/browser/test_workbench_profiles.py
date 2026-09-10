@@ -1,3 +1,4 @@
+from desktop_ui import click,fill,check,uncheck,select_option,command,show_tool,select_control,reveal,close_settings,set_local
 """End-to-end source/build/profile tests against the static site produced by npm run build."""
 from pathlib import Path
 import functools, http.server, json, os, threading, unittest
@@ -21,13 +22,13 @@ class WorkbenchProfileTests(unittest.TestCase):
         self.page=self.browser.new_page(viewport={'width':1440,'height':1000})
         self.errors=[];self.page.on('pageerror',lambda e:self.errors.append(str(e)))
         self.page.goto(self.url+'/index.html');self.page.wait_for_selector('#samples option[value="BuildProfiles"]',state='attached')
-        self.page.select_option('#samples','BuildProfiles')
+        select_option(self.page,'#samples','BuildProfiles')
         expect(self.page.frame_locator('#preview').get_by_text('Debug profile: +1 per click',exact=True)).to_be_visible(timeout=30000)
     def tearDown(self):
         self.page.screenshot(path=str(ROOT/'test-results'/f'{self._testMethodName}.png'),full_page=True)
         self.page.close()
     def set_profile(self,configuration):
-        self.page.click('#build-profile');self.page.get_by_label('Configuration',exact=True).fill(configuration)
+        click(self.page,'#build-profile');self.page.get_by_label('Configuration',exact=True).fill(configuration)
         self.page.get_by_role('button',name='Apply & build').click()
         expected='Debug profile: +1 per click' if configuration=='Debug' else 'Release profile: +10 per click'
         expect(self.page.frame_locator('#preview').get_by_text(expected,exact=True)).to_be_visible(timeout=30000)
@@ -39,7 +40,7 @@ class WorkbenchProfileTests(unittest.TestCase):
         expect(preview.get_by_text('Count: 10',exact=True)).to_be_visible()
         self.assertEqual(self.errors,[])
     def test_evaluated_profiles_include_imports_and_separate_library_symbols(self):
-        self.set_profile('Release');self.page.click('#build-profile')
+        self.set_profile('Release');click(self.page,'#build-profile')
         self.page.get_by_label('Evaluated project',exact=True).select_option('App/App.csproj')
         text=self.page.locator('#build-profile-dialog').inner_text()
         self.assertNotIn('DebugOnly.cs',text);self.assertNotIn('Native.cs',text)
@@ -51,12 +52,12 @@ class WorkbenchProfileTests(unittest.TestCase):
     def test_profile_survives_reload_and_json_export(self):
         self.set_profile('Release');self.page.reload()
         expect(self.page.frame_locator('#preview').get_by_text('Release profile: +10 per click',exact=True)).to_be_visible(timeout=30000)
-        with self.page.expect_download() as pending:self.page.click('#save-workspace')
+        with self.page.expect_download() as pending:click(self.page,'#save-workspace')
         data=json.loads(Path(pending.value.path()).read_text())
         self.assertEqual(data['profile']['configuration'],'Release');self.assertIn('Directory.Build.props',data['files'])
     def test_exported_html_keeps_selected_profile_and_runs_without_dotnet(self):
         self.set_profile('Release')
-        with self.page.expect_download() as pending:self.page.click('#export')
+        with self.page.expect_download() as pending:click(self.page,'#export')
         html=Path(pending.value.path()).read_text();app=self.browser.new_page()
         try:
             app.set_content(html,wait_until='load')
@@ -65,7 +66,7 @@ class WorkbenchProfileTests(unittest.TestCase):
             expect(app.get_by_text('Count: 10',exact=True)).to_be_visible()
         finally:app.close()
     def test_compiler_error_blocks_profile_preview(self):
-        self.page.click('#build-profile');self.page.get_by_label('Additional C# symbols').fill('LIBRARY;APP')
+        click(self.page,'#build-profile');self.page.get_by_label('Additional C# symbols').fill('LIBRARY;APP')
         self.page.get_by_role('button',name='Apply & build').click()
         expect(self.page.locator('#problems')).to_contain_text('Library received an incorrect project symbol profile',timeout=30000)
         expect(self.page.locator('#preview-state')).to_have_text('Build failed')
