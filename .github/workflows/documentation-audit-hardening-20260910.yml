@@ -1,0 +1,99 @@
+name: Finalize complete documentation audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/harden-documentation-audit-20260910.py'
+      - '.github/workflows/documentation-audit-hardening-20260910.yml'
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: jailbreak-documentation-audit-hardening
+  cancel-in-progress: false
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply narrowly scoped documentation-tool corrections
+        id: corrected
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain)"
+          python scripts/harden-documentation-audit-20260910.py
+          python -m py_compile scripts/reconcile-documentation-20260910.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- scripts/reconcile-documentation-20260910.py
+          if ! git diff --cached --quiet; then
+            git commit -m 'docs(audit): preserve current index links and make historical reconciliation idempotent'
+            git push origin HEAD:main
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Dispatch complete documentation reconciliation
+        id: documentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ steps.corrected.outputs.sha }}'
+          gh workflow run documentation-reconciliation-20260910.yml --ref main
+          run_id=''
+          for attempt in $(seq 1 30); do
+            run_id=$(gh run list --workflow documentation-reconciliation-20260910.yml --commit "$expected" --event workflow_dispatch --limit 10 --json databaseId --jq '.[0].databaseId // empty')
+            if test -n "$run_id"; then break; fi
+            sleep 5
+          done
+          test -n "$run_id"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          gh run watch "$run_id" --exit-status --interval 15
+      - name: Read actual publication receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/final-documentation-evidence"
+          gh run download '${{ steps.documentation.outputs.run_id }}' --name documentation-reconciliation-evidence --dir "$RUNNER_TEMP/final-documentation-evidence"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          directory = Path(os.environ['RUNNER_TEMP']) / 'final-documentation-evidence'
+          receipt = json.loads((directory / 'publication-receipt.json').read_text())
+          if not receipt.get('ci_passed') or receipt.get('canonical_head') != receipt.get('published_head'):
+              raise SystemExit('No passing canonical CI receipt for the published documentation head')
+          print(json.dumps(receipt, indent=2))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('# Full documentation update published\n\n')
+              summary.write(f"{receipt['requirements']} stable requirements, {receipt['groups']} acceptance groups, {receipt['documents']} audited Markdown files.\n\n")
+              summary.write(f"Final documentation head: `{receipt['published_head']}`.\n\n")
+              summary.write(f"[Exact canonical CI run]({receipt['canonical_run']}): passed.\n\n")
+              summary.write('| Commit | Scope |\n| --- | --- |\n')
+              for commit in receipt['commits']:
+                  summary.write(f"| `{commit['sha'][:12]}` | {commit['message']} |\n")
+          PY
+      - name: Retain recovery and publication evidence
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/final-documentation-evidence"
+          git status --short > "$RUNNER_TEMP/final-documentation-evidence/finalizer-worktree.txt"
+          if test -n '${{ steps.documentation.outputs.run_id }}'; then
+            gh api 'repos/${{ github.repository }}/actions/runs/${{ steps.documentation.outputs.run_id }}' > "$RUNNER_TEMP/final-documentation-evidence/documentation-workflow.json" || true
+            gh api 'repos/${{ github.repository }}/actions/runs/${{ steps.documentation.outputs.run_id }}/jobs' > "$RUNNER_TEMP/final-documentation-evidence/documentation-jobs.json" || true
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: complete-documentation-audit-evidence
+          path: ${{ runner.temp }}/final-documentation-evidence
+          retention-days: 30
