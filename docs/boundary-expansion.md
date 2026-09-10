@@ -1,5 +1,10 @@
 # Boundary expansion acceptance ledger
 
+<!-- jailbreak-current-documentation:begin -->
+> **Specialized guide / example; current applicability audited 2026-09-10.** This document is a specialized profile/example, not a full-solution completion claim. Use [current source and CI status](current-status.md), [full requirements](requirements.md), and [remaining acceptance work](remaining-work.md) for the current global contract.
+> The current IDE uses real menus, a command palette and independent docked tool windows; old combined-inspector or informational-sidebar workflows are historical. See [the integrated IDE guide](ide-guide.md). Source/XAML/MSIL cooperative debugging, constructor chaining, structural/environment reload, native-managed symbols and explicit symbol restoration each have current implementation/test profiles; do not infer their absence from an earlier milestone exclusion, or infer unrestricted compatibility from their presence.
+<!-- jailbreak-current-documentation:end -->
+
 Baseline: `cf1d3a73b2c642e90a2bb04e8fe1b5494b08cc98` (keyed panel reload). The [core tools contract](core-development-tools.md) remains mandatory. A passing subset is not completion of the full debugger, designer, Avalonia runtime or unmodified ControlCatalog.
 
 ## Required acceptance evidence

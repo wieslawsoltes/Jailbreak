@@ -1,0 +1,385 @@
+{
+  "baseline": "9b73d1167983076687cf078a3992144e4a18794a",
+  "audited_at": "2026-09-10T11:23:03+00:00",
+  "documents": [
+    {
+      "path": "README.md",
+      "role": "canonical-current-guide",
+      "sha256": "fa572a78e59434763e07ab4a407e1a0c5f1e8a6f335859501669abf2e716ad13",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "browser/README.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "942f86bbc69db1231d66248a77690dba6c75212314b12f1d1879ba9809c17188",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/PROJECT_SPECIFICATION.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "acfcf1fa5433f13e5a04ee1850a5dfa3299e8c0a56a323c973058192ea6d68da",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/README.md",
+      "role": "canonical-current-guide",
+      "sha256": "c1777be1f1384420fde18860c6e1f8e0439c65ad7238700dff97f5b310cff602",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/acceptance-plan.md",
+      "role": "canonical-current-guide",
+      "sha256": "cdd26a0086ecbb9a4e6c20e5adf083c931c04538520a91122c71eaa4329604f5",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/api-reference.md",
+      "role": "canonical-current-guide",
+      "sha256": "176084f4e9454a214d07c68676a37058810082921e6289c439316672ab6aea23",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/architecture.md",
+      "role": "canonical-current-guide",
+      "sha256": "cb007f1649baa5d224adaff7719507858d14b18b561dad070f283755dba5d484",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/binary-compilation-design.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "212f244a783101366602236dd5eacb4a2ca1c275c4e2b4bb241a8f062172b3fa",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/binary-entrypoints.md",
+      "role": "canonical-current-guide",
+      "sha256": "8777143a6306f661df71e5cffbe8f0894dd44dd768cd55584f4020c605994b81",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/boundary-expansion.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "cb0d39797efd6e1fb8cbd1b15b988b8c00ad02fbb6df86377abd4e40a7c70b45",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/browser-toolchain.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "4810d07388b212cee319ea574d56616da37c4c8b8cc20ba260836ffa89196a55",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/build-and-verification.md",
+      "role": "canonical-current-guide",
+      "sha256": "f80898a82334b4d6de1f92361767f7a6c7e01619613dd7036e3e4f67a303e23e",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/compatibility.md",
+      "role": "canonical-current-guide",
+      "sha256": "824d545e2428bd06f8373d879851bef88890e1870ba3e2bcacc5603553886bf7",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/completed-work.md",
+      "role": "canonical-current-guide",
+      "sha256": "b5f2ffc19c0c8bc0b8baada1c50d3feb8dfd28b6e58e24fa207077d7142d1e5d",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/cooperative-debugging.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "e5e540970814ad2cc0cb74bf30586c6628332996795f5bd8dc9cf23c89b3bdc1",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/core-development-tools.md",
+      "role": "canonical-current-guide",
+      "sha256": "81be1d2b50d8b09c8f0204e8d0ab21fbec5d59bd78e3f07135b580681ea3bd14",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/current-status.md",
+      "role": "canonical-current-guide",
+      "sha256": "ae40da62b663cd18b553859cd388239d94e8b92e82273b2d4aa7cc34dd4783c1",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/development-tool-regressions.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "56a850d9d79f61f880e5c386494783f46ccf0f0427eb483fb3cd0895ba65929b",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/documentation-maintenance.md",
+      "role": "canonical-current-guide",
+      "sha256": "eb9e3ffcfb066762ab502bffe5a7fb6925038912fb938e69f877f5e04c3076c1",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/getting-started.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "47a558d807e1cfa57f6e7628a0a49c955c7c25339c78ef21499facf1e0e8f897",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/ide-guide.md",
+      "role": "canonical-current-guide",
+      "sha256": "e91b110b7c36258b09554423a6efeaf4c788c5ce46ea5a64d25bbdf2bd9090e7",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/mandatory-targets-status.md",
+      "role": "canonical-current-guide",
+      "sha256": "677d27ef8037f893ae3ce30b2276f8630fc9058c9f6544ba04e08ef6f2e0f30f",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/milestone-build-profiles.md",
+      "role": "historical-milestone",
+      "sha256": "d970c0358f696b9cd3aff895b7ce36b5c6f068a33a8be1d566ff89efef31c7b5",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-constructor-chains.md",
+      "role": "historical-milestone",
+      "sha256": "b22c8c29842a28e25e5f924d081f60fb20d17a3abf3a08d189172544c7bf349d",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-design-canvas.md",
+      "role": "historical-milestone",
+      "sha256": "c11ce822aed711cda2acbedf0793a0739a87d0039ec32e16cfe6154ce82c2e9c",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-desktop-publication.md",
+      "role": "historical-milestone",
+      "sha256": "4121d2190fdca97d33f88968e7beeef87f2db8c9efeb9c216cb3abff56a6dc53",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-development-tools.md",
+      "role": "historical-milestone",
+      "sha256": "04d04c9ec29633d58a85da7fb5470e51111bc87b9d5d7fe965e9ccb00cf515e9",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-docked-desktop.md",
+      "role": "historical-milestone",
+      "sha256": "3c9596919d6f23a74df9d1ffdffd24983a13ce49af052475b7d5ee7279861d88",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-exceptions.md",
+      "role": "historical-milestone",
+      "sha256": "03afdc6fc24a443964e6692578d92c76750d6ad59b50448a0b51d8297f25901f",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-grid-inspector.md",
+      "role": "historical-milestone",
+      "sha256": "e5b18ba81f9ad691f7514020c103f00d061c7233fd6b901eafa47376e931f149",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-imperative-designer.md",
+      "role": "historical-milestone",
+      "sha256": "fd5ebb10ff4cf6987069bd61aad8c4f2798b8232806e9663b1ee2996252169c1",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-msil-continuations.md",
+      "role": "historical-milestone",
+      "sha256": "0943c7503514bc57a69dfd58f78c4de6a5b05c4ace0f8c40b5eba9901a934fad",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-msil-nuget.md",
+      "role": "historical-milestone",
+      "sha256": "8569312aeb71fd32d9f114150c3efa965fa5567ffbfe2012bbda5300430a347d",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-native-pdb.md",
+      "role": "historical-milestone",
+      "sha256": "805da5d7036d181da27b076a830e27670b4f4a0f30b47186f03e607cab0ee69c",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-portable-pdb.md",
+      "role": "historical-milestone",
+      "sha256": "6532bab5f1bc4648a6e4a18a78b1d3a68e2aa19f6ad049255f617498ffde295c",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-resumable-xaml.md",
+      "role": "historical-milestone",
+      "sha256": "eb0b3595bf268dd9d05eccb12bd170af73da2a25ac1d59c404fe0efc99dfeee0",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-source-intelligence.md",
+      "role": "historical-milestone",
+      "sha256": "2efb794659b139abc10512f632614c2b776f59d8e3a21c00ab9a23729e90305d",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-structural-reload.md",
+      "role": "historical-milestone",
+      "sha256": "9c18f94d8bc1ad4ad78b97189e2f5cd820738826972bb4961ddcec5c54eaf7d7",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-studio-ide.md",
+      "role": "historical-milestone",
+      "sha256": "e0d38d4eea2fdb7dee096f2184f959cfad13c352da86c9babe3eb45723723779",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-symbol-restoration.md",
+      "role": "historical-milestone",
+      "sha256": "675d3ede3cf24304bf45bdf1aaa0c59122a5016fa5c7375bf736eb4bb63c55b4",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-templates-resources.md",
+      "role": "historical-milestone",
+      "sha256": "f81ae0547e6faa56984622f1c768452168b367575f02721669e75f1ced399257",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-upstream-canvas.md",
+      "role": "historical-milestone",
+      "sha256": "3d84579f0a667925f6c01ba841db11897d69b2aa168af3635f69e661f0eadab1",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-workbench-shell.md",
+      "role": "historical-milestone",
+      "sha256": "16d4d4a41db85140138846d2f05d640def7ceb9af7090331d4e52b214fd9487b",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/milestone-workspace-refactoring.md",
+      "role": "historical-milestone",
+      "sha256": "056009da6f14942ed7fc7a3e18764b9293a04b57dfb6992c3857134f06de9d25",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/quality-gates.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "ec94a6dfa09f1af5c99fdc5fd3dab56317c309a34ec410844ff0c63e89de50fa",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "docs/remaining-work.md",
+      "role": "canonical-current-guide",
+      "sha256": "5161eacba8ead88c7f96286252f1efdcff5c5f141926c7ed4bc22af624729772",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/requirements-traceability.md",
+      "role": "canonical-current-guide",
+      "sha256": "31a33141a1e78a82d1c5ad926059585ad0c9cd83202e7a71ae7237b4341c17de",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/requirements.md",
+      "role": "canonical-current-guide",
+      "sha256": "ef58aaf69fabac99ba63489849783ba3020935433f174b422824d759b5359e69",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/roadmap.md",
+      "role": "canonical-current-guide",
+      "sha256": "0c61ded8bc2911d2c372abbb1870ec8c065ae27efe39f993496ec3658757aeb2",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/security-and-trust.md",
+      "role": "canonical-current-guide",
+      "sha256": "4ecf567fa61fe7351f6cc66b55adf9faf0698f85e66af63c1c2a518b063c8eec",
+      "treatment": "Current guide regenerated against source/evidence"
+    },
+    {
+      "path": "docs/security.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "62f24c872e5feb7b3d05ea1670451cffae72a8667f85aa6e25c297433f036f41",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "examples/BuildProfiles/README.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "17b215b7b84f2786263a4f018942590157c5437f5f845761d631544ea5a8d674",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "examples/DesignerWorkspace/README.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "3773eaf033815bc7bfcca849b331d76a871b4546b8fd21406a497b0bb2b69f63",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "examples/DeveloperTools/README.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "7c94e9ef8cd939761a040b59562981bed53cd5a65adbb3991bc8de75b9284b81",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "examples/ExceptionLibrary/PROVENANCE.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "177a64d34d246b3b3b3c90dc732317bc7aadc0c0d3413709806d918519006ecf",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "examples/NativeSymbols/README.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "59b203740a004c3d6e2c6debed6aac5785ce890c9d58514253acae77e78ff2bb",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "examples/PdbLibrary/README.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "169c469e918b269fb07627329b159cd23dc8746c43fe2ae9f10cbaf677e6b56b",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "examples/SteppingLab/README.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "1c653049b2b44fe42ca3a766e701b371ead085643557e4fb2808b37e9b9f82d0",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "examples/UpstreamCanvas/README.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "65ed72623f2d34845c9b20a04acdd4f59889d1f61ed395689793f9cb4ea3d280",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "examples/UpstreamCheckBox/PROVENANCE.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "30d1936967ae710ada5700c6d2c283419a74a536d84849f0b820c6a612e9de9a",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "examples/UpstreamProgressBar/PROVENANCE.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "c90375a603aa051aa0418304336f9180d1ae34454fd5191c7bb4694a50b70718",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "integration/README.md",
+      "role": "specialized-guide-or-example",
+      "sha256": "a4d01e2609b30a07de3f2b4b4f5aa12e913696124c9e4725624391e0164424f4",
+      "treatment": "Detailed content preserved; current-applicability and supersession notice added; stale local links reconciled"
+    },
+    {
+      "path": "tests/fixtures/msil/README.md",
+      "role": "preserved-upstream-vendor-license",
+      "sha256": "f8664c4bedb8ac6f83d1f2d08558b6661a4f74c90f2f2dcd0827d846b081cc60",
+      "treatment": "Preserved byte-for-byte"
+    }
+  ],
+  "count": 63
+}

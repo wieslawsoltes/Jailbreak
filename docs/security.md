@@ -1,5 +1,10 @@
 # Execution and workspace boundaries
 
+<!-- jailbreak-current-documentation:begin -->
+> **Specialized guide / example; current applicability audited 2026-09-10.** This document is a specialized profile/example, not a full-solution completion claim. Use [current source and CI status](current-status.md), [full requirements](requirements.md), and [remaining acceptance work](remaining-work.md) for the current global contract.
+> The current IDE uses real menus, a command palette and independent docked tool windows; old combined-inspector or informational-sidebar workflows are historical. See [the integrated IDE guide](ide-guide.md). Source/XAML/MSIL cooperative debugging, constructor chaining, structural/environment reload, native-managed symbols and explicit symbol restoration each have current implementation/test profiles; do not infer their absence from an earlier milestone exclusion, or infer unrestricted compatibility from their presence.
+<!-- jailbreak-current-documentation:end -->
+
 Project evaluation is pure source selection over user-supplied text files. It never downloads imports, inspects arbitrary host paths, invokes an SDK, restores packages, executes property functions or starts MSBuild tasks. Virtual paths reject traversal/absolute external locations; XML parsers reject DTD/external-entity declarations. Budgets limit source/import/condition/directive sizes and nesting.
 
 The profile inspector displays workspace values through text nodes rather than HTML. Condition operands are parsed before property expansion, preventing substituted property text from becoming new operators. These measures do not constitute a complete hostile-input audit of every compiler path.

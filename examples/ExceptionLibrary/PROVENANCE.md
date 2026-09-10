@@ -1,5 +1,10 @@
 # Owned exception fixture
 
+<!-- jailbreak-current-documentation:begin -->
+> **Specialized guide / example; current applicability audited 2026-09-10.** This document is a specialized profile/example, not a full-solution completion claim. Use [current source and CI status](../../docs/current-status.md), [full requirements](../../docs/requirements.md), and [remaining acceptance work](../../docs/remaining-work.md) for the current global contract.
+> The current IDE uses real menus, a command palette and independent docked tool windows; old combined-inspector or informational-sidebar workflows are historical. See [the integrated IDE guide](../../docs/ide-guide.md). Source/XAML/MSIL cooperative debugging, constructor chaining, structural/environment reload, native-managed symbols and explicit symbol restoration each have current implementation/test profiles; do not infer their absence from an earlier milestone exclusion, or infer unrestricted compatibility from their presence.
+<!-- jailbreak-current-documentation:end -->
+
 Built from `tests/fixtures/exception-src/ExceptionLibrary.csproj` by the .NET SDK.
 
 Source commit: `ad7c682a2c366af891ff2985aaa210f4d7e9bc83`

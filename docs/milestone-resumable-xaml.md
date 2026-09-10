@@ -1,5 +1,10 @@
 # Resumable XAML and source constructors
 
+<!-- jailbreak-current-documentation:begin -->
+> **Historical milestone; current applicability audited 2026-09-10.** The implementation details and test totals below record this milestone, not the complete present-day product. Its old remaining/unsupported lists and UI instructions may have been superseded. Use [current source and CI status](current-status.md), [full requirements](requirements.md), and [remaining acceptance work](remaining-work.md) for the current global contract.
+> The current IDE uses real menus, a command palette and independent docked tool windows; old combined-inspector or informational-sidebar workflows are historical. See [the integrated IDE guide](ide-guide.md). Source/XAML/MSIL cooperative debugging, constructor chaining, structural/environment reload, native-managed symbols and explicit symbol restoration each have current implementation/test profiles; do not infer their absence from an earlier milestone exclusion, or infer unrestricted compatibility from their presence.
+<!-- jailbreak-current-documentation:end -->
+
 The primary IDE's **Develop → In-IDE stepping** mode now constructs applications through cooperative continuations. A breakpoint in a C# constructor can step into `InitializeComponent`, pause before a XAML visual is allocated, inspect its parent/owner, step to a sibling or out to the constructor, then resume the actual application. Browser DevTools is not needed for these pauses.
 
 ## Shared execution path
@@ -31,6 +36,6 @@ All source locations and continuation factories are development-only compiler ou
 
 `tests/xaml-continuations.test.js` tests real constructor and XAML execution, shared-runtime isolation, nested constructors, base arguments, fresh-root cancellation, property-element children, failure cleanup and release stripping. `tests/browser/test_xaml_construction.py` checks in-IDE pause/step/out/continue and cancellation with an actual compiled application. The existing developer-tool browser suite remains required.
 
-## Remaining boundaries
+## Remaining boundaries (at this milestone)
 
 Templates, lazy resource evaluation, native constructors, property setters/accessors and native runtime callbacks remain synchronous step-over regions. The full source compiler still rejects delegating `this(...)` constructors and other unsupported language features. Arbitrary native/managed callbacks are not transformed by this feature. This is genuine resumable visual construction and source-constructor execution for the current compiler subset, not full Avalonia or full C# compatibility. Complete unmodified ControlCatalog, general imperative designer analysis and MSIL/async state-machine coverage remain separately gated mandatory targets.

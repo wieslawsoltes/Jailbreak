@@ -1,5 +1,10 @@
 # Exception regions, checked arithmetic and source/binary recovery
 
+<!-- jailbreak-current-documentation:begin -->
+> **Historical milestone; current applicability audited 2026-09-10.** The implementation details and test totals below record this milestone, not the complete present-day product. Its old remaining/unsupported lists and UI instructions may have been superseded. Use [current source and CI status](current-status.md), [full requirements](requirements.md), and [remaining acceptance work](remaining-work.md) for the current global contract.
+> The current IDE uses real menus, a command palette and independent docked tool windows; old combined-inspector or informational-sidebar workflows are historical. See [the integrated IDE guide](ide-guide.md). Source/XAML/MSIL cooperative debugging, constructor chaining, structural/environment reload, native-managed symbols and explicit symbol restoration each have current implementation/test profiles; do not infer their absence from an earlier milestone exclusion, or infer unrestricted compatibility from their presence.
+<!-- jailbreak-current-documentation:end -->
+
 This milestone extends the **existing verified MSIL pipeline** (`packages/msil-compiler/verified.js`). Binary Studio, local NuGet conversion, the source/binary bridge and exported apps use the same implementation. The preserved compact prototype is not silently replaced or presented as having these features.
 
 ## Executable scope
@@ -73,7 +78,7 @@ Only the last command requires a .NET SDK: it builds and executes **owned test f
 
 `tests/browser/test_exceptions.py` covers editable IL, real DLL upload, a NuGet example, nested unwind, shared source/binary catches and network-free exports. Current workflow results establish publication status; this document does not substitute for CI.
 
-## Remaining big-picture work
+## Remaining big-picture work (at this milestone)
 
 Exception filters, custom exception subclasses, catch-to-try re-entry, generic/value types, interfaces/delegates, complete assembly identities and overload binding, compiled-XAML loading, reflection, transitive NuGet restore and arbitrary framework adapters remain separate extensions. The full unchanged ControlCatalog still does not pass. DOM interaction tests do not establish full Avalonia layout/theme fidelity or WebGPU rendering performance.
 

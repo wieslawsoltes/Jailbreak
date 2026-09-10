@@ -1,5 +1,10 @@
 # Managed Windows PDB integration
 
+<!-- jailbreak-current-documentation:begin -->
+> **Historical milestone; current applicability audited 2026-09-10.** The implementation details and test totals below record this milestone, not the complete present-day product. Its old remaining/unsupported lists and UI instructions may have been superseded. Use [current source and CI status](current-status.md), [full requirements](requirements.md), and [remaining acceptance work](remaining-work.md) for the current global contract.
+> The current IDE uses real menus, a command palette and independent docked tool windows; old combined-inspector or informational-sidebar workflows are historical. See [the integrated IDE guide](ide-guide.md). Source/XAML/MSIL cooperative debugging, constructor chaining, structural/environment reload, native-managed symbols and explicit symbol restoration each have current implementation/test profiles; do not infer their absence from an earlier milestone exclusion, or infer unrestricted compatibility from their presence.
+<!-- jailbreak-current-documentation:end -->
+
 Jailbreak accepts Windows MSF7/C13 **managed** PDBs alongside Portable PDBs. This
 is a browser-native symbol reader, not a native-code debugger. The independent
 Windows fixture was already retained in the repository; this milestone wires the
@@ -40,7 +45,7 @@ release stripping, input immutability, malformed pages/records and checksum or
 identity failures. Browser tests exercise uploads, original-source breakpoints,
 offline export and the same DLL inside Studio's source application.
 
-## Remaining native profile boundaries
+## Remaining native profile boundaries (at this milestone)
 
 MSF2/C11, C++ machine-code/register locations, native Edit-and-Continue relocation,
 legacy native embedded-source encodings, and arbitrary compiler-specific records

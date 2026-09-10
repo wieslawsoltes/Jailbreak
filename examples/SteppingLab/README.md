@@ -1,5 +1,10 @@
 # In-IDE stepping laboratory
 
+<!-- jailbreak-current-documentation:begin -->
+> **Specialized guide / example; current applicability audited 2026-09-10.** This document is a specialized profile/example, not a full-solution completion claim. Use [current source and CI status](../../docs/current-status.md), [full requirements](../../docs/requirements.md), and [remaining acceptance work](../../docs/remaining-work.md) for the current global contract.
+> The current IDE uses real menus, a command palette and independent docked tool windows; old combined-inspector or informational-sidebar workflows are historical. See [the integrated IDE guide](../../docs/ide-guide.md). Source/XAML/MSIL cooperative debugging, constructor chaining, structural/environment reload, native-managed symbols and explicit symbol restoration each have current implementation/test profiles; do not infer their absence from an earlier milestone exclusion, or infer unrestricted compatibility from their presence.
+<!-- jailbreak-current-documentation:end -->
+
 Open **Develop**, enable **In-IDE stepping**, and open `MainView.axaml.cs`. Add a breakpoint on `int result = Double(3);`, then click **Run nested call**. The continuation suspends before the assignment; the IDE and its inspector remain responsive. **Step into** enters `Double`, **Step over** advances within the current frame, and **Step out** returns to the caller. Select a call frame to inspect its own locals or watches. **Set local** accepts a variable name and a JSON scalar of the same supported type; integer ranges are checked.
 
 Try changing `value` to `10` in `Double` and continue: the actual computation uses the new value. **Cancel invocation** unwinds generator `finally` blocks. **Run async call** exercises awaited method continuations. With **Break on C# throw**, **Catch an exception** suspends before the explicit throw, then resumes into the typed catch.

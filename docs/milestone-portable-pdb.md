@@ -1,5 +1,10 @@
 # Portable PDB source debugging
 
+<!-- jailbreak-current-documentation:begin -->
+> **Historical milestone; current applicability audited 2026-09-10.** The implementation details and test totals below record this milestone, not the complete present-day product. Its old remaining/unsupported lists and UI instructions may have been superseded. Use [current source and CI status](current-status.md), [full requirements](requirements.md), and [remaining acceptance work](remaining-work.md) for the current global contract.
+> The current IDE uses real menus, a command palette and independent docked tool windows; old combined-inspector or informational-sidebar workflows are historical. See [the integrated IDE guide](ide-guide.md). Source/XAML/MSIL cooperative debugging, constructor chaining, structural/environment reload, native-managed symbols and explicit symbol restoration each have current implementation/test profiles; do not infer their absence from an earlier milestone exclusion, or infer unrestricted compatibility from their presence.
+<!-- jailbreak-current-documentation:end -->
+
 Jailbreak's converted-DLL path now has a reusable Portable PDB reader, source integrity verification, optional emitted sequence hooks, scoped-local capture and shared Source Map v3 composition. Binary Studio accepts matching DLL/PDB/source inputs and symbol-bearing NuGet packages. The primary IDE separates verified binary source into read-only symbol tabs rather than compiling it a second time as source.
 
 This extends the existing MSIL compiler and managed runtime. It is not a CLR, an IL interpreter, or a claim of complete .NET compatibility. The [mandatory development-tools contract](core-development-tools.md) applies to this path as it does to C#/XAML compilation.
@@ -49,7 +54,7 @@ Checksums establish consistency, not code safety or publisher authenticity. Run 
 
 ## Relationship to the other boundary extensions
 
-The round also extends [content-host and retained-control ownership reload](milestone-ownership-reload.md), [binding/resource/style/template reload](milestone-binding-environment-reload.md), [source-preserving designer round-tripping](milestone-designer-roundtrip.md), and [in-IDE C# continuation stepping](milestone-in-ide-debugger.md). Those guides specify their supported edit/control-flow subsets and rollback behavior.
+The round also extends content-host and retained-control ownership reload (historical target not present in this audited checkout; see [current status](current-status.md)), binding/resource/style/template reload (historical target not present in this audited checkout; see [current status](current-status.md)), source-preserving designer round-tripping (historical target not present in this audited checkout; see [current status](current-status.md)), and in-IDE C# continuation stepping (historical target not present in this audited checkout; see [current status](current-status.md)). Those guides specify their supported edit/control-flow subsets and rollback behavior.
 
 C# continuation stepping is not automatically MSIL continuation stepping. Converted binaries currently use native browser debugging plus source-linked snapshots and locals. XAML construction breakpoints and visual-source inspection are not resumable XAML construction. No guide should label the full original ControlCatalog as passing merely because the developer examples or selected original pages pass.
 
@@ -69,7 +74,7 @@ python -m unittest discover -s tests/browser -p 'test_*.py' -v
 
 CI results belong to the exact tested commit; staging a patch or adding a parser module alone is not proof of successful integration or deployment.
 
-## Remaining limits
+## Remaining limits (at this milestone)
 
 Windows/native PDB, compressed embedded Portable PDB, embedded-source decompression, remote Source Link, symbol-package restore, general async state-machine reconstruction, portable local constants/import-expression evaluation, byref/value-type local reconstruction and cross-MSIL continuation stepping remain additional work. Reading metadata rows needed to size a table is not execution support for the corresponding .NET feature.
 

@@ -1,5 +1,10 @@
 # Jailbreak — complete product specification, implementation status, and remaining work
 
+<!-- jailbreak-current-documentation:begin -->
+> **Specialized guide / example; current applicability audited 2026-09-10.** This document is a specialized profile/example, not a full-solution completion claim. Use [current source and CI status](current-status.md), [full requirements](requirements.md), and [remaining acceptance work](remaining-work.md) for the current global contract.
+> The current IDE uses real menus, a command palette and independent docked tool windows; old combined-inspector or informational-sidebar workflows are historical. See [the integrated IDE guide](ide-guide.md). Source/XAML/MSIL cooperative debugging, constructor chaining, structural/environment reload, native-managed symbols and explicit symbol restoration each have current implementation/test profiles; do not infer their absence from an earlier milestone exclusion, or infer unrestricted compatibility from their presence.
+<!-- jailbreak-current-documentation:end -->
+
 **Document purpose:** one coherent description of the requested finished product, the work already implemented, the evidence supporting that work, and the work still required. This is the product-level specification; individual milestone documents provide implementation details and historical evidence.
 
 **Project:** [wieslawsoltes/Jailbreak](https://github.com/wieslawsoltes/Jailbreak)  
@@ -640,9 +645,9 @@ The following guides provide deeper implementation context; their historical lim
 - [Core development-tools contract](core-development-tools.md).
 - [MSIL/NuGet](milestone-msil-nuget.md), [binary entry points](binary-entrypoints.md), [exception handling](milestone-exceptions.md), and [MSIL continuations](milestone-msil-continuations.md).
 - [Portable PDB](milestone-portable-pdb.md), [managed Windows PDB](milestone-native-pdb.md), and [symbol restoration](milestone-symbol-restoration.md).
-- [Initial developer tools](milestone-development-tools.md), [in-IDE debugger](milestone-in-ide-debugger.md), and [resumable XAML](milestone-resumable-xaml.md).
-- [Structural reload](milestone-structural-reload.md), [ownership reload](milestone-ownership-reload.md), and [binding/environment reload](milestone-binding-environment-reload.md).
-- [Designer round-trip](milestone-designer-roundtrip.md), [imperative designer](milestone-imperative-designer.md), [design canvas](milestone-design-canvas.md), [Grid inspector](milestone-grid-inspector.md), and [workspace refactoring](milestone-workspace-refactoring.md).
+- [Initial developer tools](milestone-development-tools.md), in-IDE debugger (historical target not present in this audited checkout; see [current status](current-status.md)), and [resumable XAML](milestone-resumable-xaml.md).
+- [Structural reload](milestone-structural-reload.md), ownership reload (historical target not present in this audited checkout; see [current status](current-status.md)), and binding/environment reload (historical target not present in this audited checkout; see [current status](current-status.md)).
+- Designer round-trip (historical target not present in this audited checkout; see [current status](current-status.md)), [imperative designer](milestone-imperative-designer.md), [design canvas](milestone-design-canvas.md), [Grid inspector](milestone-grid-inspector.md), and [workspace refactoring](milestone-workspace-refactoring.md).
 - [Original upstream Canvas](milestone-upstream-canvas.md), [Studio integration](milestone-studio-ide.md), and [docked desktop](milestone-docked-desktop.md).
 
 ### Updating this document

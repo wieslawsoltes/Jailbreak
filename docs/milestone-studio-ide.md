@@ -1,5 +1,10 @@
 # Integrated Studio IDE
 
+<!-- jailbreak-current-documentation:begin -->
+> **Historical milestone; current applicability audited 2026-09-10.** The implementation details and test totals below record this milestone, not the complete present-day product. Its old remaining/unsupported lists and UI instructions may have been superseded. Use [current source and CI status](current-status.md), [full requirements](requirements.md), and [remaining acceptance work](remaining-work.md) for the current global contract.
+> The current IDE uses real menus, a command palette and independent docked tool windows; old combined-inspector or informational-sidebar workflows are historical. See [the integrated IDE guide](ide-guide.md). Source/XAML/MSIL cooperative debugging, constructor chaining, structural/environment reload, native-managed symbols and explicit symbol restoration each have current implementation/test profiles; do not infer their absence from an earlier milestone exclusion, or infer unrestricted compatibility from their presence.
+<!-- jailbreak-current-documentation:end -->
+
 Jailbreak Studio is the primary C#/XAML workbench, redesigned around a modern desktop IDE layout. It integrates the actual compiler worker, runtime, debugger, visual designer, hot reload, project evaluator and binary tools. It does not replace those engines with demonstrations, and does not imply full Visual Studio language or framework parity.
 
 ## Workspace and execution

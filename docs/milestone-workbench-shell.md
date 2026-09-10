@@ -1,5 +1,10 @@
 # Docked IDE and functional editor navigation
 
+<!-- jailbreak-current-documentation:begin -->
+> **Historical milestone; current applicability audited 2026-09-10.** The implementation details and test totals below record this milestone, not the complete present-day product. Its old remaining/unsupported lists and UI instructions may have been superseded. Use [current source and CI status](current-status.md), [full requirements](requirements.md), and [remaining acceptance work](remaining-work.md) for the current global contract.
+> The current IDE uses real menus, a command palette and independent docked tool windows; old combined-inspector or informational-sidebar workflows are historical. See [the integrated IDE guide](ide-guide.md). Source/XAML/MSIL cooperative debugging, constructor chaining, structural/environment reload, native-managed symbols and explicit symbol restoration each have current implementation/test profiles; do not infer their absence from an earlier milestone exclusion, or infer unrestricted compatibility from their presence.
+<!-- jailbreak-current-documentation:end -->
+
 The primary browser IDE now uses a compact desktop workbench with an explorer, source/preview split, diagnostics and a right-hand developer-tool dock. This is a functional redesign of the existing compiler/designer/debugger client, not a standalone mockup or a claim of Rider/Visual Studio parity.
 
 ## Commands and editing
@@ -22,6 +27,6 @@ Dark/light themes, compact tabs, breadcrumbs, focus styling and command hints ar
 
 `tests/workbench.test.js` checks Unicode ranges, replacement limits, source parsing and bounded state. `tests/browser/test_workbench.py` exercises actual file/symbol/search navigation, compiled results after replacement, read-only protection, caret restoration, command execution, splitters and mobile layout. Existing developer-tool and XAML-construction browser gates remain required after docking.
 
-## Remaining mandatory scope
+## Remaining mandatory scope (at this milestone)
 
 Semantic completion, refactoring, rich multi-caret editing, project-wide incremental analysis and the full professional-IDE end state are not implemented by these navigation tools. Full language/framework and unmodified ControlCatalog compatibility remain separate targets. The complete debugger, source round-tripping and symbol-format requirements in `core-development-tools.md` are unchanged.

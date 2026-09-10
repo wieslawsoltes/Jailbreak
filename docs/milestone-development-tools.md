@@ -1,5 +1,10 @@
 # Developer tools: source debugging, visual design and hot reload
 
+<!-- jailbreak-current-documentation:begin -->
+> **Historical milestone; current applicability audited 2026-09-10.** The implementation details and test totals below record this milestone, not the complete present-day product. Its old remaining/unsupported lists and UI instructions may have been superseded. Use [current source and CI status](current-status.md), [full requirements](requirements.md), and [remaining acceptance work](remaining-work.md) for the current global contract.
+> The current IDE uses real menus, a command palette and independent docked tool windows; old combined-inspector or informational-sidebar workflows are historical. See [the integrated IDE guide](ide-guide.md). Source/XAML/MSIL cooperative debugging, constructor chaining, structural/environment reload, native-managed symbols and explicit symbol restoration each have current implementation/test profiles; do not infer their absence from an earlier milestone exclusion, or infer unrestricted compatibility from their presence.
+<!-- jailbreak-current-documentation:end -->
+
 **Later updates:** [Boundary expansion](boundary-expansion.md) adds content/reparenting, bindings/resources/styles/templates and expanded C# source edits. [In-IDE stepping](cooperative-debugging.md) supplies a separate compiled-continuation transport; the native-only descriptions below document this original milestone.
 
 **Update:** [Keyed panel structural reload and designer duplication](milestone-structural-reload.md) supersedes the initial restart-only rule for supported panel child changes. Other structural/resource/template changes remain restart-required.

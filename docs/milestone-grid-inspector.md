@@ -1,5 +1,10 @@
 # Source-backed Grid inspector and live track editing
 
+<!-- jailbreak-current-documentation:begin -->
+> **Historical milestone; current applicability audited 2026-09-10.** The implementation details and test totals below record this milestone, not the complete present-day product. Its old remaining/unsupported lists and UI instructions may have been superseded. Use [current source and CI status](current-status.md), [full requirements](requirements.md), and [remaining acceptance work](remaining-work.md) for the current global contract.
+> The current IDE uses real menus, a command palette and independent docked tool windows; old combined-inspector or informational-sidebar workflows are historical. See [the integrated IDE guide](ide-guide.md). Source/XAML/MSIL cooperative debugging, constructor chaining, structural/environment reload, native-managed symbols and explicit symbol restoration each have current implementation/test profiles; do not infer their absence from an earlier milestone exclusion, or infer unrestricted compatibility from their presence.
+<!-- jailbreak-current-documentation:end -->
+
 The merged desktop/source-intelligence stages were verified at `1a71c4d73acf31e24759e863de62ec591b4804cf`. No open pull requests remained at this round's reconciliation. The earlier screenshot of a Grid inspector did not establish that its implementation was in that source tree. This milestone adds the missing executable Grid inspector and its regression tests to the existing Studio, without replacing any debugger, designer or compiler implementation.
 
 ## Designer workflow
