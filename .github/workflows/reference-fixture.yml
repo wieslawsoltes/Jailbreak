@@ -1,0 +1,26 @@
+name: Managed reference acceptance fixture
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['tests/fixtures/reference-src/**', 'scripts/build-reference-fixture.mjs', '.github/workflows/reference-fixture.yml']
+permissions:
+  contents: read
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build owned Debug and Release libraries and execute CLR oracle
+        run: node scripts/build-reference-fixture.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: managed-reference-fixture
+          path: test-results/reference-clr/fixture.json
