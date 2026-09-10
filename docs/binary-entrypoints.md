@@ -1,6 +1,6 @@
 # Binary compiler entrypoints and route selection
 
-> Audit input: [`9b73d1167983`](https://github.com/wieslawsoltes/Jailbreak/tree/9b73d1167983076687cf078a3992144e4a18794a); documentation reconciled 2026-09-10T11:23:03+00:00. This is a source/evidence snapshot, not a declaration of full product completion.
+> Audit input: [`92cfb4ddc1f3`](https://github.com/wieslawsoltes/Jailbreak/tree/92cfb4ddc1f35e1ae3fa9093d7ed04a041d75d4c); documentation reconciled 2026-09-10T11:42:51+00:00. This is a source/evidence snapshot, not a declaration of full product completion.
 
 Use the verified MSIL pipeline for whole-assembly checking and JavaScript emission; use the debug wrapper for PDB/source preparation before that same emission. Use binary-project for C#/XAML linkage and workspace records, NuGet for package validation/asset selection, and the matching MSIL runtime for execution. Preserved compact prototypes are not a substitute for this route.
 
