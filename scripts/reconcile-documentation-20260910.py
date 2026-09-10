@@ -67,7 +67,7 @@ def authored_md() -> list[str]:
 
 def protected(path: str) -> bool:
     parts = Path(path).parts
-    return (path.startswith(('tests/fixtures/', 'third_party/', 'third-party/', 'vendor/', 'upstream/'))
+    return (path.startswith(('tests/fixtures/', 'third_party/', 'third-party/', 'vendor/', 'upstream/', '.github/ISSUE_TEMPLATE/', '.github/PULL_REQUEST_TEMPLATE/'))
             or any(part.lower() in {'third_party', 'third-party', 'vendor'} for part in parts)
             or Path(path).name.upper().startswith(('LICENSE', 'COPYING', 'NOTICE')))
 
@@ -186,6 +186,8 @@ def resolve_target(source: str, target: str):
         return ('outside', target, '')
     return (name, destination, urllib.parse.unquote(parsed.fragment))
 
+REFERENCE_LINK = re.compile(r'(?m)^( {0,3}\[(?!\^)[^\]\n]+\]:)\s*(<[^>]+>|[^\s]+)(?:[ \t]+[^\n]*)?$')
+
 def repair_and_check_links(repair: bool = False) -> dict:
     repairs, errors = [], []
     documents = authored_md()
@@ -193,7 +195,8 @@ def repair_and_check_links(repair: bool = False) -> dict:
         source = text(name)
         body = markdown_body(source)
         replacements = {}
-        for match in LINK.finditer(body):
+        for match in list(LINK.finditer(body)) + list(REFERENCE_LINK.finditer(body)):
+            definition = match.re is REFERENCE_LINK
             label, target = match.group(1), match.group(2)
             resolved = resolve_target(name, target)
             if not resolved:
@@ -206,6 +209,9 @@ def repair_and_check_links(repair: bool = False) -> dict:
                         replacement = rel_link(name, candidates[0], label.lstrip('![').rstrip(']'))
                     else:
                         replacement = label.lstrip('![').rstrip(']') + ' (historical target not present in this audited checkout; see ' + rel_link(name, 'docs/current-status.md', 'current status') + ')'
+                    if definition:
+                        destination_path = candidates[0] if len(candidates) == 1 else 'docs/current-status.md'
+                        replacement = label + ' ' + urllib.parse.quote(os.path.relpath(destination_path, str(Path(name).parent)).replace(os.sep, '/'), safe='/._-')
                     replacements[match.group(0)] = replacement
                     repairs.append({'source': name, 'old': target, 'reason': 'Target absent from audited source; no missing implementation was fabricated.'})
                 elif not protected(name):
@@ -214,7 +220,7 @@ def repair_and_check_links(repair: bool = False) -> dict:
                 if repair and not protected(name):
                     parsed = urllib.parse.urlsplit(target)
                     new_target = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, '')) or Path(name).name
-                    replacements[match.group(0)] = label + '(' + new_target + ')'
+                    replacements[match.group(0)] = label + (' ' + new_target if definition else '(' + new_target + ')')
                     repairs.append({'source': name, 'old': target, 'reason': 'Obsolete section fragment removed; link retains the actual document.'})
                 elif not protected(name):
                     errors.append({'source': name, 'target': target, 'reason': 'missing section anchor'})
@@ -223,7 +229,7 @@ def repair_and_check_links(repair: bool = False) -> dict:
                 source = source.replace(before, after)
             write(name, source)
     return {'documents_examined': len(documents), 'repairs': repairs, 'errors': errors,
-            'scope': 'Repository-local authored Markdown links and heading fragments. External URLs are retained as references and are not asserted reachable. Vendored/upstream/license documents are preserved byte-for-byte.'}
+            'scope': 'Repository-local authored inline/reference Markdown links and heading fragments. External URLs are retained as references and are not asserted reachable. Vendored/upstream/license documents are preserved byte-for-byte.'}
 
 def generate() -> dict:
     spec = json.loads(SPEC.read_text(encoding='utf-8'))
@@ -365,7 +371,7 @@ def generate() -> dict:
         if (ROOT / p).is_file():
             names = exports(p)
             api += '| ' + rel_link('docs/api-reference.md', p) + ' | ' + (', '.join('`' + n + '`' for n in names) or 'See module reexports/implementation') + ' |\n'
-    api += '\n## Input, output and lifecycle rules\n\nSource workspaces, evaluated projects and binary records are not interchangeable structures. Symbol preparation is asynchronous and must complete before verified binary emission. Register/link assemblies with the matching runtime instance and preserve type identity. Source maps and original documents belong only in deliberate development output. Runtime/development/preview handles must be disposed when replacing a session.\n\nDesign edits and refactors are source transactions, not unchecked string replacements. Reload plans are revision-bound; do not apply an incompatible plan or substitute a successful older result for a failed current compilation. A restored symbol attachment must be validated against the unchanged DLL record before publishing it.\n\nThe [build guide](build-and-verification.md) lists exact package scripts from this revision. [Architecture](architecture.md), [compatibility](compatibility.md) and the linked tests define each entrypoint's supported profile.\n'
+    api += '\n## Input, output and lifecycle rules\n\nSource workspaces, evaluated projects and binary records are not interchangeable structures. Symbol preparation is asynchronous and must complete before verified binary emission. Register/link assemblies with the matching runtime instance and preserve type identity. Source maps and original documents belong only in deliberate development output. Runtime/development/preview handles must be disposed when replacing a session.\n\nDesign edits and refactors are source transactions, not unchecked string replacements. Reload plans are revision-bound; do not apply an incompatible plan or substitute a successful older result for a failed current compilation. A restored symbol attachment must be validated against the unchanged DLL record before publishing it.\n\nThe [build guide](build-and-verification.md) lists exact package scripts from this revision. [Architecture](architecture.md), [compatibility](compatibility.md) and the linked tests define each entrypoint\'s supported profile.\n'
     write('docs/api-reference.md', api)
     write('docs/binary-entrypoints.md', '# Binary compiler entrypoints and route selection\n\n' + stamp + 'Use the verified MSIL pipeline for whole-assembly checking and JavaScript emission; use the debug wrapper for PDB/source preparation before that same emission. Use binary-project for C#/XAML linkage and workspace records, NuGet for package validation/asset selection, and the matching MSIL runtime for execution. Preserved compact prototypes are not a substitute for this route.\n\n' + api.split('## Input, output and lifecycle rules')[0].split('| Module |')[0].split('The names below')[0].replace('# Reusable API entrypoints\n\n' + stamp, '') + 'See the exact [module/export index](api-reference.md). IL text, loose managed binaries and packages have different input validation. Unsupported IL, metadata or executable dependencies stop output; a PDB reader cannot make an unsupported DLL executable.\n\nNative-engine `debug` and cooperative-debug instrumentation are separate modes. Both must retain the ordinary supported semantics and share exception/type/lifetime rules with source callers. SDK-generated async-state-machine IL remains a separate acceptance requirement from source async support.\n\nVerified original source is read-only debugger data; symbol-free methods expose labeled IL. Explicit symbol restoration cannot silently introduce source compilation replacements or execute package/native tasks. Standalone exports must carry the generated runtime/assets they need, with development source disclosure made explicit.\n')
 
@@ -373,7 +379,7 @@ def generate() -> dict:
     ide += '## Workspace model\n\nJailbreak is one development environment with source, split, designer and binary perspectives. The central document area contains editable source, the actual compiled preview or binary documents. Operational tool windows are docked independently; informational Compatibility Gates/Getting Started panes and the old oversized combined inspector are not the desired layout. Compatibility and learning material lives in this documentation.\n\n'
     ide += '## Menus, commands and docking\n\nUse the menu bar or command palette to discover commands available in the current context. Tool-window commands expose Solution Explorer, Document Outline, Properties, Layout, Toolbox, Find Results, Error List, Output, Call Stack, Locals, Watch, Breakpoints, Tasks, Debug Console, Debug Settings and Symbols & Sources where registered. Docking moves the existing view/controller; floating, auto-hide, close/reopen and named layouts must not reset its runtime session. Layout reset recovers hidden/off-screen windows.\n\nKeyboard shortcuts are defined by the current command registry rather than by screenshots in older milestone guides. Check the displayed shortcut/availability before invoking an operation; platform-reserved browser shortcuts and native paused-engine behavior may differ.\n\n'
     ide += '## Open, build and run\n\nOpen a folder or complete set of files to include the solution/projects, XAML, code-behind, resources and dependencies. A browser permission for one project file does not grant access to neighboring files. Choose the startup project/build profile/entry view, edit source, and build through the primary pipeline. Navigate errors in Error List and inspect build/application output. Failed development builds retain the previous working preview; incompatible successful edits require explicit restart.\n\n'
-    ide += '## Debug source and converted libraries\n\nChoose the execution mode appropriate to release, design, in-IDE continuation debugging or native DevTools. Bind breakpoints to actual source/IL points, then inspect the selected session in Call Stack, Locals, Watch and Tasks. Permitted scalar local edits affect the suspended invocation. Conditions/logpoints and exception settings have explicit supported expression/event semantics. Native-engine stepping is not the same transport as cooperative in-IDE stepping.\n\nWhen the binary workspace is selected, shared execution/debugger commands route to its isolated runtime, not the source preview. Original **[symbol]** documents require identity and checksum verification. **[IL]** documents display actual disassembly. A library's symbol file does not expand its executable opcode/type/API compatibility.\n\n'
+    ide += '## Debug source and converted libraries\n\nChoose the execution mode appropriate to release, design, in-IDE continuation debugging or native DevTools. Bind breakpoints to actual source/IL points, then inspect the selected session in Call Stack, Locals, Watch and Tasks. Permitted scalar local edits affect the suspended invocation. Conditions/logpoints and exception settings have explicit supported expression/event semantics. Native-engine stepping is not the same transport as cooperative in-IDE stepping.\n\nWhen the binary workspace is selected, shared execution/debugger commands route to its isolated runtime, not the source preview. Original **[symbol]** documents require identity and checksum verification. **[IL]** documents display actual disassembly. A library\'s symbol file does not expand its executable opcode/type/API compatibility.\n\n'
     ide += '## Design and hot reload\n\nUse Document Outline or canvas picking to select real controls. Properties edits literals or explicit expressions according to source editability; Layout exposes available Canvas/Grid operations; Toolbox inserts actual supported controls. Artboard zoom/pan/grid/snapping and multi-selection use logical coordinates. Text, designer and refactor changes share preimage-checked history where integrated.\n\nCanvas sibling operations and Grid track/cell tools have different compatibility rules. Template/generated instances, computed assignments and ambiguous C# ownership require source editing or additional analysis rather than silent rewrites. Straight-line C# aliases/final literal writes are not unrestricted control-flow analysis.\n\nEnable hot reload for compatible method/property/tree/environment changes. Constructor/type-shape or unsupported structural changes must report restart requirements. Cancelling a gesture, encountering stale source or failing a patch must leave the prior source/app coherent.\n\n'
     ide += '## Review changes and restore symbols\n\nUse the available change-review/refactor tools for multi-file operations: inspect the proposed diff and diagnostics, apply only if every preimage is current, and retain grouped undo. For Symbols & Sources, preview candidate requests first, approve symbol servers and source origins separately, and attach only validated bytes to an unchanged library record. Network/authentication/CORS and format limitations remain explicit.\n\n'
     ide += '## Offline, persistence and release\n\nStandalone IDE/application exports use the same tested build inputs. Development exports may include original source maps and debugging controls; rebuild in release before distributing source-free output. Persistence failures need visible session-only behavior, not a false Saved indicator. Source/binary workspaces, layouts and debugger tasks have different lifetimes and must not be merged accidentally.\n\nSee [compatibility](compatibility.md), [security](security-and-trust.md), [verification](build-and-verification.md), and [remaining desktop work](remaining-work.md). Full desktop editing/refactoring/project tooling is not declared equivalent to Visual Studio or Rider merely because the layout resembles them.\n'
@@ -466,7 +472,7 @@ def generate() -> dict:
         else:
             content = note + content
         if historical:
-            content = re.sub(r'^(#{2,6}\s+)(Remaining(?:\s+[^\n]*)?)$', lambda m: m.group(1) + m.group(2) + ' (at this milestone)', content, flags=re.M)
+            content = re.sub(r'^(#{2,6}\s+)(Remaining(?:\s+[^\n]*)?)$', lambda m: m.group(1) + re.sub(r'(?: \(at this milestone\))+$', '', m.group(2)) + ' (at this milestone)', content, flags=re.M)
         write(name, content)
         notice_updates.append(name)
 
@@ -479,6 +485,9 @@ def generate() -> dict:
     hub += '\nThe complete Markdown coverage/exclusion record is [documentation-index.json](audit/documentation-index.json). Upstream/vendor/license documents are intentionally preserved instead of rewriting provenance material.\n'
     write('docs/README.md', hub)
 
+    # This index is linked by current guides and is finalized after link reconciliation.
+    if not (ROOT / 'docs/audit/documentation-index.json').exists():
+        dump('docs/audit/documentation-index.json', {'baseline': baseline, 'documents': [], 'status': 'generation in progress'})
     repairs = repair_and_check_links(repair=True)
     final_check = repair_and_check_links(repair=False)
     dump('docs/audit/link-check.json', {**final_check, 'repairs': repairs['repairs'], 'baseline': baseline, 'audited_at': timestamp})
