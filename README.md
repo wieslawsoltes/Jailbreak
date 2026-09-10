@@ -96,3 +96,20 @@ property editing](docs/milestone-imperative-designer.md).
 ## Workspace review and component refactoring
 
 Studio now connects source/designer undo, checkpoint diffs and compiler-validated three-file UserControl extraction. See [workspace refactoring](docs/milestone-workspace-refactoring.md) and the [live Grid inspector](docs/milestone-grid-inspector.md). These are bounded supported workflows, not complete desktop IDE or ControlCatalog parity.
+
+### Docked desktop tools and symbol restoration
+
+The workspace now exposes independent **Solution Explorer**, **Document Outline**,
+**Properties**, **Layout**, **Toolbox** and debugger windows. Open them through
+**View → Tool Windows** or the shared command palette. Drag a title/tab to dock,
+use the title menu to float/auto-hide/close, or save a named layout from **Window**.
+The original informational sidebar panes have been removed; compatibility status
+and instructions remain in the documentation rather than blocking editing space.
+
+**Debug → Restore symbols and original sources** opens the opt-in downloader.
+Inspect prospective requests, approve symbol servers and original-source origins
+separately, restore/verify, then explicitly attach and restart. Source attachment
+is debugger metadata, not a replacement for the DLL. Approval is never automatic.
+See [desktop composition](docs/milestone-docked-desktop.md) and
+[symbol/source restoration](docs/milestone-symbol-restoration.md) for APIs, tested
+workflows, source disclosure and remaining limitations.

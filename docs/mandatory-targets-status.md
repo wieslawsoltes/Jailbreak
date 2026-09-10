@@ -65,3 +65,24 @@ framework behavior without claiming full measure/arrange or ControlCatalog parit
 ## Source transactions and reusable components
 
 [Workspace review and component extraction](milestone-workspace-refactoring.md) share one bounded journal across editor/designer/refactor changes. Multi-file extraction uses real project evaluation before Apply, rejects ownership-sensitive references and requires explicit restart for a changed type/document set. This advances source-backed visual workflows without declaring arbitrary extraction, imperative C# round-tripping or full framework compatibility complete.
+
+## Docked desktop recovery and explicit symbol restoration
+
+The [desktop IDE composition](milestone-docked-desktop.md) replaces informational
+sidebar panes and the combined inspector with real controller-backed tool
+windows, menus, docking, floating, auto-hide and shared source/binary debugger
+presentation. Existing designer, layout, refactoring and hot-reload functionality
+is retained. Browser regressions navigate actual exposed windows, not hidden
+legacy controls.
+
+[Symbol restoration](milestone-symbol-restoration.md) supplies opt-in ordinary
+symbol-store PDB downloads and checksum-verified Source Link retrieval. Approval
+is independent for symbol servers and source origins; candidate bytes and the
+source workspace are verified before explicit attachment/restart. Controlled
+SDK/Windows fixture tests are not a claim that arbitrary feeds support CORS,
+authentication or every native format.
+
+The full unmodified ControlCatalog, unrestricted C# flow/interprocedural designer
+analysis, SDK-generated async-state-machine IL and complete language/framework
+compatibility remain unfinished mandatory acceptance targets. The new network
+path does not change the execution or compatibility profile of a downloaded DLL.
