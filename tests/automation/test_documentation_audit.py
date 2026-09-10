@@ -165,14 +165,34 @@ class DocumentationAuditTests(unittest.TestCase):
             self.assertEqual(receipt['exit_code'], 7)
             self.assertEqual(receipt['source_sha'], auditor.git('rev-parse', 'HEAD'))
 
-    def test_runner_dependent_paths_are_initialized_in_a_step(self):
-        workflow = (ROOT / '.github/workflows/documentation-reconciliation-20260910.yml').read_text()
-        job_env = workflow.split('    env:\n', 1)[1].split('    steps:\n', 1)[0]
-        self.assertNotIn('runner.', job_env)
-        self.assertNotIn('JAILBREAK_DOCS_CHECKS:', job_env)
-        self.assertIn('JAILBREAK_DOCS_CHECKS=$RUNNER_TEMP/documentation-evidence/checks.json', workflow)
-        self.assertIn('JAILBREAK_DOCS_RECEIPT=$RUNNER_TEMP/documentation-evidence/reconciliation.json', workflow)
-        self.assertIn('>> "$GITHUB_ENV"', workflow)
+    def test_only_tests_and_pages_workflow_remains(self):
+        # One-off recovery/publication workflows are retired. Keep this guard
+        # against reintroducing source-writing automation or dropping test gates.
+        directory = ROOT / '.github/workflows'
+        workflows = {p.name for p in directory.iterdir()
+                     if p.is_file() and p.suffix.lower() in ('.yml', '.yaml')}
+        self.assertEqual(workflows, {'toolchain.yml'})
+        workflow = (directory / 'toolchain.yml').read_text(encoding='utf-8')
+        for required in (
+            '  push:', '    branches: [main]', '  pull_request:',
+            '  workflow_dispatch:', '  contents: read', '  verify:',
+            'npm test', 'npm run gate', 'npm run build', 'npm run check',
+            'node scripts/verify-msil-clr.mjs',
+            'node scripts/verify-exceptions-clr.mjs',
+            "python -m unittest discover -s tests/automation -p 'test_*.py' -v",
+            'python scripts/run-browser-gates.py', 'set -euo pipefail',
+            'actions/upload-artifact@', 'actions/upload-pages-artifact@',
+            '  deploy:', '    needs: verify',
+            "    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'",
+            '      pages: write', '      id-token: write',
+            '      name: github-pages', 'actions/deploy-pages@',
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, workflow)
+        for retired in ('contents: write', 'actions: write', 'git push',
+                        'gh workflow run', 'pull_request_target:', 'workflow_run:'):
+            with self.subTest(retired=retired):
+                self.assertNotIn(retired, workflow)
 
 
 if __name__ == '__main__':
