@@ -1,0 +1,509 @@
+{
+  "format": "jailbreak-documentation-audit-v1",
+  "source_baseline": "9b73d1167983076687cf078a3992144e4a18794a",
+  "audited_at": "2026-09-10T11:23:03+00:00",
+  "requirement_count": 138,
+  "group_count": 13,
+  "evidence": {
+    "PROD": {
+      "implementation": [
+        "packages/avalonia-runtime/index.js",
+        "packages/binary-project/index.js",
+        "packages/build-profile/index.js",
+        "packages/compiler-core/index.js",
+        "packages/csharp-compiler/index.js",
+        "packages/dotnet-runtime/index.js",
+        "packages/il-runtime/index.js",
+        "packages/language-service/index.js",
+        "packages/managed-pe/index.js",
+        "packages/msil-compiler/index.js",
+        "packages/msil-runtime/index.js",
+        "packages/native-pdb/index.js",
+        "packages/nuget/index.js",
+        "packages/portable-pdb/index.js",
+        "packages/project-system/backend.js",
+        "packages/project-system/index.js",
+        "packages/renderer/index.js",
+        "packages/symbol-restoration/index.js",
+        "packages/workspace-changes/index.js",
+        "packages/xaml-compiler/index.js",
+        "scripts/build.mjs",
+        "scripts/bundle.mjs"
+      ],
+      "tests": [
+        "tests/browser/test_design_canvas.py",
+        "tests/browser/test_desktop_commit.py",
+        "tests/browser/test_development.py",
+        "tests/browser/test_docking.py",
+        "tests/browser/test_exceptions.py",
+        "tests/browser/test_grid_tools.py",
+        "tests/browser/test_msil.py",
+        "tests/browser/test_msil_continuations.py",
+        "tests/browser/test_native_symbols.py",
+        "tests/browser/test_profile_inspector.py",
+        "tests/browser/test_secondary_workbench.py",
+        "tests/browser/test_source_tools.py",
+        "tests/browser/test_studio.py",
+        "tests/browser/test_symbol_restoration.py",
+        "tests/browser/test_templates.py",
+        "tests/browser/test_upstream_canvas.py",
+        "tests/browser/test_workbench.py",
+        "tests/browser/test_workbench_profiles.py",
+        "tests/browser/test_workspace_refactor.py",
+        "tests/browser/test_xaml_construction.py",
+        "tests/project-runtime.test.js"
+      ]
+    },
+    "PROJECT": {
+      "implementation": [
+        "apps/ide/app.js",
+        "packages/binary-project/index.js",
+        "packages/binary-project/workspace.js",
+        "packages/nuget/index.js",
+        "packages/nuget/zip.js",
+        "packages/project-system/backend.js",
+        "packages/project-system/index.js",
+        "packages/project-system/preview.js"
+      ],
+      "tests": [
+        "tests/browser/test_profile_inspector.py",
+        "tests/browser/test_workbench_profiles.py",
+        "tests/build-profile-integration.test.js",
+        "tests/build-profile.test.js",
+        "tests/project-runtime.test.js",
+        "tests/workspace-journal.test.js"
+      ]
+    },
+    "CS": {
+      "implementation": [
+        "packages/compiler-core/index.js",
+        "packages/compiler-core/managed-types.js",
+        "packages/compiler-core/xml.js",
+        "packages/csharp-compiler/backend.js",
+        "packages/csharp-compiler/constructor-chains.js",
+        "packages/csharp-compiler/index.js",
+        "packages/csharp-compiler/lexer.js",
+        "packages/csharp-compiler/parser.js",
+        "packages/dotnet-runtime/checked.js",
+        "packages/dotnet-runtime/exceptions.js",
+        "packages/dotnet-runtime/index.js"
+      ],
+      "tests": [
+        "tests/constructor-chains.test.js",
+        "tests/cooperative-debugger.test.js",
+        "tests/csharp.test.js",
+        "tests/language-service.test.js"
+      ]
+    },
+    "XAML": {
+      "implementation": [
+        "packages/avalonia-runtime/schema.js",
+        "packages/avalonia-runtime/xaml.js",
+        "packages/compiler-core/xml.js",
+        "packages/xaml-compiler/includes.js",
+        "packages/xaml-compiler/index.js"
+      ],
+      "tests": [
+        "tests/templates-resources.test.js",
+        "tests/xaml-continuations.test.js"
+      ]
+    },
+    "UI": {
+      "implementation": [
+        "packages/avalonia-runtime/attribute-lifecycle.js",
+        "packages/avalonia-runtime/binding.js",
+        "packages/avalonia-runtime/controls.js",
+        "packages/avalonia-runtime/grid-layout.js",
+        "packages/avalonia-runtime/index.js",
+        "packages/avalonia-runtime/progress.js",
+        "packages/avalonia-runtime/properties.js",
+        "packages/avalonia-runtime/resources.js",
+        "packages/avalonia-runtime/schema.js",
+        "packages/avalonia-runtime/selectors.js",
+        "packages/avalonia-runtime/styling.js",
+        "packages/avalonia-runtime/svg-shapes.js",
+        "packages/avalonia-runtime/template-transaction.js",
+        "packages/avalonia-runtime/templates.js",
+        "packages/avalonia-runtime/vector-model.js",
+        "packages/avalonia-runtime/xaml.js",
+        "packages/renderer/index.js"
+      ],
+      "tests": [
+        "tests/browser/test_design_canvas.py",
+        "tests/browser/test_upstream_canvas.py",
+        "tests/grid-editor.test.js"
+      ]
+    },
+    "BINARY": {
+      "implementation": [
+        "packages/binary-project/index.js",
+        "packages/binary-project/workspace.js",
+        "packages/managed-pe/bytes.js",
+        "packages/managed-pe/debug-directory.js",
+        "packages/managed-pe/exception-sections.js",
+        "packages/managed-pe/index.js",
+        "packages/managed-pe/metadata-schema.js",
+        "packages/managed-pe/reader.js",
+        "packages/managed-pe/signatures.js",
+        "packages/managed-pe/structured.js",
+        "packages/managed-pe/tables.js",
+        "packages/msil-compiler/continuation-sites.js",
+        "packages/msil-compiler/debug-metadata.js",
+        "packages/msil-compiler/debug.js",
+        "packages/msil-compiler/emitter.js",
+        "packages/msil-compiler/exception-regions.js",
+        "packages/msil-compiler/index.js",
+        "packages/msil-compiler/instruction-set.js",
+        "packages/msil-compiler/linker.js",
+        "packages/msil-compiler/opcodes.js",
+        "packages/msil-compiler/text.js",
+        "packages/msil-compiler/verification.js",
+        "packages/msil-compiler/verified.js",
+        "packages/msil-compiler/verify.js",
+        "packages/msil-runtime/adapters.js",
+        "packages/msil-runtime/continuations.js",
+        "packages/msil-runtime/exception-frame.js",
+        "packages/msil-runtime/export.js",
+        "packages/msil-runtime/index.js",
+        "packages/nuget/index.js",
+        "packages/nuget/zip.js"
+      ],
+      "tests": [
+        "scripts/verify-exceptions-clr.mjs",
+        "scripts/verify-msil-clr.mjs",
+        "tests/msil-cleanup-await.test.js",
+        "tests/msil-cli.test.js",
+        "tests/msil-continuations.test.js",
+        "tests/msil-exceptions.test.js",
+        "tests/msil.test.js",
+        "tests/nuget.test.js"
+      ]
+    },
+    "SYMBOL": {
+      "implementation": [
+        "packages/development/source-map.js",
+        "packages/native-pdb/index.js",
+        "packages/native-pdb/legacy-checksum.js",
+        "packages/native-pdb/msf.js",
+        "packages/portable-pdb/hash.js",
+        "packages/portable-pdb/index.js",
+        "packages/portable-pdb/symbols.js",
+        "packages/symbol-restoration/index.js",
+        "packages/symbol-restoration/network.js",
+        "packages/symbol-restoration/source-link.js",
+        "packages/workbench/symbols.js"
+      ],
+      "tests": [
+        "tests/browser/test_native_symbols.py",
+        "tests/browser/test_symbol_restoration.py",
+        "tests/native-pdb.test.js",
+        "tests/portable-pdb.test.js",
+        "tests/symbol-restoration.test.js"
+      ]
+    },
+    "DEBUG": {
+      "implementation": [
+        "packages/development/binary-preview.js",
+        "packages/development/construction.js",
+        "packages/development/cooperative-debugger.js",
+        "packages/development/runtime.js",
+        "packages/workbench/binary-client.js",
+        "packages/workbench/debug-context.js"
+      ],
+      "tests": [
+        "tests/browser/test_msil_continuations.py",
+        "tests/browser/test_xaml_construction.py",
+        "tests/cooperative-debugger.test.js",
+        "tests/development-reload-locations.test.js",
+        "tests/development.test.js",
+        "tests/msil-continuations.test.js",
+        "tests/xaml-continuations.test.js"
+      ]
+    },
+    "DESIGN": {
+      "implementation": [
+        "packages/development/csharp-designer.js",
+        "packages/development/design-geometry.js",
+        "packages/development/design-surface.js",
+        "packages/development/design-transactions.js",
+        "packages/development/designer.js",
+        "packages/development/imperative-designer.js",
+        "packages/development/structure-runtime.js",
+        "packages/development/structure.js",
+        "packages/workbench/design-canvas.js",
+        "packages/workbench/grid-tools.js"
+      ],
+      "tests": [
+        "tests/browser/test_design_canvas.py",
+        "tests/component-refactor.test.js",
+        "tests/design-geometry.test.js",
+        "tests/designer-roundtrip.test.js",
+        "tests/grid-editor.test.js",
+        "tests/imperative-designer.test.js"
+      ]
+    },
+    "RELOAD": {
+      "implementation": [
+        "packages/avalonia-runtime/xaml.js",
+        "packages/development/reload.js",
+        "packages/development/structure-runtime.js",
+        "packages/development/structure.js"
+      ],
+      "tests": [
+        "tests/development-reload-locations.test.js",
+        "tests/environment-reload.test.js",
+        "tests/structural-reload.test.js",
+        "tests/tree-ownership-reload.test.js"
+      ]
+    },
+    "IDE": {
+      "implementation": [
+        "apps/binary/app.js",
+        "apps/binary/index.html",
+        "apps/binary/style.css",
+        "apps/binary/worker.js",
+        "apps/ide/app.js",
+        "apps/ide/desktop-documents.css",
+        "apps/ide/desktop-floating.css",
+        "apps/ide/desktop-menus.css",
+        "apps/ide/desktop-responsive.css",
+        "apps/ide/desktop-tools.css",
+        "apps/ide/desktop-views.css",
+        "apps/ide/desktop.css",
+        "apps/ide/index.html",
+        "apps/ide/language-worker.js",
+        "apps/ide/studio.css",
+        "apps/ide/style.css",
+        "apps/ide/worker.js",
+        "packages/workbench/binary-client.js",
+        "packages/workbench/change-review.js",
+        "packages/workbench/debug-context.js",
+        "packages/workbench/design-canvas.js",
+        "packages/workbench/desktop.js",
+        "packages/workbench/dock-model.js",
+        "packages/workbench/docking.js",
+        "packages/workbench/documents.js",
+        "packages/workbench/edit-history.js",
+        "packages/workbench/editor-history.js",
+        "packages/workbench/editor-tools.js",
+        "packages/workbench/grid-tools.js",
+        "packages/workbench/icons.js",
+        "packages/workbench/language-tools.js",
+        "packages/workbench/layout.js",
+        "packages/workbench/menus.js",
+        "packages/workbench/navigation.js",
+        "packages/workbench/new-item.js",
+        "packages/workbench/preview-shortcuts.js",
+        "packages/workbench/shell.js",
+        "packages/workbench/studio-debug.js",
+        "packages/workbench/studio-model.js",
+        "packages/workbench/studio-state.js",
+        "packages/workbench/studio-ui.js",
+        "packages/workbench/studio.js",
+        "packages/workbench/symbols.js"
+      ],
+      "tests": [
+        "tests/browser/test_desktop_commit.py",
+        "tests/browser/test_studio.py",
+        "tests/docking-model.test.js",
+        "tests/grid-editor.test.js",
+        "tests/workbench.test.js"
+      ]
+    },
+    "CATALOG": {
+      "implementation": [
+        "examples/UpstreamCanvas/CanvasPage.xaml",
+        "examples/UpstreamCanvas/CanvasPage.xaml.cs",
+        "examples/UpstreamCanvas/LICENSE.Avalonia.txt",
+        "examples/UpstreamCanvas/README.md",
+        "examples/UpstreamCanvas/UpstreamCanvas.csproj",
+        "examples/UpstreamCheckBox/CheckBoxPage.xaml",
+        "examples/UpstreamCheckBox/CheckBoxPage.xaml.cs",
+        "examples/UpstreamCheckBox/LICENSE.Avalonia.txt",
+        "examples/UpstreamCheckBox/PROVENANCE.md",
+        "examples/UpstreamProgressBar/LICENSE.Avalonia.txt",
+        "examples/UpstreamProgressBar/PROVENANCE.md",
+        "examples/UpstreamProgressBar/ProgressBarPage.xaml",
+        "examples/UpstreamProgressBar/ProgressBarPage.xaml.cs",
+        "scripts/gate.mjs",
+        "tests/fixtures/upstream.json"
+      ],
+      "tests": [
+        "tests/browser/test_design_canvas.py",
+        "tests/browser/test_upstream_canvas.py",
+        "tests/requested-upstream.test.js"
+      ]
+    },
+    "QUALITY": {
+      "implementation": [
+        ".github/workflows/toolchain.yml",
+        "packages/development/preview.js",
+        "packages/project-system/preview.js",
+        "packages/symbol-restoration/network.js",
+        "scripts/check.mjs",
+        "scripts/gate.mjs"
+      ],
+      "tests": [
+        "scripts/verify-exceptions-clr.mjs",
+        "scripts/verify-msil-clr.mjs",
+        "tests/browser/test_design_canvas.py",
+        "tests/browser/test_desktop_commit.py",
+        "tests/browser/test_development.py",
+        "tests/browser/test_docking.py",
+        "tests/browser/test_exceptions.py",
+        "tests/browser/test_grid_tools.py",
+        "tests/browser/test_msil.py",
+        "tests/browser/test_msil_continuations.py",
+        "tests/browser/test_native_symbols.py",
+        "tests/browser/test_profile_inspector.py",
+        "tests/browser/test_secondary_workbench.py",
+        "tests/browser/test_source_tools.py",
+        "tests/browser/test_studio.py",
+        "tests/browser/test_symbol_restoration.py",
+        "tests/browser/test_templates.py",
+        "tests/browser/test_upstream_canvas.py",
+        "tests/browser/test_workbench.py",
+        "tests/browser/test_workbench_profiles.py",
+        "tests/browser/test_workspace_refactor.py",
+        "tests/browser/test_xaml_construction.py",
+        "tests/build-profile-integration.test.js",
+        "tests/build-profile.test.js",
+        "tests/compiler-core.test.js",
+        "tests/component-refactor.test.js",
+        "tests/constructor-chains.test.js",
+        "tests/cooperative-debugger.test.js",
+        "tests/csharp.test.js",
+        "tests/design-geometry.test.js",
+        "tests/designer-roundtrip.test.js",
+        "tests/development-reload-locations.test.js",
+        "tests/development.test.js",
+        "tests/docking-model.test.js",
+        "tests/environment-reload.test.js",
+        "tests/grid-editor.test.js",
+        "tests/imperative-designer.test.js",
+        "tests/inline-assets.test.js",
+        "tests/language-service.test.js",
+        "tests/msil-cleanup-await.test.js",
+        "tests/msil-cli.test.js",
+        "tests/msil-continuations.test.js",
+        "tests/msil-exceptions.test.js",
+        "tests/msil.test.js",
+        "tests/native-pdb.test.js",
+        "tests/nuget.test.js",
+        "tests/portable-pdb.test.js",
+        "tests/preprocessor-integration.test.js",
+        "tests/preprocessor.test.js",
+        "tests/preview-shortcuts.test.js",
+        "tests/progressbar.test.js",
+        "tests/project-runtime.test.js",
+        "tests/regressions.test.js",
+        "tests/requested-upstream.test.js",
+        "tests/structural-reload.test.js",
+        "tests/studio-model.test.js",
+        "tests/studio-state.test.js",
+        "tests/symbol-restoration.test.js",
+        "tests/templates-resources.test.js",
+        "tests/tree-ownership-reload.test.js",
+        "tests/vector-canvas.test.js",
+        "tests/workbench.test.js",
+        "tests/workspace-journal.test.js",
+        "tests/xaml-continuations.test.js"
+      ]
+    }
+  },
+  "upstream_manifest_observations": {
+    "official.repository": "AvaloniaUI/Avalonia",
+    "official.commit": "27c1ece36cbe17de3b8f95ae88223ba68702ae47",
+    "requestedLibrary.repository": "wieslawsoltes/Avalonia",
+    "requestedLibrary.commit": "b709c58c6b1b8aa3b90866c7c001b7bf82b6353b",
+    "requestedLibrary.fullControlCatalogPassed": false
+  },
+  "hosted_ci": {
+    "exact_baseline_runs": [],
+    "most_recent_successful_ancestor": {
+      "id": 34467875477,
+      "name": "Toolchain verification and Pages",
+      "head_sha": "1572fa18720737f91f5e0a0651b4bf870aa01034",
+      "path": ".github/workflows/toolchain.yml",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/wieslawsoltes/Jailbreak/actions/runs/34467875477",
+      "created_at": "2026-09-10T10:47:15Z",
+      "updated_at": "2026-09-10T10:54:20Z"
+    },
+    "implementation_or_gate_changes_since_successful_ancestor": [
+      ".github/workflows/toolchain.yml",
+      "scripts/harden-documentation-audit-20260910.py",
+      "tests/automation/test_documentation_audit.py"
+    ],
+    "exact_query_error": null,
+    "history_query_error": null
+  },
+  "local_verification": [
+    {
+      "name": "unit",
+      "command": [
+        "npm",
+        "test"
+      ],
+      "source_sha": "9b73d1167983076687cf078a3992144e4a18794a",
+      "started_at": "2026-09-10T11:22:53.368682+00:00",
+      "exit_code": 0,
+      "summary": {
+        "tests": 474,
+        "pass": 474,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "log_file": "jailbreak-docs-unit.log"
+    },
+    {
+      "name": "examples",
+      "command": [
+        "npm",
+        "run",
+        "gate"
+      ],
+      "source_sha": "9b73d1167983076687cf078a3992144e4a18794a",
+      "started_at": "2026-09-10T11:22:56.612521+00:00",
+      "exit_code": 0,
+      "summary": {},
+      "log_file": "jailbreak-docs-examples.log"
+    },
+    {
+      "name": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "source_sha": "9b73d1167983076687cf078a3992144e4a18794a",
+      "started_at": "2026-09-10T11:22:57.180772+00:00",
+      "exit_code": 0,
+      "summary": {},
+      "log_file": "jailbreak-docs-build.log"
+    },
+    {
+      "name": "syntax",
+      "command": [
+        "npm",
+        "run",
+        "check"
+      ],
+      "source_sha": "9b73d1167983076687cf078a3992144e4a18794a",
+      "started_at": "2026-09-10T11:22:58.557000+00:00",
+      "exit_code": 0,
+      "summary": {},
+      "log_file": "jailbreak-docs-syntax.log"
+    }
+  ],
+  "interpretation": {
+    "source_presence": "A located file, not semantic completeness.",
+    "test_presence": "A committed test, not automatically a passing run.",
+    "fixture_success": "The SDK/CLR fixture was produced, not proof of JavaScript conversion.",
+    "ci_success": "The exact workflow scope passed for the recorded SHA, not every requirement.",
+    "deployment_success": "Requires a successful deploy job for that SHA, not merely a source push."
+  }
+}
