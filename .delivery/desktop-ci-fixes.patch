@@ -70,3 +70,22 @@ diff --git a/tests/browser/test_desktop_commit.py b/tests/browser/test_desktop_c
 +        expect(self.page.locator('#symbols-status')).to_contain_text('Verified 1 original', timeout=30000)
 +        self.page.click('#symbols-attach')
 +        expect(self.page.locator('#symbols-status')).to_contain_text('Verified symbols attached', timeout=30000)
+diff --git a/apps/ide/desktop-responsive.css b/apps/ide/desktop-responsive.css
+--- a/apps/ide/desktop-responsive.css
++++ b/apps/ide/desktop-responsive.css
+@@ -6,0 +7,7 @@
++
++/* On phones, docked tools occupy their own row instead of covering the artboard.
++   Floating/auto-hidden windows remain explicit overlays that can be dismissed. */
++@media(max-width:700px){
++  .desktop-ide .desktop-workspace{grid-template-rows:minmax(160px,1fr) auto}
++  .desktop-ide .dock-right-stack{position:relative;grid-column:4;grid-row:2;right:auto;top:auto;width:100%;height:min(28vh,210px);max-height:none;z-index:auto;box-shadow:none;border-top:1px solid var(--border)}
++}
+diff --git a/tests/browser/test_design_canvas.py b/tests/browser/test_design_canvas.py
+--- a/tests/browser/test_design_canvas.py
++++ b/tests/browser/test_design_canvas.py
+@@ -91,0 +92,4 @@
++        toolbar=self.page.locator('#design-canvas-toolbar').bounding_box()
++        tools=self.page.locator('.dock-right-stack').bounding_box()
++        if tools:
++            self.assertGreaterEqual(tools['y'],toolbar['y']+toolbar['height'])

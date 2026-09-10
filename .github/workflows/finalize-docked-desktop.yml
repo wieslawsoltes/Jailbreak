@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.delivery/desktop-20260910*.json'
+      - '.delivery/desktop-ci-fixes.*'
       - '.delivery/apply-desktop.py'
       - '.github/workflows/finalize-docked-desktop.yml'
 permissions:
