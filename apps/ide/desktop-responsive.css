@@ -4,3 +4,10 @@
 @media(prefers-reduced-motion:reduce){.desktop-ide *{transition:none!important;animation:none!important}}
 
 .symbols-policy{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:10px;padding:10px}.symbols-policy>label{display:flex;flex-direction:column;gap:5px}.symbols-policy>label:has(input[type=checkbox]){flex-direction:row;align-items:center}.symbols-policy textarea{width:100%;max-width:100%;resize:vertical;border:1px solid var(--border);background:var(--editor);color:var(--text);font:11px/1.4 var(--mono);padding:6px}.symbols-policy details{grid-column:1/-1}.symbols-policy input[type=checkbox]{accent-color:var(--accent)}@media(max-width:800px){.symbols-policy{grid-template-columns:1fr}}
+
+/* On phones, docked tools occupy their own row instead of covering the artboard.
+   Floating/auto-hidden windows remain explicit overlays that can be dismissed. */
+@media(max-width:700px){
+  .desktop-ide .desktop-workspace{grid-template-rows:minmax(160px,1fr) auto}
+  .desktop-ide .dock-right-stack{position:relative;grid-column:4;grid-row:2;right:auto;top:auto;width:100%;height:min(28vh,210px);max-height:none;z-index:auto;box-shadow:none;border-top:1px solid var(--border)}
+}

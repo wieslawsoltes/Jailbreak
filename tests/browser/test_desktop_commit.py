@@ -1,5 +1,6 @@
 """Real browser acceptance for the independent tool-window desktop composition."""
 import base64
+import os
 import functools
 import http.server
 import json
@@ -17,7 +18,7 @@ class DesktopCommitTests(unittest.TestCase):
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
         cls.playwright = sync_playwright().start()
-        cls.browser = cls.playwright.chromium.launch(headless=True)
+        cls.browser = cls.playwright.chromium.launch(headless=True,**({'executable_path':os.environ['CHROMIUM_EXECUTABLE']} if os.environ.get('CHROMIUM_EXECUTABLE') else {}))
         cls.url = f'http://127.0.0.1:{cls.server.server_port}/'
 
     @classmethod
@@ -126,12 +127,12 @@ class DesktopCommitTests(unittest.TestCase):
     def test_design_property_edit_retains_input_and_root(self):
         self.page.select_option('#studio-session-mode', 'design')
         expect(self.page.locator('#preview-state')).to_contain_text('Running', timeout=30000)
-        self.page.locator('#studio-perspectives').get_by_role('button', name='Designer', exact=True).click()
+        self.page.locator('#studio-perspectives').get_by_role('tab', name='Designer', exact=True).click()
         self.tool('Debug Settings')
         self.page.check('#dev-hot')
         preview = self.page.frame_locator('#preview')
         preview.get_by_role('textbox').fill('Keep the live state')
-        frame = next(f for f in self.page.frames if f.frame_element().get_attribute('id') == 'preview')
+        frame = self.page.locator('#preview').element_handle().content_frame()
         identity = frame.evaluate('appHandle.root.uid')
         self.tool('Document Outline')
         self.page.locator('#dev-tree button').filter(has_text='#IncrementButton').click()
@@ -145,13 +146,13 @@ class DesktopCommitTests(unittest.TestCase):
 
     def test_binary_execution_uses_main_start_and_preserves_source_preview(self):
         self.page.frame_locator('#preview').get_by_role('textbox').fill('Independent source session')
-        self.page.locator('#studio-perspectives').get_by_role('button', name='Binary Studio', exact=True).click()
+        self.page.locator('#studio-perspectives').get_by_role('tab', name='Binary Studio', exact=True).click()
         binary = self.page.frame_locator('#studio-binary-host iframe')
         expect(binary.locator('#method')).to_contain_text('Calculator::Add', timeout=30000)
         expect(binary.locator('#runtime-state')).to_have_text('Ready', timeout=30000)
         self.page.click('#run')
         expect(binary.locator('#result')).to_have_text('42')
-        self.page.locator('#studio-perspectives').get_by_role('button', name='Split', exact=True).click()
+        self.page.locator('#studio-perspectives').get_by_role('tab', name='Split', exact=True).click()
         expect(self.page.frame_locator('#preview').get_by_role('textbox')).to_have_value('Independent source session')
         self.assertEqual(self.errors, [])
 
@@ -168,15 +169,17 @@ class DesktopCommitTests(unittest.TestCase):
             route.fulfill(status=200, content_type='application/octet-stream', headers={'Access-Control-Allow-Origin': '*'}, body=pdb)
         self.page.route('https://symbols.example/**', serve)
         self.tool('Symbols & Sources')
-        self.page.click('#symbols-refresh')
+        self.page.select_option('#symbols-library', 'library.binary.json')
         self.page.fill('#symbols-servers', 'https://symbols.example/store')
         expect(self.page.locator('#symbols-restore')).to_be_disabled()
-        self.page.click('#symbols-plan')
+        self.page.click('#symbols-inspect')
         self.assertEqual(requests, [])
         expect(self.page.locator('#symbols-report')).to_contain_text('jailbreak.nativesymbols.pdb')
         self.page.check('#symbols-consent')
         self.page.click('#symbols-restore')
-        expect(self.page.locator('#symbols-status')).to_contain_text('Attached verified native-pdb', timeout=30000)
+        expect(self.page.locator('#symbols-status')).to_contain_text('Verified 1 original', timeout=30000)
+        self.page.click('#symbols-attach')
+        expect(self.page.locator('#symbols-status')).to_contain_text('Verified symbols attached', timeout=30000)
         self.assertEqual(len(requests), 1)
         stored = json.loads(self.source('library.binary.json'))
         self.assertEqual(base64.b64decode(stored['symbols']['pdb']), pdb)

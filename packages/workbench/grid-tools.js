@@ -7,14 +7,22 @@ export function createGridTools({document:doc=globalThis.document,development,no
   title.append(el('strong','▦  GRID LAYOUT'),badge);
   const message=el('p','',{id:'grid-message',role:'status'}),body=el('div');root.append(title,message,body);
   const parent=doc.getElementById('dev-property-panel');parent.insertBefore(root,parent.children[1]??null);
-  let model=null,disposed=false;
+  let model=null,disposed=false,sourceIdentity=null;
   const input=(id,label,value,type='text')=>{const e=el('input',undefined,{id,'aria-label':label,type});e.value=String(value);return e;};
   const apply=request=>{try{development.editSource((text,file,offset)=>editGrid(text,file,offset,request));}catch(error){message.textContent=error.message;notify(error.message);}};
   const button=(id,label,fn)=>{const b=el('button',label,{id,type:'button'});b.onclick=fn;return b;};
   function refresh(){
-    if(disposed)return;body.replaceChildren();model=null;
-    try{const source=development.sourceForSelection();if(!source){root.hidden=true;return;}model=inspectGrid(source.text,source.file,source.offset);root.hidden=false;}
-    catch(error){root.hidden=true;return;}
+    if(disposed)return;
+    try{
+      const source=development.sourceForSelection();
+      if(!source){root.hidden=true;model=null;sourceIdentity=null;return;}
+      // Selection snapshots can arrive more than once after a reload. Do not
+      // replace focused inputs (and lose typed values) for an identical source.
+      if(sourceIdentity&&sourceIdentity.file===source.file&&sourceIdentity.offset===source.offset&&sourceIdentity.text===source.text){root.hidden=false;return;}
+      model=inspectGrid(source.text,source.file,source.offset);
+      sourceIdentity={file:source.file,offset:source.offset,text:source.text};
+      root.hidden=false;body.replaceChildren();
+    }catch(error){root.hidden=true;model=null;sourceIdentity=null;return;}
     badge.textContent=model.name+' · '+model.rows.length+' × '+model.columns.length;
     message.textContent=model.child?'Choose a cell or edit placement. Track changes preserve child identities.':'Select a direct child to place it. Track edits update affected indices and spans.';
     for(const axis of ['rows','columns']){
@@ -42,6 +50,6 @@ export function createGridTools({document:doc=globalThis.document,development,no
     for(const [label,field]of [['Row gap',rowGap],['Column gap',columnGap]]){const l=el('label',label);l.append(field);gaps.append(l);}
     gaps.append(button('grid-apply-gaps','Apply gaps',()=>apply({kind:'spacing',rowSpacing:rowGap.value,columnSpacing:columnGap.value})));body.append(gaps);
   }
-  const unsubscribe=development.subscribe(({event})=>{if(['selected','reloaded'].includes(event))refresh();else if(['workspace-reset','session-starting','session-stopped'].includes(event)){root.hidden=true;model=null;}});
+  const unsubscribe=development.subscribe(({event})=>{if(['selected','reloaded'].includes(event))refresh();else if(['workspace-reset','session-starting','session-stopped'].includes(event)){root.hidden=true;model=null;sourceIdentity=null;}});
   return {refresh,dispose(){disposed=true;unsubscribe();root.remove();}};
 }

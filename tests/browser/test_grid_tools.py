@@ -38,7 +38,12 @@ class GridToolsTests(unittest.TestCase):
     def test_track_sizes_spacing_and_rendered_bounds(self):
         self.select('Layout');fill(self.page,'#grid-columns','200,2*,180');click(self.page,'#grid-apply-columns')
         expect(self.page.locator('#dev-status')).to_contain_text('Hot reload 1',timeout=30000)
-        self.select('Input');fill(self.page,'#grid-row-gap','20');fill(self.page,'#grid-column-gap','10');click(self.page,'#grid-apply-gaps')
+        self.select('Input');fill(self.page,'#grid-row-gap','20');fill(self.page,'#grid-column-gap','10')
+        # A repeated selection response must not reset partially entered values.
+        self.select('Input')
+        expect(self.page.locator('#grid-row-gap')).to_have_value('20')
+        expect(self.page.locator('#grid-column-gap')).to_have_value('10')
+        click(self.page,'#grid-apply-gaps')
         expect(self.page.locator('#dev-status')).to_contain_text('Hot reload 2',timeout=30000)
         frame=self.page.frames[-1];self.assertEqual(frame.evaluate("getComputedStyle(appHandle.root.Layout.element).columnGap"),'10px')
         self.assertEqual(frame.evaluate("getComputedStyle(appHandle.root.Input.element).gridColumnStart"),'1')

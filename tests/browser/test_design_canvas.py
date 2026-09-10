@@ -89,6 +89,10 @@ class DesignCanvasTests(unittest.TestCase):
         expect(self.page.locator('#design-align-top')).to_be_disabled()
         self.page.set_viewport_size({'width':390,'height':844})
         close_settings(self.page)
+        toolbar=self.page.locator('#design-canvas-toolbar').bounding_box()
+        tools=self.page.locator('.dock-right-stack').bounding_box()
+        if tools:
+            self.assertGreaterEqual(tools['y'],toolbar['y']+toolbar['height'])
         click(self.page,'#design-fit')
         self.assertEqual(self.page.evaluate('document.documentElement.scrollWidth'),390)
         self.assertEqual(self.errors,[])

@@ -13,7 +13,7 @@ export function createMenuBar({document:doc=globalThis.document,host,commands,no
   function populate(menu,items,isSub=false){
     const nested=new Map();
     for(const command of items){const group=command.menuGroup;if(group&&!isSub){if(!nested.has(group)){nested.set(group,[]);const b=el('button',undefined,{type:'button',role:'menuitem','aria-label':group,'aria-haspopup':'menu','aria-expanded':'false'});b.append(el('span',group),el('span','›',{class:'menu-arrow'}));const show=()=>{sub?.remove();sub=el('div',undefined,{class:'desktop-popup desktop-submenu',role:'menu','aria-label':group});populate(sub,nested.get(group),true);doc.body.append(sub);position(sub,b,true);b.setAttribute('aria-expanded','true');};b.onclick=()=>{show();sub.querySelector('button:not(:disabled)')?.focus();};b.onpointerenter=show;menu.append(b);}nested.get(group).push(command);continue;}
-      const b=el('button',undefined,{type:'button',role:command.checked?'menuitemcheckbox':'menuitem'});b.disabled=!enabled(command);
+      const b=el('button',undefined,{type:'button',role:command.checked?'menuitemcheckbox':'menuitem'});b.disabled=!enabled(command);b.setAttribute('aria-label',command.menuLabel??command.label.replace(/^[^:]+:\s*/,''));
       if(command.checked)b.setAttribute('aria-checked',String(!!command.checked()));
       b.append(el('span',command.checked?.()?'✓':'',{class:'menu-check'}),el('span',command.menuLabel??command.label.replace(/^[^:]+:\s*/,''),{class:'menu-label'}));
       if(command.shortcut)b.append(el('kbd',command.shortcut));b.onclick=()=>execute(command);b.onpointerenter=()=>{b.focus({preventScroll:true});if(!isSub){sub?.remove();sub=null;}};menu.append(b);
