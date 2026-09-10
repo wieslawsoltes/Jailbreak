@@ -1,3 +1,4 @@
+import {createSymbolTools} from './symbols.js';
 import {createDockWorkspace} from './docking.js';
 import {element,action,icon} from './studio-ui.js';
 import {searchWorkspace} from './navigation.js';
@@ -5,8 +6,9 @@ import {searchWorkspace} from './navigation.js';
 export function createDesktopWorkbench({document:doc=globalThis.document,shell,development,debugContext,binaryClient,bottomPanels,showPerspective,active,documents,open,closeDocument,reopenDocument,workspace,notify,compile}) {
   const el=(tag,text,attrs)=>element(doc,tag,text,attrs),$=id=>doc.getElementById(id);
   const storageKey='jailbreak.docking.v1',layoutKey='jailbreak.named-layouts.v1';
-  const read=key=>{try{return JSON.parse(localStorage.getItem(key))??{};}catch{return {};}};
-  const write=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value));}catch{notify('Layout persistence is unavailable.');}};
+  const sessionLayouts=new Map();let storageWarning=false;
+  const read=key=>{try{return JSON.parse(localStorage.getItem(key))??sessionLayouts.get(key)??{};}catch{return sessionLayouts.get(key)??{};}};
+  const write=(key,value)=>{sessionLayouts.set(key,structuredClone(value));try{localStorage.setItem(key,JSON.stringify(value));}catch{if(!storageWarning){storageWarning=true;notify('Browser storage is unavailable; layouts are kept for this session.');}}};
   const guard=fn=>{try{const r=fn();if(r?.catch)r.catch(e=>notify(e.message));return r;}catch(e){notify(e.message);}};
   const b=(id,label,glyph,fn)=>action(doc,id,label,glyph,()=>guard(fn));
   let current='split',disposed=false;const off=[];
@@ -44,7 +46,9 @@ export function createDesktopWorkbench({document:doc=globalThis.document,shell,d
   const errorHost=el('section',undefined,{id:'desktop-errors'});const errorToolbar=$('studio-error-toolbar');errorToolbar.hidden=false;errorHost.append(errorToolbar,bottomPanels.get('problems'));
   const outputHost=el('section',undefined,{id:'desktop-output'}),outputBar=el('div',undefined,{class:'desktop-window-toolbar'});outputBar.append(el('span','Build & application'),b('desktop-clear-output','Clear output','close',()=>{$('output').textContent='';}));outputHost.append(outputBar,bottomPanels.get('output'));
   for(const panel of bottomPanels.values())panel.hidden=false;
+  const symbols=createSymbolTools({document:doc,workspace,development,compile,notify,activateSource:()=>showPerspective('split',{enable:false})});off.push(()=>symbols.dispose());
   const definitions=[
+    {id:'symbols',title:'Symbols & Sources',icon:'box',node:symbols.node,zone:'bottom',mode:'hidden'},
     {id:'solution',title:'Solution Explorer',icon:'files',node:solution,zone:'right'},
     {id:'outline',title:'Document Outline',icon:'design',node:hierarchy,zone:'right'},
     {id:'properties',title:'Properties',icon:'settings',node:properties,zone:'right-lower'},
@@ -102,6 +106,8 @@ export function createDesktopWorkbench({document:doc=globalThis.document,shell,d
     {label:'Build: Build solution',shortcut:'Ctrl+Shift+B',run:()=>current==='binary'?binaryClient.run('compile'):compile()},
     {label:'Debug: Start / Continue',shortcut:'F5',run:target('run')},
     ...[['into','Step Into','F11'],['over','Step Over','F10'],['out','Step Out','Shift+F11'],['stop','Stop Debugging','Shift+F5'],['restart','Restart','Ctrl+Shift+F5'],['break','Break All','']].map(([key,label,shortcut])=>({label:'Debug: '+label,shortcut,enabled:()=>!$('studio-debug-'+key).disabled,run:target('studio-debug-'+key)})),
+    {label:'Debug: Cancel current invocation',enabled:()=>!!debugContext.state().paused,run:()=>debugContext.command('cancel')},
+    {label:'Debug: Restore symbols and original sources',run:()=>dock.activate('symbols')},
     {label:'Debug: Exception Settings',run:()=>dock.activate('debug-settings')},
     {label:'Tools: Debug settings',run:()=>dock.activate('debug-settings')},
     {label:'Tools: Light theme',checked:()=>doc.body.classList.contains('light'),run:()=>{if(!doc.body.classList.contains('light'))$('theme').click();}},

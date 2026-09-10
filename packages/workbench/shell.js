@@ -1,3 +1,4 @@
+import {createMenuBar} from './menus.js';
 import {DocumentPositions,rankItems,documentSymbols,searchWorkspace,findText,replaceText,lineOffset} from './navigation.js';
 import {installSplitters} from './layout.js';
 /** Optional workbench shell over the real editor/compiler. No application code is evaluated here. */
@@ -12,7 +13,7 @@ export function createWorkbenchShell({document:doc=globalThis.document,documents
   doc.body.classList.add('wb-studio');
   const commandButton=button('Search everywhere…','wb-command',()=>show('commands'));commandButton.append(el('kbd','Ctrl ⇧ P'));commandButton.setAttribute('aria-haspopup','dialog');
   const menu=el('nav',undefined,{'aria-label':'Main menu',class:'wb-menubar'});
-  for(const [group,label]of [['File','File'],['Edit','Edit'],['View','View'],['Build','Build'],['Debug','Run'],['Help','Help']])menu.append(button(label,'wb-menu-'+group.toLowerCase(),()=>show('commands',group+' ')));
+  // The live command registry is populated below; menus are actual menu surfaces.
   doc.querySelector('.topbar').insertBefore(menu,doc.querySelector('.top-actions'));menu.after(commandButton);
   doc.querySelector('.brand .workbench').textContent='Studio';doc.querySelector('.brand strong').textContent='Jailbreak';
   const view=el('select',undefined,{id:'wb-view-mode','aria-label':'Editor view mode'});for(const [value,label]of [['split','Code + Preview'],['source','Code only'],['preview','Preview only']])view.append(el('option',label,{value}));view.onchange=()=>{doc.body.dataset.view=view.value;};$('run').parentElement.insertBefore(view,$('run'));
@@ -23,7 +24,7 @@ export function createWorkbenchShell({document:doc=globalThis.document,documents
     ['Build: Compile and run','run','Ctrl+Enter'],['Build: Project profiles','build-profile',''],['Debug: Open developer tools','development-tools',''],['Debug: Stop application','stop',''],
     ['Debug: Continue','dev-debug-continue','F8'],['Debug: Step over','dev-debug-over','F10'],['Debug: Step into','dev-debug-into','F11'],['Debug: Step out','dev-debug-out','Shift+F11'],
     ['View: Toggle light / dark theme','theme',''],['View: Expand preview','expand-preview','']
-  ].map(([label,id,shortcut])=>({label,shortcut,run:()=>{const target=$(id);if(!target)throw new Error('Command is not available in this workspace');if(target.disabled)throw new Error('Command is unavailable in the current application state');target.click();}}));
+  ].map(([label,id,shortcut])=>({label,shortcut,enabled:()=>!!$(id)&&!$(id).disabled,run:()=>{const target=$(id);if(!target)throw new Error('Command is not available in this workspace');if(target.disabled)throw new Error('Command is unavailable in the current application state');target.click();}}));
   commands.push(...[
     {label:'File: Quick open document',shortcut:'Ctrl+P',run:()=>show('files')},
     {label:'Edit: Find in document',shortcut:'Ctrl+F',run:()=>openFind()},
@@ -40,6 +41,7 @@ export function createWorkbenchShell({document:doc=globalThis.document,documents
     {label:'Help: Mandatory compatibility targets',run:()=>window.open('./docs/mandatory-targets-status.md','_blank','noopener')},
     {label:'Help: Debugger and designer documentation',run:()=>window.open('./docs/core-development-tools.md','_blank','noopener')}
   ]);
+  const menus=createMenuBar({document:doc,host:menu,commands:()=>commands,notify});
   const dialog=el('dialog',undefined,{id:'wb-palette','aria-labelledby':'wb-palette-title'}),title=el('h2','Search everywhere',{id:'wb-palette-title'}),query=el('input',undefined,{id:'wb-palette-query',autocomplete:'off',spellcheck:'false',role:'combobox','aria-expanded':'true','aria-controls':'wb-palette-results','aria-autocomplete':'list','aria-label':'Search command, file, symbol or text'}),results=el('div',undefined,{id:'wb-palette-results',role:'listbox'}),hint=el('div','↑ ↓ Navigate · Enter Open · Esc Close',{class:'wb-palette-hint'});
   const dialogTop=el('div',undefined,{class:'wb-dialog-top'});dialogTop.append(title,button('Esc','wb-close-palette',()=>dialog.close()));dialog.append(dialogTop,query,results,hint);doc.body.append(dialog);
   let mode='commands',items=[],index=0,previousFocus=null;
@@ -48,17 +50,17 @@ export function createWorkbenchShell({document:doc=globalThis.document,documents
   function navigate(file,start=0,end=start){open(file,start,end);}
   function refresh(){
     const text=query.value;let info='';
-    if(mode==='commands')items=rankItems(commands,text);
+    if(mode==='commands')items=rankItems(commands.filter(c=>!c.hidden),text.startsWith('>')?text.slice(1):text);
     if(mode==='files')items=rankItems(Object.keys(documents()).map(file=>({label:file.split('/').at(-1),detail:file,run:()=>navigate(file)})),text);
     if(mode==='symbols'){const file=active(),source=documents()[file]??editor.value;items=rankItems(documentSymbols(source,file).map(symbol=>({...symbol,detail:symbol.detail+' · '+symbol.line,run:()=>navigate(file,symbol.start)})),text);if(!items.length)info='No parsed C# or named XAML symbols. Unsupported syntax is not invented.';}
     if(mode==='search'){const found=searchWorkspace(documents(),text);items=found.rows.map(row=>({...row,run:()=>navigate(row.file,row.start,row.end)}));info=found.truncated?'Result budget reached. Refine your search.':text?items.length+' matching locations':'Enter literal text to search across source files.';}
     if(mode==='line'){const m=/^\s*(\d+)(?::(\d+))?\s*$/.exec(text);items=m?[{label:'Go to line '+m[1]+', column '+(m[2]??1),detail:active(),run:()=>{const at=lineOffset(editor.value,+m[1],+(m[2]??1));selectRange(at,at);}}]:[];info='Enter line or line:column (1-based).';}
     results.replaceChildren();index=0;
-    items.forEach((item,i)=>{const b=button('', 'wb-result-'+i,()=>execute(i));b.setAttribute('role','option');b.append(el('span',item.label,{class:'wb-result-label'}));if(item.detail)b.append(el('span',item.detail,{class:'wb-result-detail'}));if(item.shortcut)b.append(el('kbd',item.shortcut));results.append(b);});
+    items.forEach((item,i)=>{const b=button('', 'wb-result-'+i,()=>execute(i));b.setAttribute('role','option');if(item.enabled&&!item.enabled())b.setAttribute('aria-disabled','true');b.append(el('span',item.label,{class:'wb-result-label'}));if(item.detail)b.append(el('span',item.detail,{class:'wb-result-detail'}));if(item.shortcut)b.append(el('kbd',item.shortcut));results.append(b);});
     if(!items.length)results.append(el('p',info||'No matching commands or documents.',{class:'wb-empty'}));hint.textContent=info||'↑ ↓ Navigate · Enter Open · Esc Close';selectIndex(0);
   }
   function selectIndex(n){index=Math.max(0,Math.min(items.length-1,n));for(const [i,b]of [...results.querySelectorAll('[role=option]')].entries())b.setAttribute('aria-selected',String(i===index));if(items.length){query.setAttribute('aria-activedescendant','wb-result-'+index);results.children[index].scrollIntoView({block:'nearest'});}else query.removeAttribute('aria-activedescendant');}
-  function execute(i){const item=items[i];if(!item)return;close();safely(item.run);}
+  function execute(i){const item=items[i];if(!item)return;if(item.enabled&&!item.enabled())return notify('Command is unavailable in this context');close();safely(item.run);}
   function show(next,initial=''){mode=next;previousFocus=doc.activeElement;title.textContent={commands:'Commands',files:'Open document',symbols:'Go to symbol',search:'Search workspace',line:'Go to line'}[mode];query.value=initial;query.placeholder={commands:'Type a command…',files:'Type a file name…',symbols:'Type a symbol name…',search:'Search literal source text…',line:'Line:column'}[mode];if(!dialog.open)dialog.showModal();refresh();query.focus();query.select();}
   query.addEventListener('input',()=>safely(refresh));query.addEventListener('keydown',event=>{if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();selectIndex(index+(event.key==='ArrowDown'?1:-1));}if(event.key==='Enter'){event.preventDefault();execute(index);}});
   // Find/replace is a source transaction on the real editor. Read-only binary
@@ -83,14 +85,15 @@ export function createWorkbenchShell({document:doc=globalThis.document,documents
       if(key==='p')action=()=>show(e.shiftKey?'commands':'files');else if(key==='o'&&e.shiftKey)action=()=>show('symbols');else if(key==='f')action=()=>e.shiftKey?show('search'):openFind();else if(key==='h')action=()=>openFind(true);else if(key==='g')action=()=>show('line');else if(key==='/')action=toggleComment;
       if(action){e.preventDefault();safely(action);return;}
     }
-    const command={F8:'dev-debug-continue',F10:'dev-debug-over',F11:e.shiftKey?'dev-debug-out':'dev-debug-into'}[e.key];if(command){e.preventDefault();if($(command)&&!$(command).disabled)$(command).click();}
+    const command={F8:'run',F10:'studio-debug-over',F11:e.shiftKey?'studio-debug-out':'studio-debug-into'}[e.key];if(command){e.preventDefault();if($(command)&&!$(command).disabled)$(command).click();}
   }
   const protectReadOnly=e=>{if(editor.readOnly&&e.key==='Tab'){e.preventDefault();e.stopImmediatePropagation();}};doc.addEventListener('keydown',keys,true);editor.addEventListener('keydown',protectReadOnly,true);
-  return {show,layout,
+  return {show,layout,commands:()=>[...commands],
+    execute(label){const command=commands.find(c=>c.label===label);if(!command)throw new Error('Unknown command: '+label);if(command.enabled&&!command.enabled())throw new Error('Command is unavailable in this context');return command.run();},
     registerCommands(entries){if(!Array.isArray(entries)||entries.some(e=>typeof e.label!=='string'||typeof e.run!=='function'))throw new TypeError('Invalid workbench command');commands.push(...entries);return ()=>{for(const entry of entries){const at=commands.indexOf(entry);if(at>=0)commands.splice(at,1);}};},
     beforeRender(){savePosition();internal=true;},
     afterRender(){current=active();const p=positions.get(current,editor.value.length);editor.setSelectionRange(p.start,p.end);editor.scrollTop=p.top;editor.scrollLeft=p.left;internal=false;editor.dispatchEvent(new Event('scroll'));editor.dispatchEvent(new Event('select'));if(!findBar.hidden)updateFind();},
     reset(){positions.clear();current='';},
-    dispose(){layout.dispose();doc.removeEventListener('keydown',keys,true);editor.removeEventListener('keydown',protectReadOnly,true);for(const event of ['select','keyup','click','scroll'])editor.removeEventListener(event,savePosition);dialog.remove();findBar.remove();}
+    dispose(){menus.dispose();layout.dispose();doc.removeEventListener('keydown',keys,true);editor.removeEventListener('keydown',protectReadOnly,true);for(const event of ['select','keyup','click','scroll'])editor.removeEventListener(event,savePosition);dialog.remove();findBar.remove();}
   };
 }

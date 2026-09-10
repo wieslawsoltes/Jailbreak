@@ -1,6 +1,6 @@
 import {binaryPreviewDebugger} from '../development/binary-preview.js';
 import {mappedScript} from '../development/source-map.js';
-import { escapeJs } from '../compiler-core/index.js';
+import {escapeJs} from '../compiler-core/index.js';
 /** Export an offline method runner. Callers embed the result in sandbox="allow-scripts". */
 export function createBinaryApplicationHtml(compilation,runtimeSource,{channel='binary-preview',development={}}={}){
   if(!compilation.success)throw new Error('Cannot export a failed binary conversion');

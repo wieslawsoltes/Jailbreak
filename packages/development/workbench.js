@@ -2,7 +2,6 @@ import {editSelectionProperties} from './design-transactions.js';
 import {inspectSource,editProperty,editExpression,reparentControl,insertControl,removeControl,moveControl,duplicateControl,EditHistory,palette} from './designer.js';
 import {planReload,reloadScript} from './reload.js';
 import {mappedScript,updateGeneratedLocations} from './source-map.js';
-
 /** IDE client. The preview owns runtime objects; this client only sees serializable records. */
 export function createDevelopmentWorkbench({document:doc=globalThis.document,getFiles,getActive,openFile,applySource,build,persist,send,showGenerated=()=>{},sharedHistory=null}){
   const listeners=new Set();
@@ -25,8 +24,8 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
   const tree=el('div');tree.className='dev-list';tree.id='dev-tree';tree.setAttribute('role','tree');const row=el('div');row.className='dev-row';row.append(refresh,pick);
   const toolbox=el('select');toolbox.id='dev-toolbox';toolbox.setAttribute('aria-label','Control palette');for(const type of palette){const o=el('option',type);o.value=type;toolbox.append(o);}
   const duplicate=el('button','Duplicate');duplicate.id='dev-duplicate';duplicate.type='button';
-  const add=el('button','Insert'),remove=el('button','Delete'),up=el('button','Move up'),down=el('button','Move down');for(const b of [add,remove,up,down])b.type='button';const tools=el('div');tools.className='dev-row';tools.append(toolbox,add,duplicate,remove,up,down);
-  const undo=el('button','Undo design'),redo=el('button','Redo design');undo.type=redo.type='button';const historyRow=el('div');historyRow.className='dev-row';historyRow.append(undo,redo);
+  const add=el('button','Insert'),remove=el('button','Delete'),up=el('button','Move up'),down=el('button','Move down');for(const b of [add,remove,up,down])b.type='button';const tools=el('div');tools.className='dev-row';add.id='dev-insert';remove.id='dev-delete';up.id='dev-move-up';down.id='dev-move-down';tools.append(toolbox,add,duplicate,remove,up,down);
+  const undo=el('button','Undo design'),redo=el('button','Redo design');undo.type=redo.type='button';const historyRow=el('div');historyRow.className='dev-row';undo.id='dev-design-undo';redo.id='dev-design-redo';historyRow.append(undo,redo);
   const destination=el('input');destination.id='dev-destination';destination.placeholder='Destination host name';destination.setAttribute('aria-label','Destination host name');const reparent=el('button','Move into');reparent.id='dev-reparent';reparent.type='button';const moveRow=el('div');moveRow.className='dev-row';moveRow.append(destination,reparent);
   hierarchy.append(el('h3','Visual hierarchy & palette'),row,tree,tools,moveRow,historyRow);
   const selection=el('div','Select a visual to inspect its source.'),propertyList=el('div');propertyList.id='dev-properties';propertyList.className='dev-list';
@@ -96,6 +95,8 @@ export function createDevelopmentWorkbench({document:doc=globalThis.document,get
     selection(){return designSelection.map(i=>({...i}));},
     subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},
     show(){panel.hidden=false;send('inspect');},
+    tasks(){return [...pausedTasks.values()].map(task=>structuredClone(task));},
+    selectTask(id){const task=pausedTasks.get(Number(id));if(!task)throw new Error('Task is not suspended');showPause(task);publish('debug-paused',task);},
     state(){return {settings:api.options(),paused:pausedTasks.get(pausedTask)??null,frameId:pausedFrame,selected:selected?.source??null};},
     mode(mode){
       if(!['release','design','cooperative','native'].includes(mode))throw new Error('Unknown development mode');

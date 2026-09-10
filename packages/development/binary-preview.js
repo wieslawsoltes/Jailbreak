@@ -1,16 +1,18 @@
+import {shortcutRelayScript} from '../workbench/preview-shortcuts.js';
 import {escapeJs} from '../compiler-core/index.js';
 /** Offline runner UI and channel bridge for the same cooperative scheduler used
  * by Studio. It displays already-serialized frames and never evaluates watches. */
 export function binaryPreviewDebugger(debug,settings={}){
   return `(function(){
 const settings=${escapeJs(settings)}, sources=${escapeJs(debug.sources??{})};
-const root=document.createElement('details');root.id='binary-debugger';root.open=true;
+${shortcutRelayScript("command=>send('ide-shortcut',command)","settings.hosted===true")}
+const root=document.createElement('details');root.id='binary-debugger';root.open=true;root.hidden=settings.hosted===true;
 const node=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
 root.append(node('summary','MSIL debugger · compiled continuations'));
 const state=node('div','Ready'),frames=node('select'),values=node('pre'),source=node('select'),listing=node('textarea'),line=node('input'),entry=node('input');
 state.id='binary-debug-state';state.setAttribute('role','status');frames.id='binary-debug-frames';frames.setAttribute('aria-label','Binary call stack');values.id='binary-debug-values';
 source.id='binary-debug-source';source.setAttribute('aria-label','Binary source document');listing.id='binary-debug-listing';listing.readOnly=true;listing.setAttribute('aria-label','Read-only binary source or disassembly');listing.rows=7;
-line.id='binary-debug-line';line.type='number';line.min='1';line.value='1';line.setAttribute('aria-label','Binary breakpoint line');entry.type='checkbox';entry.id='binary-debug-entry';
+line.id='binary-debug-line';line.type='number';line.min='1';line.value='1';line.setAttribute('aria-label','Binary breakpoint line');entry.type='checkbox';entry.id='binary-debug-entry';entry.checked=settings.breakOnEntry===true;
 const entryLabel=node('label','Break on entry');entryLabel.prepend(entry);
 for(const file of Object.keys(sources)){const option=node('option',file);option.value=file;source.append(option);}
 source.onchange=()=>listing.value=sources[source.value]??'';source.onchange();
@@ -47,7 +49,13 @@ document.getElementById('run').after(root);
 addEventListener('pagehide',()=>co.dispose());
 addEventListener('message',event=>{const m=event.data;if(event.source!==parent||m?.channel!==channel)return;try{
  if(m.kind==='debug-command')co.command(m.taskId,m.action);
- else if(m.kind==='configure-debug'&&Array.isArray(m.settings?.breakpoints))settings.breakpoints=m.settings.breakpoints.slice(0,1000);
+ else if(m.kind==='debug-frame')send('debug-frame',co.inspectFrame(m.taskId,m.frameId,m.paths??[]));
+ else if(m.kind==='debug-local')co.setLocal(m.taskId,m.frameId,m.name,m.value);
+ else if(m.kind==='configure-debug'){
+  if(Array.isArray(m.settings?.breakpoints))settings.breakpoints=m.settings.breakpoints.slice(0,1000);
+  if(typeof m.settings?.breakOnEntry==='boolean')entry.checked=m.settings.breakOnEntry;
+ }
+
 }catch(e){send('error',e.message);}});
 return {invoke(m,args,constructorArgs,instances){
  if(co.busy)throw new Error('Finish or cancel the active invocation first');

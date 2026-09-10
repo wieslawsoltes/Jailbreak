@@ -10,6 +10,7 @@ export async function bundleModules(root,entry,{expose=null,entryScript=false}={
     for(const match of imports){const dependency=path.resolve(path.dirname(file),match[2]);if(!dependency.startsWith(root+path.sep))throw new Error('Bundle dependency leaves source tree');await visit(dependency);const spec=match[1].trim(),id=moduleId(dependency);let declaration;if(spec.startsWith('* as ')){bindings.add(spec.slice(5));declaration=`const ${spec.slice(5)}=__modules[${JSON.stringify(id)}];`;}else if(spec.startsWith('{')){const items=spec.slice(1,-1).split(',').map(x=>x.trim()).filter(Boolean).filter(item=>{const local=item.split(/\s+as\s+/).at(-1);if(bindings.has(local))return false;bindings.add(local);return true;});declaration=items.length?`const {${items.join(',').replace(/\bas\b/g,':')}}=__modules[${JSON.stringify(id)}];`:'';}else throw new Error('Unsupported authored import: '+spec);source=source.replace(match[0],declaration);}
     const isEntry=path.resolve(root,entry)===file,exports=entryScript&&isEntry?[]:Object.keys(await import(pathToFileURL(file).href));
     source=source.replace(/^export\s+(?=(?:async\s+)?(?:class|function|const|let|var)\b)/gm,'');
+    source=source.replace(/^export\s*\{[^}]*\};?\s*$/gm,'');
     if(/^export\s/m.test(source))throw new Error('Unsupported authored export in '+file);
     if(entryScript&&isEntry)source=source.replaceAll('import.meta.url','document.baseURI');
     output.push(`__modules[${JSON.stringify(moduleId(file))}]=(()=>{\n${source}\nreturn {${exports.join(',')}};\n})();`);

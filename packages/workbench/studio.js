@@ -1,22 +1,31 @@
+import {createBinaryClient} from './binary-client.js';
+import {createDebugContext} from './debug-context.js';
+import {createDesktopWorkbench} from './desktop.js';
 import {createChangeReview} from './change-review.js';
 import {createGridTools} from './grid-tools.js';
 import {installEditorHistory} from './editor-history.js';
 import {createLanguageTools} from './language-tools.js';
 import {createDesignCanvas} from './design-canvas.js';
-import {element, action, icon, tabKeys} from './studio-ui.js';
-import {studioPreferences, diagnosticMatches, indentSource} from './studio-model.js';
+import {element,action,icon,tabKeys} from './studio-ui.js';
+import {studioPreferences,diagnosticMatches,indentSource} from './studio-model.js';
 import {createDebugWindows} from './studio-debug.js';
 import {lineOffset} from './navigation.js';
-
 /** The Studio client composes the existing compiler, development session and editor.
  * It never evaluates application code or takes ownership of preview runtime objects. */
 export function createStudio({workspace=null,document: doc = globalThis.document, development, active, open, closeDocument, reopenDocument, createDocument, shell, notify, persist, compile, documents}) {
   const $ = id => doc.getElementById(id), el = (tag, text, attrs) => element(doc, tag, text, attrs);
   const guard = fn => {try {return fn();} catch (error) {notify(error.message);}};
-  let initializing = true;
+  let initializing = true, desktop = null;
   const persistState = () => {if (!initializing) persist();};
   let prefs = studioPreferences(), ready = false, waitingPick = false, binary = null, diagnosticItems = [], disposed = false;
   const off = [];
+  const binaryChannel='studio-'+(crypto.randomUUID?.()??Array.from(crypto.getRandomValues(new Uint8Array(20)),v=>v.toString(16).padStart(2,'0')).join(''));
+  const binaryClient=createBinaryClient({notify,send:(action,payload)=>binary?.contentWindow.postMessage({jailbreakStudio:1,channel:binaryChannel,action,payload},'*')});
+  const debugContext=createDebugContext(development,binaryClient);
+  const binaryMessage=event=>{if(event.source!==binary?.contentWindow||event.data?.jailbreakBinaryStudio!==1||event.data.channel!==binaryChannel)return;if(event.data.event==='ide-shortcut'){shortcut(event.data.payload,'binary');return;}binaryClient.receive(event.data);if(event.data.event==='binary-log'){const out=$('output');out.textContent+='[Binary] '+String(event.data.payload.message).slice(0,8000)+'\n';}};
+  doc.defaultView.addEventListener('message',binaryMessage);off.push(()=>doc.defaultView.removeEventListener('message',binaryMessage));
+  const binaryTheme=new MutationObserver(()=>{binary?.contentWindow.postMessage({jailbreakStudio:1,channel:binaryChannel,action:'theme',payload:{light:doc.body.classList.contains('light')}},'*');});binaryTheme.observe(doc.body,{attributes:true,attributeFilter:['class']});off.push(()=>binaryTheme.disconnect());
+
   const sourceHistory=installEditorHistory({document:doc,active,documents,notify,shared:workspace?direction=>workspace.history(direction):null});
   const sourceTools=createLanguageTools({document:doc,documents,active,open,notify,history:sourceHistory});
   doc.body.classList.add('vs-studio');
@@ -25,19 +34,20 @@ export function createStudio({workspace=null,document: doc = globalThis.document
   doc.querySelector('.brand').append(el('span', 'STUDIO', {class: 'studio-wordmark'}));
   $('wb-command').firstChild.textContent = 'Search commands and files';
   doc.querySelector('#files-panel .section-label').firstChild.textContent = 'SOLUTION EXPLORER ';
-  doc.querySelector('.sidebar-note').replaceChildren(el('span', 'LOCAL WORKSPACE', {class: 'studio-eyebrow'}), el('p', 'Your source. Your browser.'), el('span', 'C# / XAML → JavaScript. Sources and builds stay on this device.'));
+  doc.querySelector('.sidebar-note')?.replaceChildren(el('span', 'LOCAL WORKSPACE', {class: 'studio-eyebrow'}), el('p', 'Your source. Your browser.'), el('span', 'C# / XAML → JavaScript. Sources and builds stay on this device.'));
   const toolbar = el('div', undefined, {class: 'studio-toolbar', role: 'toolbar', 'aria-label': 'Build, debug and designer commands'});
   doc.querySelector('.commandbar').after(toolbar);
   const mode = el('select', undefined, {id: 'studio-session-mode', 'aria-label': 'Execution configuration'});
   for (const [value, label] of [['release', 'Release'], ['design', 'Design session'], ['cooperative', 'Debug · In-IDE'], ['native', 'Debug · DevTools']]) mode.append(el('option', label, {value}));
-  mode.onchange = () => guard(() => {if (mode.value === 'cooperative' || mode.value === 'native') showTools('debug');development.mode(mode.value);});
+  mode.onchange = () => guard(() => {if(prefs.perspective==='binary'){binaryClient.mode(mode.value);return;}if (mode.value === 'cooperative' || mode.value === 'native') showTools('debug');development.mode(mode.value);});
   const modeWrap = el('label', undefined, {class: 'studio-configuration'});modeWrap.append(mode, el('span', 'Browser · JavaScript', {class: 'studio-target'}));
   const run = $('run');run.replaceChildren(icon(doc, 'play'), el('span', 'Start'), el('kbd', 'F5'));run.title = 'Build and run · F5';run.setAttribute('aria-label', 'Start application');
-  run.onclick = () => guard(() => development.state().paused ? development.command('continue') : compile());
+  run.onclick = () => guard(() => prefs.perspective==='binary'?binaryClient.run('start'):development.state().paused ? development.command('continue') : compile());
   const debugActions = el('div', undefined, {class: 'studio-debug-actions'});
   const buttons = {};
   for (const [command, title, glyph, key] of [['restart', 'Restart application', 'restart', 'Ctrl+Shift+F5'], ['stop', 'Stop application', 'stop', 'Shift+F5'], ['break', 'Pause at next statement', 'pause', ''], ['over', 'Step over', 'over', 'F10'], ['into', 'Step into', 'into', 'F11'], ['out', 'Step out', 'out', 'Shift+F11']]) {
     const b = action(doc, 'studio-debug-' + command, title, glyph, () => guard(() => {
+      if(prefs.perspective==='binary'){if(['restart','stop','break'].includes(command))binaryClient.run(command);else binaryClient.command(command);return;}
       if (command === 'restart') compile(true);
       else if (command === 'stop') $('stop').click();
       else if (command === 'break') $('dev-break-next').click();
@@ -51,7 +61,7 @@ export function createStudio({workspace=null,document: doc = globalThis.document
     const b = action(doc, 'studio-view-' + name, title, glyph, () => setPerspective(name));b.setAttribute('role', 'tab');b.setAttribute('aria-controls', name === 'binary' ? 'studio-binary-host' : 'studio-workspace-host');views.set(name, b);perspective.append(b);
   }
   off.push(tabKeys(perspective, b => b.click()));
-  const inspectorButton = action(doc, 'studio-inspector', 'Inspector', 'settings', () => {development.show();showTools(prefs.tools);});
+  const inspectorButton = action(doc, 'studio-inspector', 'Inspector', 'settings', () => {if(desktop)desktop.showProperties();else {development.show();showTools(prefs.tools);}});
   toolbar.append(run, modeWrap, debugActions, el('span', '', {class: 'studio-toolbar-divider'}), hot, perspective, inspectorButton);
   const buildProfile = $('build-profile');if (buildProfile) doc.querySelector('.commands').prepend(buildProfile);
   const oldBinaryLink = [...doc.querySelectorAll('.commands a')].find(a => a.getAttribute('href') === './binary/');if (oldBinaryLink) oldBinaryLink.remove();
@@ -79,7 +89,8 @@ export function createStudio({workspace=null,document: doc = globalThis.document
     binary = el('iframe', undefined, {id: 'studio-binary-frame', title: 'Integrated Binary Studio', sandbox: 'allow-scripts allow-downloads', referrerpolicy: 'no-referrer'});
     if (globalThis.__JailbreakAssets?.binaryHtml) binary.srcdoc = globalThis.__JailbreakAssets.binaryHtml;
     else binary.src = new URL('./binary/', doc.baseURI).href;
-    binaryHost.append(caption, binary);
+    binary.addEventListener('load',()=>{binary.contentWindow.postMessage({jailbreakStudio:1,channel:binaryChannel,action:'attach'},'*');binary.contentWindow.postMessage({jailbreakStudio:1,channel:binaryChannel,action:'theme',payload:{light:doc.body.classList.contains('light')}},'*');});
+    binaryHost.append(binary);
   }
   function setPerspective(name, {save = true, enable = true} = {}) {
     prefs.perspective = studioPreferences({perspective: name}).perspective;
@@ -98,7 +109,7 @@ export function createStudio({workspace=null,document: doc = globalThis.document
       if (enable && !development.options().enabled) {waitingPick = true;development.mode('design');}
       else if (enable && ready) development.pick(true);
     } else {waitingPick=false;development.pick(false);}
-    if (save) persistState();
+    debugContext.select(isBinary?'binary':'source');desktop?.context(prefs.perspective);if(desktop)syncSession();if (save) persistState();
   }
   $('wb-view-mode').onchange = () => setPerspective($('wb-view-mode').value === 'preview' ? 'design' : $('wb-view-mode').value, {enable: false});
   const dock = $('development-panel'), groups = {hierarchy: $('dev-hierarchy-panel'), properties: $('dev-property-panel'), debug: $('dev-debugger-panel')};
@@ -110,6 +121,7 @@ export function createStudio({workspace=null,document: doc = globalThis.document
   const columns = dock.querySelector('.dev-columns');columns.id = 'studio-inspector-content';columns.setAttribute('role', 'tabpanel');dock.prepend(toolTabs);
   off.push(tabKeys(toolTabs, b => b.click()));
   function showTools(key, show = true) {
+    if(desktop){if(show)desktop.showTools(key);return;}
     prefs.tools = studioPreferences({tools: key}).tools;
     if (show) development.show();
     groups.hierarchy.hidden = groups.properties.hidden = prefs.tools === 'debug';groups.debug.hidden = prefs.tools === 'design';
@@ -131,7 +143,7 @@ export function createStudio({workspace=null,document: doc = globalThis.document
   const tiles = el('div', undefined, {class: 'studio-toolbox-tiles'});
   for (const option of $('dev-toolbox').options) {
     const b = action(doc, '', option.value, ['Grid', 'StackPanel', 'Canvas', 'Border'].includes(option.value) ? 'design' : 'box', () => {
-      $('dev-toolbox').value = option.value;const insert = [...groups.hierarchy.querySelectorAll('button')].find(b => b.textContent === 'Insert');insert?.click();
+      $('dev-toolbox').value = option.value;$('dev-insert').click();
     });tiles.append(b);
   }
   toolbox.append(tiles);groups.hierarchy.append(toolbox);
@@ -140,8 +152,8 @@ export function createStudio({workspace=null,document: doc = globalThis.document
   $('problems-tab').firstChild.textContent = 'Error List ';$('output-tab').textContent = 'Output';
   const bottomButtons = new Map([['problems', $('problems-tab')], ['output', $('output-tab')]]);
   const bottomPanels = new Map([['problems', $('problems')], ['output', $('output')]]);
-  const debug = createDebugWindows({document: doc, development, active,
-    open: (file, offset, line = 1, column = 1) => {if (Object.hasOwn(documents(), file)) {if (prefs.perspective === 'binary') setPerspective('split');else if (prefs.perspective === 'design') setPerspective('split', {enable: false});open(file, offset ?? lineOffset(documents()[file], line, column));}},
+  const debug = createDebugWindows({document: doc, development:debugContext, active,
+    open: (file, offset, line = 1, column = 1) => {if(debugContext.kind==='binary'){binaryClient.open({file,offset,line,column});return;}if (Object.hasOwn(documents(), file)) {if (prefs.perspective === 'binary') setPerspective('split');else if (prefs.perspective === 'design') setPerspective('split', {enable: false});open(file, offset ?? lineOffset(documents()[file], line, column));}},
     notify, activate: name => activateBottom(name)});
   for (const [key, panel] of debug.panels) {
     const b = action(doc, 'studio-tab-' + key, {stack: 'Call Stack', locals: 'Locals', watch: 'Watch', breakpoints: 'Breakpoints'}[key], null, () => activateBottom(key));
@@ -157,6 +169,7 @@ export function createStudio({workspace=null,document: doc = globalThis.document
     rows.forEach((row, i) => {row.hidden = !diagnosticMatches(diagnosticItems[i] ?? {message: row.textContent}, {query: errorFilter.value, severity: severity.value});if (!row.hidden) visible++;});count.textContent = `${visible} of ${rows.length} messages`;
   }
   function activateBottom(name, save = true) {
+    if(desktop){prefs.bottom=studioPreferences({bottom:name}).bottom;desktop.activateBottom(prefs.bottom);if(save)persistState();return;}
     prefs.bottom = studioPreferences({bottom: name}).bottom;
     for (const [key, p] of bottomPanels) {p.hidden = key !== prefs.bottom;p.setAttribute('role', 'tabpanel');p.setAttribute('aria-labelledby', bottomButtons.get(key).id);}
     for (const [key, b] of bottomButtons) {b.setAttribute('role', 'tab');b.classList.toggle('active', key === prefs.bottom);b.setAttribute('aria-selected', String(key === prefs.bottom));b.setAttribute('aria-controls', bottomPanels.get(key).id);b.tabIndex = key === prefs.bottom ? 0 : -1;}
@@ -167,27 +180,29 @@ export function createStudio({workspace=null,document: doc = globalThis.document
   const liveBadge = el('span', 'Ready', {id: 'studio-session-badge'}), secure = el('span', 'LOCAL · ISOLATED', {class: 'studio-secure-label'});
   doc.querySelector('.statusbar').append(liveBadge, secure);
   function syncSession() {
-    const state = development.state(), s = state.settings;
+    const isBinary=prefs.perspective==='binary';const state = debugContext.state(), s = state.settings;
     mode.value = !s.enabled ? 'release' : s.cooperativeDebug ? 'cooperative' : s.nativeBreaks ? 'native' : 'design';
-    hot.setAttribute('aria-pressed', String(s.hotReload));hot.disabled = !s.enabled;
+    hot.setAttribute('aria-pressed', String(s.hotReload));hot.disabled = !s.enabled||isBinary;
     for (const k of ['over', 'into', 'out']) buttons[k].disabled = !state.paused;
-    buttons.break.disabled = !s.enabled || !ready || !!state.paused;
+    buttons.break.disabled = !s.enabled || !(isBinary?state.ready:ready) || !!state.paused;
+    if(isBinary){run.disabled=state.busy&&!state.paused;buttons.restart.disabled=false;buttons.stop.disabled=!state.ready&&!state.busy;mode.querySelector('[value=native]').disabled=true;}else {mode.querySelector('[value=native]').disabled=false;buttons.restart.disabled=false;buttons.stop.disabled=false;}
     run.querySelector('span').textContent = state.paused ? 'Continue' : 'Start';run.setAttribute('aria-label', state.paused ? 'Continue application' : 'Start application');
     doc.body.classList.toggle('studio-debug-paused', !!state.paused);
     debug.refresh();
   }
-  const unsubscribe = development.subscribe(message => {
-    if (message.event === 'debug-paused') {liveBadge.textContent = 'Paused';liveBadge.dataset.state = 'paused';development.show();}
+  const unsubscribe = debugContext.subscribe(message => {
+    if (message.event === 'debug-paused') {liveBadge.textContent = 'Paused';liveBadge.dataset.state = 'paused';if(desktop)desktop.paused();else development.show();}
     else if (message.event === 'debug-resumed' || message.event === 'debug-completed') {liveBadge.textContent = ready ? 'Running' : 'Constructing';liveBadge.dataset.state = ready ? 'running' : 'building';}
     else if (message.event === 'session-stopped' || message.event === 'workspace-reset') {ready = false;liveBadge.textContent = 'Stopped';liveBadge.dataset.state = '';}
     else if (message.event === 'reloaded') {liveBadge.textContent = 'Reloaded · r' + message.payload.revision;liveBadge.dataset.state = 'running';}
     else if (message.event === 'tool-error' || message.event === 'reload-error') notify(message.payload.message);
+    if(message.event==='binary-state'&&prefs.perspective==='binary'){liveBadge.textContent=message.payload.busy?(binaryClient.state().paused?'Paused':'Running'):message.payload.ready?'Binary ready':'Binary stopped';liveBadge.dataset.state=message.payload.busy?'paused':message.payload.ready?'running':'';}
     syncSession();
   });
   function keys(e) {
     if (e.defaultPrevented || e.isComposing || doc.querySelector('dialog[open]')) return;
-    if (e.key === 'F9') {e.preventDefault();guard(() => development.toggleBreakpoint(active(), editorLine()));}
-    else if (e.key === 'F5') {e.preventDefault();e.stopImmediatePropagation();guard(() => e.shiftKey ? ((e.ctrlKey || e.metaKey) ? compile(true) : $('stop').click()) : run.click());}
+    if (e.key === 'F9'&&prefs.perspective!=='binary') {e.preventDefault();guard(() => development.toggleBreakpoint(active(), editorLine()));}
+    else if (e.key === 'F5') {e.preventDefault();e.stopImmediatePropagation();guard(() => e.shiftKey ? ((e.ctrlKey || e.metaKey) ? buttons.restart.click() : buttons.stop.click()) : run.click());}
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'w') {e.preventDefault();guard(() => closeDocument(active()));}
     else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 't') {e.preventDefault();guard(reopenDocument);}
   }
@@ -207,12 +222,19 @@ export function createStudio({workspace=null,document: doc = globalThis.document
     {label:'View: Locals window',run:()=>activateBottom('locals')},
     {label:'View: Watch window',run:()=>activateBottom('watch')},
     {label:'View: Breakpoints window',run:()=>activateBottom('breakpoints')},
-    {label:'Debug: Toggle source breakpoint',shortcut:'F9',run:()=>development.toggleBreakpoint(active(),editorLine())},
+    {label:'Debug: Toggle source breakpoint',shortcut:'F9',enabled:()=>prefs.perspective!=='binary',run:()=>development.toggleBreakpoint(active(),editorLine())},
     {label:'Debug: Start in-IDE debug session',run:()=>{showTools('debug');development.mode('cooperative');}},
     {label:'Build: Toggle state-preserving hot reload',run:()=>development.hotReload(!development.options().hotReload)}
   ]));
-  showTools('all', false);setPerspective('split', {save: false, enable: false});activateBottom('problems', false);syncSession();initializing = false;
+  function shortcut(command,context='source'){
+    if(context!==debugContext.kind)return;
+    if(['palette','files','search'].includes(command)){shell.show(command==='palette'?'commands':command);return;}
+    if(command==='properties'){desktop.showProperties();return;}
+    const button=command==='continue'?run:buttons[command];if(button&&!button.disabled&&['continue','restart','stop','into','over','out'].includes(command))button.click();
+  }
+  showTools('all', false);setPerspective('split', {save: false, enable: false});activateBottom('problems', false);syncSession();desktop=createDesktopWorkbench({document:doc,shell,development,debugContext,binaryClient,bottomPanels,showPerspective:setPerspective,active,documents,open,closeDocument,reopenDocument,workspace,notify,compile});initializing = false;
   return {
+    shortcut,
     options: () => ({...prefs,design:designer.options()}),
     restore(value) {sourceHistory.reset();sourceTools.reset();prefs = studioPreferences(value);designer.restore(value?.design);showTools(prefs.tools, false);setPerspective(prefs.perspective, {save: false, enable: false});activateBottom(prefs.bottom, false);propertySearch.value = '';fontSize.value=String(prefs.fontSize);doc.body.style.setProperty('--studio-font-size',prefs.fontSize+'px');debug.refresh();},
     render() {sourceTools.changed();debug.refresh();},
@@ -224,6 +246,6 @@ export function createStudio({workspace=null,document: doc = globalThis.document
       else if (kind === 'error') {liveBadge.textContent = 'Runtime error';liveBadge.dataset.state = 'error';}
       syncSession();
     },
-    dispose() {if (disposed) return;disposed = true;sourceHistory.dispose();sourceTools.dispose();designer.dispose();unsubscribe();debug.dispose();propertyObserver.disconnect();off.forEach(fn => fn());doc.removeEventListener('keydown', keys, true);editor.removeEventListener('keydown', indent, true);binary?.remove();fileDialog.remove();toolbar.remove();}
+    dispose() {if (disposed) return;disposed = true;desktop?.dispose();debugContext.dispose();binaryClient.dispose();sourceHistory.dispose();sourceTools.dispose();designer.dispose();unsubscribe();debug.dispose();propertyObserver.disconnect();off.forEach(fn => fn());doc.removeEventListener('keydown', keys, true);editor.removeEventListener('keydown', indent, true);binary?.remove();fileDialog.remove();toolbar.remove();}
   };
 }

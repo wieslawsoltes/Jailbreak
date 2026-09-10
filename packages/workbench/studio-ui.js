@@ -1,5 +1,7 @@
 /** Small DOM primitives shared by the Studio tool windows. Icons are local SVG paths. */
 const paths = {
+  pin: 'M5 1h6l-1 5 3 3H3l3-3ZM8 9v6',
+  undo: 'M6 2 2 6l4 4M2 6h8a4 4 0 0 1 0 8', redo: 'm10 2 4 4-4 4m4-4H6a4 4 0 0 0 0 8',
   play: 'm5 3 9 5-9 5Z', stop: 'M4 4h8v8H4Z', pause: 'M5 3v10M11 3v10',
   restart: 'M3 7a5 5 0 1 1 1 5M3 3v4h4', over: 'M3 8a5 5 0 0 1 10 0M10 5l3 3 2-3M8 11v3',
   into: 'M8 2v9m-4-4 4 4 4-4M4 14h8', out: 'M8 12V2M4 6l4-4 4 4M4 14h8',
