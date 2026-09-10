@@ -1,6 +1,6 @@
 {
-  "baseline": "9b73d1167983076687cf078a3992144e4a18794a",
-  "audited_at": "2026-09-10T11:23:03+00:00",
+  "baseline": "92cfb4ddc1f35e1ae3fa9093d7ed04a041d75d4c",
+  "audited_at": "2026-09-10T11:42:51+00:00",
   "documents": [
     {
       "path": "README.md",
@@ -23,25 +23,25 @@
     {
       "path": "docs/README.md",
       "role": "canonical-current-guide",
-      "sha256": "c1777be1f1384420fde18860c6e1f8e0439c65ad7238700dff97f5b310cff602",
+      "sha256": "03cfc09ab1311b2450d50899f28c441c72170a72b5cfb135c7652825a880126f",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {
       "path": "docs/acceptance-plan.md",
       "role": "canonical-current-guide",
-      "sha256": "cdd26a0086ecbb9a4e6c20e5adf083c931c04538520a91122c71eaa4329604f5",
+      "sha256": "ad3f74764bd8bffe121400d8048d9b43f456af20384eebdadb70488bc1b1eba7",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {
       "path": "docs/api-reference.md",
       "role": "canonical-current-guide",
-      "sha256": "176084f4e9454a214d07c68676a37058810082921e6289c439316672ab6aea23",
+      "sha256": "d75388a56984521853233b4b31f831d7cfd16a0fde9990e154de395756ed2c87",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {
       "path": "docs/architecture.md",
       "role": "canonical-current-guide",
-      "sha256": "cb007f1649baa5d224adaff7719507858d14b18b561dad070f283755dba5d484",
+      "sha256": "963262333c418b2cc37a6e5a333232c363761deb35314b8dbd5fba40fbe0f397",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {
@@ -53,7 +53,7 @@
     {
       "path": "docs/binary-entrypoints.md",
       "role": "canonical-current-guide",
-      "sha256": "8777143a6306f661df71e5cffbe8f0894dd44dd768cd55584f4020c605994b81",
+      "sha256": "1443a061e316aa5a323c47bee9ab86fe1bfbf10abf19aa80c3d01c4edb26258c",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {
@@ -71,19 +71,19 @@
     {
       "path": "docs/build-and-verification.md",
       "role": "canonical-current-guide",
-      "sha256": "f80898a82334b4d6de1f92361767f7a6c7e01619613dd7036e3e4f67a303e23e",
+      "sha256": "4dc6d217c39bef4743202c4d6f6d31ad619560327ebdc08c11416a91156d14c6",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {
       "path": "docs/compatibility.md",
       "role": "canonical-current-guide",
-      "sha256": "824d545e2428bd06f8373d879851bef88890e1870ba3e2bcacc5603553886bf7",
+      "sha256": "28db608ba10b3bbd631c8ea3cd64b3a98804f557ebbdfbdd06749744589af119",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {
       "path": "docs/completed-work.md",
       "role": "canonical-current-guide",
-      "sha256": "b5f2ffc19c0c8bc0b8baada1c50d3feb8dfd28b6e58e24fa207077d7142d1e5d",
+      "sha256": "06b044362a88ff3dbb2cbc9b05d1680ff62b553f65efe64e6670c2af4d855714",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {
@@ -95,13 +95,13 @@
     {
       "path": "docs/core-development-tools.md",
       "role": "canonical-current-guide",
-      "sha256": "81be1d2b50d8b09c8f0204e8d0ab21fbec5d59bd78e3f07135b580681ea3bd14",
+      "sha256": "698dda6de3de603a6ebde34a1be196f8da7cc1e952752fac5b014992b172ff3a",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {
       "path": "docs/current-status.md",
       "role": "canonical-current-guide",
-      "sha256": "ae40da62b663cd18b553859cd388239d94e8b92e82273b2d4aa7cc34dd4783c1",
+      "sha256": "47b1c6aacbd154b1c4a57ba62099add61821dd365bdcbf5fb599b1bafd588d91",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {
@@ -113,7 +113,7 @@
     {
       "path": "docs/documentation-maintenance.md",
       "role": "canonical-current-guide",
-      "sha256": "eb9e3ffcfb066762ab502bffe5a7fb6925038912fb938e69f877f5e04c3076c1",
+      "sha256": "4979d8169723643e0e9b4b6db2a82eb169fb4e55fa296a939a51327cbfa43775",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {
@@ -125,13 +125,13 @@
     {
       "path": "docs/ide-guide.md",
       "role": "canonical-current-guide",
-      "sha256": "e91b110b7c36258b09554423a6efeaf4c788c5ce46ea5a64d25bbdf2bd9090e7",
+      "sha256": "f4c2e297a8e97d2cf2cd10fd82cb7f1110824178b4052658b64a0bbf448fc759",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {
       "path": "docs/mandatory-targets-status.md",
       "role": "canonical-current-guide",
-      "sha256": "677d27ef8037f893ae3ce30b2276f8630fc9058c9f6544ba04e08ef6f2e0f30f",
+      "sha256": "b36c3382001aaaa14ee058fa0a852426d206f6e6cd0eb6c057b08be2f382122f",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {
@@ -275,31 +275,31 @@
     {
       "path": "docs/remaining-work.md",
       "role": "canonical-current-guide",
-      "sha256": "5161eacba8ead88c7f96286252f1efdcff5c5f141926c7ed4bc22af624729772",
+      "sha256": "9b8e3c3b911f9a347214b7e3a234e9e433bf7974c0f59ab62b49713350639f4e",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {
       "path": "docs/requirements-traceability.md",
       "role": "canonical-current-guide",
-      "sha256": "31a33141a1e78a82d1c5ad926059585ad0c9cd83202e7a71ae7237b4341c17de",
+      "sha256": "b3393ff9a1b702fb979b1f74ded691557b3a25135c1ac62d6953a348c866c64c",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {
       "path": "docs/requirements.md",
       "role": "canonical-current-guide",
-      "sha256": "ef58aaf69fabac99ba63489849783ba3020935433f174b422824d759b5359e69",
+      "sha256": "4a7023b4971fe2ac2f4097818db5944cc92afd7721176dff1dc8a6a36a0f4d47",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {
       "path": "docs/roadmap.md",
       "role": "canonical-current-guide",
-      "sha256": "0c61ded8bc2911d2c372abbb1870ec8c065ae27efe39f993496ec3658757aeb2",
+      "sha256": "9f5e60c98f3b514e88a7c884e496a3de3a311c7fa17951f3ada3e3ac8acfbf78",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {
       "path": "docs/security-and-trust.md",
       "role": "canonical-current-guide",
-      "sha256": "4ecf567fa61fe7351f6cc66b55adf9faf0698f85e66af63c1c2a518b063c8eec",
+      "sha256": "b958a09bede9b9b85974ef2b1de2f422a367afc07bf124813466d76cc8a25dbc",
       "treatment": "Current guide regenerated against source/evidence"
     },
     {

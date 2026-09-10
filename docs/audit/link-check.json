@@ -1,49 +1,8 @@
 {
   "documents_examined": 63,
-  "repairs": [
-    {
-      "source": "docs/PROJECT_SPECIFICATION.md",
-      "old": "milestone-in-ide-debugger.md",
-      "reason": "Target absent from audited source; no missing implementation was fabricated."
-    },
-    {
-      "source": "docs/PROJECT_SPECIFICATION.md",
-      "old": "milestone-ownership-reload.md",
-      "reason": "Target absent from audited source; no missing implementation was fabricated."
-    },
-    {
-      "source": "docs/PROJECT_SPECIFICATION.md",
-      "old": "milestone-binding-environment-reload.md",
-      "reason": "Target absent from audited source; no missing implementation was fabricated."
-    },
-    {
-      "source": "docs/PROJECT_SPECIFICATION.md",
-      "old": "milestone-designer-roundtrip.md",
-      "reason": "Target absent from audited source; no missing implementation was fabricated."
-    },
-    {
-      "source": "docs/milestone-portable-pdb.md",
-      "old": "milestone-ownership-reload.md",
-      "reason": "Target absent from audited source; no missing implementation was fabricated."
-    },
-    {
-      "source": "docs/milestone-portable-pdb.md",
-      "old": "milestone-binding-environment-reload.md",
-      "reason": "Target absent from audited source; no missing implementation was fabricated."
-    },
-    {
-      "source": "docs/milestone-portable-pdb.md",
-      "old": "milestone-designer-roundtrip.md",
-      "reason": "Target absent from audited source; no missing implementation was fabricated."
-    },
-    {
-      "source": "docs/milestone-portable-pdb.md",
-      "old": "milestone-in-ide-debugger.md",
-      "reason": "Target absent from audited source; no missing implementation was fabricated."
-    }
-  ],
+  "repairs": [],
   "errors": [],
   "scope": "Repository-local authored inline/reference Markdown links and heading fragments. External URLs are retained as references and are not asserted reachable. Vendored/upstream/license documents are preserved byte-for-byte.",
-  "baseline": "9b73d1167983076687cf078a3992144e4a18794a",
-  "audited_at": "2026-09-10T11:23:03+00:00"
+  "baseline": "92cfb4ddc1f35e1ae3fa9093d7ed04a041d75d4c",
+  "audited_at": "2026-09-10T11:42:51+00:00"
 }
